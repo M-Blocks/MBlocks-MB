@@ -9,6 +9,12 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "ble_hci.h";
+#include "ble_gap.h";
+
+#include "app_error.h"
+#include "app_uart.h"
+
 #include "util.h"
 #include "pwm.h"
 #include "adc.h"
@@ -17,7 +23,10 @@
 #include "sma.h"
 #include "freqcntr.h"
 #include "cmdline.h"
+#include "ble_sps.h"
 #include "commands.h"
+
+extern ble_sps_t m_sps;
 
 static void cmdVersion(const char *args);
 static void cmdPWMSet(const char *args);
@@ -38,6 +47,10 @@ static void cmdBLDCSetKP(const char *args);
 static void cmdBLDCSetKI(const char *args);
 /* SMA commands */
 static void cmdSMA(const char *args);
+/* BLE Serial Port Service Testing Commands */
+static void cmdBLETx(const char *args);
+static void cmdBLERx(const char *args);
+static void cmdBLEDisconnect(const char *args);
 
 
 // These string are what the command line processes looking for the user to
@@ -61,6 +74,10 @@ static const char cmdBLDCSetKPStr[] = "bldckp";
 static const char cmdBLDCSetKIStr[] = "bldcki";
 /* SMA commands */
 static const char cmdSMAStr[] = "sma";
+/* BLE Serial Port Service Testing Commands */
+static const char cmdBLETxStr[] = "bletx";
+static const char cmdBLERxStr[] = "blerx";
+static const char cmdBLEDisconStr[] = "blediscon";
 static const char cmdEmptyStr[] = "";
 
 // This table correlates the command strings above to the actual functions that
@@ -85,7 +102,11 @@ static cmdFcnPair_t cmdTable[] = {
 	{cmdBLDCSetKPStr, cmdBLDCSetKP},
 	{cmdBLDCSetKIStr, cmdBLDCSetKI},
 	/* SMA commands */
-	/*{cmdSMAStr, cmdSMA},*/
+	{cmdSMAStr, cmdSMA},
+	/* BLE Serial Port Service Testing Commands */
+	{cmdBLETxStr, cmdBLETx},
+	{cmdBLERxStr, cmdBLERx},
+	{cmdBLEDisconStr, cmdBLEDisconnect},
 	// Always end the command table with an emptry string and null pointer
 	{cmdEmptyStr, NULL}
 };
@@ -404,3 +425,65 @@ void cmdSMA(const char *args) {
 		}
 	}
 }
+
+void cmdBLETx(const char *args) {
+	char txStr[150];
+	char respStr[100];
+	uint32_t nChars;
+
+	if (sscanf(args, "%150s", txStr) != 1) {
+		return;
+	}
+
+	nChars = strlen(txStr);
+
+	if (nChars == 0) {
+		return;
+	}
+
+	if (ble_sps_put_string(&m_sps, txStr)) {
+		snprintf(respStr, sizeof(respStr), "Placed %lu-character string in BLE SPS transmit buffer\r\n", nChars);
+	} else {
+		snprintf(respStr, sizeof(respStr), "Failed to place %lu-character string in BLE SPS transmit buffer\r\n", nChars);
+	}
+	app_uart_put_string(respStr);
+}
+
+void cmdBLERx(const char *args) {
+	int nArgs;
+	uint32_t nChars;
+	uint8_t c;
+	char str[150];
+
+	nArgs = sscanf(args, "%lu", &nChars);
+
+	if (nArgs == -1) {
+		/* With no arguments, print out entire BLE SPS receive buffer. */
+		app_uart_put_string("BLE SPS Receive Buffer (begins on next line):\r\n");
+		while (ble_sps_get_char(&m_sps, &c)) {
+			app_uart_put(c);
+		}
+	} else if (nArgs == 1) {
+		snprintf(str, sizeof(str), "First %lu characters of the BLE SPS Receive Buffer:\r\n", nChars);
+		app_uart_put_string(str);
+		while ((nChars-- > 0) && (ble_sps_get_char(&m_sps, &c))) {
+			app_uart_put(c);
+		}
+	}
+
+	app_uart_put_string("\r\n");
+}
+
+void cmdBLEDisconnect(const char *args) {
+	uint32_t err_code;
+
+	if (m_sps.conn_handle == BLE_CONN_HANDLE_INVALID) {
+		app_uart_put_string("BLE not connected\r\n");
+		return;
+	}
+
+	app_uart_put_string("BLE disconnecting\r\n");
+	err_code = sd_ble_gap_disconnect(m_sps.conn_handle, BLE_HCI_CONN_INTERVAL_UNACCEPTABLE);
+	APP_ERROR_CHECK(err_code);
+}
+

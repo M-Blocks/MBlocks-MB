@@ -446,13 +446,14 @@ bool bldc_setIRefRatio(uint8_t refRatio) {
 }
 
 void bldc_speedControlLoop(bool reinit) {
-	uint16_t runReg;
 	int32_t actual_rpm, error_rpm;
 	uint16_t controlCurrent;
 	uint32_t rtcTicks, elapsedTicks;
 	int32_t pError;
 
+#if (BLDC_DEBUG)
 	char str[125];
+#endif
 
 	static uint32_t lastCallRTCTicks = 0;
 	static int32_t intError = 0;
@@ -565,7 +566,10 @@ void bldc_speedControlLoop(bool reinit) {
 void bldc_updateStable(int32_t newestError) {
 	int32_t meanError, meanErrorSquare;
 	int32_t varianceError;
+
+#if (BLDC_DEBUG)
 	char str[150];
+#endif
 
 	static int validSamples = 0;
 	static int oldestSample = 0;

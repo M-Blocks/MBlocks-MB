@@ -9,6 +9,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#include "spi.h"
 #include "a4960.h"
 
 bool a4960_writeReg(uint8_t addr, uint16_t data, uint16_t *diag) {
@@ -55,7 +56,7 @@ bool a4960_writeReg(uint8_t addr, uint16_t data, uint16_t *diag) {
 	 * of its diagnostic register.  Assuming that the caller provided a
 	 * destination for this data, we pass it back to the caller. */
 	if (diag != NULL) {
-		*diag = (readData[0] << 0xFF) | readData[1];
+		*diag = (((uint16_t)readData[0]) << 8) | (uint16_t)readData[1];
 	}
 
 	return true;

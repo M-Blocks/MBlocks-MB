@@ -94,7 +94,7 @@ bool sma_retractTimeCurrent_ms_mA(uint16_t time_ms, uint16_t current_mA) {
 
 	/* Allow the low-passed PWM out time to reach a steady-state analog
 	 * voltage. */
-	nrf_delay_ms(25);
+	nrf_delay_ms(100);
 
 	/* Before energizing the SMA above, if it had remained off for sufficient
 	 * time to completely cool down, we measure the voltage across the SMA now.
@@ -142,16 +142,14 @@ smaState_t sma_getState () {
 }
 
 bool sma_setCurrent_mA(uint32_t current_mA) {
-	uint32_t smairef_mV;
+
 	uint32_t onPeriod;
 
-	if (current_mA > 2000) {
-		current_mA = 2000;
+	if (current_mA > 1250) {
+		current_mA = 1250;
 	}
 
-	smairef_mV = (current_mA * 3300) / 2000;
-
-	onPeriod = (smairef_mV * pwm_getPeriod()) / 3300;
+	onPeriod = (current_mA * pwm_getPeriod()) / 1250;
 
 	pwm_setOnPeriod(SMAIREF_PWM_CHNL, onPeriod);
 
@@ -205,7 +203,7 @@ void sma_timerHandler(void *p_context) {
 				/* If the voltage across the SMA has decreased by
 				 * RETRACTED_VOLTAGE_CHANGE_PCT percent, the SMA is now fully
 				 * retracted, so we update the state variable. */
-				smaState = SMA_STATE_RETRACTED;
+				//smaState = SMA_STATE_RETRACTED;
 			}
 		}
 	} else if (smaState == SMA_STATE_EXTENDING) {

@@ -1,0 +1,36 @@
+var group__gzp__source__device =
+[
+    [ "SOURCE_FILE", "group__gzp__source__device.html#gaf9169006e14a70c7dc21d9eeb4974d63", null ],
+    [ "GZP_PARAMS_DB_ELEMENT_SYSTEM_ADDRESS", "group__gzp__source__device.html#ga962ff3c5b83f1ebe9aab28579b9a59f4", null ],
+    [ "GZP_PARAMS_DB_ELEMENT_HOST_ID", "group__gzp__source__device.html#gaa7d2b8dc9d023955948bf6cce895fc62", null ],
+    [ "GZP_PARAMS_DB_ELEMENT_SIZE", "group__gzp__source__device.html#gac2f70b2158396654e55ec5126170e7f8", null ],
+    [ "GZP_PARAMS_DB_MAX_ENTRIES", "group__gzp__source__device.html#ga4a1b390073a2588a9766201f8d333cc3", null ],
+    [ "gzp_tx_rx_trans_result_t", "group__gzp__source__device.html#ga956f301cff1ba1e4f2464727240ad710", [
+      [ "GZP_TX_RX_SUCCESS", "group__gzp__source__device.html#gga956f301cff1ba1e4f2464727240ad710add890eb9e35657c8d7f9cacc0f59a7f3", null ]
+    ] ],
+    [ "gzp_tx_packet", "group__gzp__source__device.html#gabc198cadd0a06c4a03c2dff58fcc64bb", null ],
+    [ "gzp_tx_rx_transaction", "group__gzp__source__device.html#gabd2954782b251c14d313022873064726", null ],
+    [ "gzp_crypt_tx_transaction", "group__gzp__source__device.html#ga823436ddea6862a24d3b5977c1b03ef1", null ],
+    [ "gzp_key_update", "group__gzp__source__device.html#gaf61abf9380ab2cb67aab41b4e291c9c9", null ],
+    [ "gzp_params_db_add", "group__gzp__source__device.html#ga7a829109252a7f094d34e388c4798604", null ],
+    [ "gzp_params_db_read", "group__gzp__source__device.html#ga9d1e7cf43c3c89abb5bac6fb88827714", null ],
+    [ "gzp_index_db_add", "group__gzp__source__device.html#ga800df1342de7b3be5af4a806dc911be2", null ],
+    [ "gzp_index_db_read", "group__gzp__source__device.html#gad7811ab757b8eff4bc850232f21c8f94", null ],
+    [ "gzp_index_db_full", "group__gzp__source__device.html#ga877b3be54b4bf32179bdd046e47103e7", null ],
+    [ "gzp_index_db_empty", "group__gzp__source__device.html#ga9f94ef27e7c19f83de803a3107cb625b", null ],
+    [ "gzp_array_is_set", "group__gzp__source__device.html#ga6afba3e7866fd7d7b82255ccb1a81366", null ],
+    [ "gzp_params_store", "group__gzp__source__device.html#ga39fd18bf45312e8620054cb2de03480f", null ],
+    [ "gzp_params_restore", "group__gzp__source__device.html#gaac440ada7dc965f2ef51e4414577d09c", null ],
+    [ "gzp_delay_rx_periods", "group__gzp__source__device.html#gabfd875501f24f9619f8a60193fbe4cfe", null ],
+    [ "gzp_tick_sleep_rx_periods", "group__gzp__source__device.html#ga4593f54b40b250b7337d05245ee0fa7b", null ],
+    [ "gzp_init", "group__gzp__source__device.html#ga99f3baa235ae247ab01a65a1d548baa8", null ],
+    [ "gzp_erase_pairing_data", "group__gzp__source__device.html#ga0374790d09eb34436ae22618bac6b8f3", null ],
+    [ "gzp_address_req_send", "group__gzp__source__device.html#gab52132200bb9f6d710d0eda82f330701", null ],
+    [ "gzp_id_req_send", "group__gzp__source__device.html#gab055584a002f63ac91e76f247596c3e3", null ],
+    [ "gzp_id_req_cancel", "group__gzp__source__device.html#ga465a475cf8ae18dc767ba5ebf75b3bcb", null ],
+    [ "gzp_crypt_data_send", "group__gzp__source__device.html#ga4994083175f26dbffef2d1c934a01248", null ],
+    [ "latest_tx_info", "group__gzp__source__device.html#ga5bf7dc7da7ec99ae80f3fcb3e31fc45c", null ],
+    [ "tx_complete", "group__gzp__source__device.html#ga19789b4ca7200e3526e05f5197aa6e6a", null ],
+    [ "tx_success", "group__gzp__source__device.html#ga7f5def3689e8bb61a3e58372de6c48ee", null ],
+    [ "database", "group__gzp__source__device.html#ga41423eb04d340262c0504abeebb9b90b", null ]
+];

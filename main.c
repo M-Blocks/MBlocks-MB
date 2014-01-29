@@ -42,7 +42,6 @@
 #include "app_scheduler.h"
 #include "ble_stack_handler.h"
 #include "app_timer.h"
-#include "ble_error_log.h"
 #include "app_gpiote.h"
 #include "app_button.h"
 #include "app_timer.h"
@@ -62,8 +61,11 @@
 #include "commands.h"
 #include "cmdline.h"
 
+#include "fifo.h"
+#include "ble_sps.h"
+#include "ble_vns.h"
 
-#define VERSION_STRING					"MBlocks-HWTest v1.0"
+#define VERSION_STRING					"MBlocks-MB v1.0"
 
 //#define WAKEUP_BUTTON_PIN               NRF6310_BUTTON_0                            /**< Button used to wake up the application. */
 // YOUR_JOB: Define any other buttons to be used by the applications:
@@ -73,6 +75,8 @@
 
 #define APP_ADV_INTERVAL                64                                          /**< The advertising interval (in units of 0.625 ms. This value corresponds to 40 ms). */
 #define APP_ADV_TIMEOUT_IN_SECONDS      180                                         /**< The advertising timeout (in units of seconds). */
+
+#define BLE_APPEARANCE_CABLE_REPLACEMENT	1800
 
 // YOUR_JOB: Modify these according to requirements.
 #define SECOND_1_25_MS_UNITS            800                                         /**< Definition of 1 second, when 1 unit is 1.25 ms. */
@@ -122,7 +126,19 @@ static app_timer_id_t bldc_tacho_freq_update_timer_id;
 #endif
 
 
-static char deviceName[BLE_GAP_DEVNAME_MAX_LEN + 1] = "nRF51822Test";
+static char deviceName[BLE_GAP_DEVNAME_MAX_LEN + 1] = "BLE SPP 67:6F:C7";
+
+ble_vns_t m_vns;
+
+#define BLE_TX_FIFO_SIZE	384
+#define BLE_RX_FIFO_SIZE	64
+
+static fifo_t ble_sps_txFifo;
+static uint8_t ble_sps_txFifoData[BLE_TX_FIFO_SIZE];
+static fifo_t ble_sps_rxFifo;
+static uint8_t ble_sps_rxFifoData[BLE_RX_FIFO_SIZE];
+
+ble_sps_t m_sps;
 
 /**@brief Error handler function, which is called when an error has occurred. 
  *
@@ -147,7 +163,7 @@ void app_error_handler(uint32_t error_code, uint32_t line_num, const uint8_t * p
     //                The flash write will happen EVEN if the radio is active, thus interrupting
     //                any communication.
     //                Use with care. Un-comment the line below to use.
-    // ble_debug_assert_handler(error_code, line_num, p_file_name);
+    //ble_debug_assert_handler(error_code, line_num, p_file_name);
 
     // On assert, the system can only recover with a reset.
     NVIC_SystemReset();
@@ -200,89 +216,6 @@ static void leds_init(void)
     // YOUR_JOB: Add additional LED initialiazations if needed.
 }
 
-#if (0)
-static void parse_command(const char *cmd) {
-	char resp[33];
-	static bool advertising = false;
-
-
-	if (strncmp(cmd, "ver", 3) == 0) {
-		snprintf(resp, sizeof(resp), "%s\r\n", VERSION_STRING);
-	} else if (strncmp(cmd, "rssi", 4) == 0) {
-   		snprintf(resp, sizeof(resp), "%d\r\n", rssi);
-	} else if (strncmp(cmd, "name", 4) == 0) {
-		char requestedName[20 + 1];
-
-		if (sscanf(cmd, "%*s %20s", requestedName) == 1) {
-			/* The length of the requested name may exceed the allowed length,
-			 * so we copy only the allowed number of characters and then
-			 * remember to null-terminate the string because strncpy will not
-			 * if the source is longer than the destination string. */
-			strncpy(deviceName, requestedName, sizeof(deviceName));
-			deviceName[sizeof(deviceName) - 1] = '\0';
-
-			/* Reinitialize the GAP parameters now that we have changed the
-			 * device's name. */
-			gap_params_init();
-			advertising_init();
-
-			snprintf(resp, sizeof(resp), "OK\r\n");
-		} else {
-			snprintf(resp, sizeof(resp), "ERROR\r\n");
-		}
-	} else if (strncmp(cmd, "addr", 4) == 0) {
-		unsigned int tempUInt[6];
-
-		if (sscanf(cmd, "%*s %2x%2x%2x%2x%2x%2x",
-				&tempUInt[0], &tempUInt[1], &tempUInt[2], &tempUInt[3], &tempUInt[4], &tempUInt[5]) == 6) {
-
-			ble_gap_addr_t addr;
-
-			addr.addr_type = BLE_GAP_ADDR_TYPE_PUBLIC;
-			/* The address set function expects the address to be LSB, but the
-			 * user is probably typing the address MSB, so we reverse the byte
-			 * order. */
-			addr.addr[0] = (uint8_t)tempUInt[5];
-			addr.addr[1] = (uint8_t)tempUInt[4];
-			addr.addr[2] = (uint8_t)tempUInt[3];
-			addr.addr[3] = (uint8_t)tempUInt[2];
-			addr.addr[4] = (uint8_t)tempUInt[1];
-			addr.addr[5] = (uint8_t)tempUInt[0];
-
-			sd_ble_gap_address_set(&addr);
-
-			/* Reinitialize now that we've changed the device's address */
-			gap_params_init();
-			advertising_init();
-
-			snprintf(resp, sizeof(resp), "OK\r\n");
-		} else {
-			snprintf(resp, sizeof(resp), "ERROR\r\n");
-		}
-	} else if (strncmp(cmd, "advstart", 8) == 0) {
-		if (!advertising) {
-			advertising_start();
-			advertising = true;
-		}
-		snprintf(resp, sizeof(resp), "OK\r\n");
-	} else if (strncmp(cmd, "advstop", 7) == 0) {
-		if (advertising) {
-			advertising_stop();
-			advertising = false;
-		}
-		snprintf(resp, sizeof(resp), "OK\r\n");
-	} else if (strncmp(cmd, "reset", 5) == 0) {
-		NVIC_SystemReset();
-	} else if (strncmp(cmd, "off", 3) == 0) {
-		/* Enter the power-off mode.  The only way to return is to reset the chip */
-		sd_power_system_off();
-	} else {
-		snprintf(resp, sizeof(resp), "ERROR\r\n");
-	}
-
-	app_uart_put_string(resp);
-}
-#endif
 
 static void on_uart_evt(app_uart_evt_t *p_app_uart_event) {
 #if (0)
@@ -319,7 +252,8 @@ static void uart_init(void) {
 	comm_params.use_parity = false;
 	comm_params.baud_rate = UART_BAUDRATE_BAUDRATE_Baud115200;
 
-	APP_UART_INIT(&comm_params, 128, 512, on_uart_evt, 15, err_code);
+	//APP_UART_FIFO_INIT(&comm_params, 128, 512, on_uart_evt, 3, err_code);
+	APP_UART_FIFO_INIT(&comm_params, 128, 128, on_uart_evt, 3, err_code);
 	APP_ERROR_CHECK(err_code);
 
 }
@@ -368,19 +302,114 @@ static void timers_init(void)
  *          parameters of the device. It also sets the permissions and appearance.
  */
 void gap_params_init(void) {
-    uint32_t                err_code;
+    uint32_t err_code;
     ble_gap_conn_params_t   gap_conn_params;
     ble_gap_conn_sec_mode_t sec_mode;
 
+    ble_gatts_char_md_t char_md;
+    ble_gatts_attr_t attr;
+    ble_gatts_attr_md_t attr_md;
+    ble_uuid_t uuid;
+
+    uint16_t service_handle;
+    uint16_t char_handle;
+    uint16_t desc_handle;
+
+#if (1)
     BLE_GAP_CONN_SEC_MODE_SET_OPEN(&sec_mode);
     
     err_code = sd_ble_gap_device_name_set(&sec_mode, (uint8_t *)deviceName, strlen(deviceName));
     APP_ERROR_CHECK(err_code);
 
-    /* YOUR_JOB: Use an appearance value matching the application's use case.
-    err_code = sd_ble_gap_appearance_set(BLE_APPEARANCE_);
-    APP_ERROR_CHECK(err_code); */
+#if (0)
+	/* We now add a descriptor attribute for the user description of the device
+	 * name. Here we configure its attribute's metadata to allow open reads but
+	 * no writes. */
+	memset(&attr_md, 0, sizeof(attr_md));
+	BLE_GAP_CONN_SEC_MODE_SET_OPEN(&attr_md.read_perm);
+	BLE_GAP_CONN_SEC_MODE_SET_NO_ACCESS(&attr_md.write_perm);
+	attr_md.vloc = BLE_GATTS_VLOC_STACK;
+
+	/* Indicate the that attribute is a user description descriptor */
+	BLE_UUID_BLE_ASSIGN(uuid, BLE_UUID_DESCRIPTOR_CHAR_USER_DESC);
+
+	/* Configure the value of the attribute. */
+	memset(&attr, 0, sizeof(attr));
+	attr.p_uuid = &uuid;
+	attr.p_attr_md = &attr_md;
+	attr.init_len = 11;
+	attr.init_offs = 0;
+	attr.max_len = 11;
+	attr.p_value = (uint8_t *)"Device Name";
+
+    err_code = sd_ble_gatts_descriptor_add(BLE_GATT_HANDLE_INVALID, &attr, &desc_handle);
+    APP_ERROR_CHECK(err_code);
+#endif
+#endif
+
+#if (0)
+    /* Create the GAP service */
+    BLE_UUID_BLE_ASSIGN(uuid, BLE_UUID_GAP);
+
+    err_code = sd_ble_gatts_service_add(BLE_GATTS_SRVC_TYPE_PRIMARY, &uuid, &service_handle);
+    APP_ERROR_CHECK(err_code);
+
+    /* We add two characteristics to the GAP serivce: */
+
+	/* The first characteristic is the device name, which should be read-able.
+	 * Here, we use the characteristics metadata to make the device name
+	 * characteristic readable.  We also add a user description field stating
+	 * what the characteristic represents. */
+	memset(&char_md, 0, sizeof(char_md));
+	char_md.char_props.read = 1;
+	char_md.p_char_user_desc = (uint8_t *)"Device Name";
+	char_md.char_user_desc_max_size = 11;
+	char_md.char_user_desc_size = 11;
+	char_md.p_user_desc_md = NULL;
+	char_md.p_char_pf = NULL;
+	char_md.p_cccd_md = NULL;
+	char_md.p_sccd_md = NULL;
+
+	/* The attribute is the part of the characteristic that holds data, in this
+	 * case, the device's actual name.  Here we configure its attribute's
+	 * metadata to allow open reads but no writes. */
+	memset(&attr_md, 0, sizeof(attr_md));
+	BLE_GAP_CONN_SEC_MODE_SET_OPEN(&attr_md.read_perm);
+	BLE_GAP_CONN_SEC_MODE_SET_NO_ACCESS(&attr_md.write_perm);
+	attr_md.vloc = BLE_GATTS_VLOC_STACK;
+
+	/* Set the UUID of the device name attribute correctly */
+	BLE_UUID_BLE_ASSIGN(uuid, BLE_UUID_GAP_CHARACTERISTIC_DEVICE_NAME);
+
+	/* Configure the device name attribute itself */
+	memset(&attr, 0, sizeof(attr));
+	attr.p_uuid = &uuid;
+	attr.p_attr_md = &attr_md;
+	attr.init_len = strlen(deviceName);
+	attr.init_offs = 0;
+	attr.max_len = strlen(deviceName);
+	attr.p_value = (uint8_t *)deviceName;
+
+	/* Finally, add the device name characteristic to the GAP service */
+	err_code = sd_ble_gatts_characteristic_add(service_handle, &char_md, &attr, &char_handle);
+	APP_ERROR_CHECK(err_code);
+
+#endif /* 0 */
+
+
+    /* YOUR_JOB: Use an appearance value matching the application's use case.*/
+    err_code = sd_ble_gap_appearance_set(BLE_APPEARANCE_UNKNOWN);
+    APP_ERROR_CHECK(err_code);
     
+#if (0)
+    /* Add a user description to the appearance characteristic */
+    attr.p_value = (uint8_t *)"Appearance";
+
+    err_code = sd_ble_gatts_descriptor_add(BLE_GATT_HANDLE_INVALID, &attr, &handle);
+    APP_ERROR_CHECK(err_code);
+#endif /* 0 */
+
+#if (1)
     memset(&gap_conn_params, 0, sizeof(gap_conn_params));
 
     gap_conn_params.min_conn_interval = MIN_CONN_INTERVAL;
@@ -390,6 +419,7 @@ void gap_params_init(void) {
 
     err_code = sd_ble_gap_ppcp_set(&gap_conn_params);
     APP_ERROR_CHECK(err_code);
+#endif /* 1 */
 }
 
 
@@ -402,22 +432,32 @@ void advertising_init(void)
 {
     uint32_t      err_code;
     ble_advdata_t advdata;
-    uint8_t       flags = BLE_GAP_ADV_FLAGS_LE_ONLY_LIMITED_DISC_MODE;
+    ble_advdata_t scanrsp;
+    ble_advdata_manuf_data_t manuf_data;
+    uint8_t spp_key[3] = {0x00, 0x00, 0x00};
+    uint8_t       flags = BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE;
     
     // YOUR_JOB: Use UUIDs for service(s) used in your application.
-    ble_uuid_t adv_uuids[] = {{BLE_UUID_BATTERY_SERVICE, BLE_UUID_TYPE_BLE}};
+    ble_uuid_t adv_uuids[] = {{SPS_UUID_SERVICE, m_sps.service_uuid_type}};
 
     // Build and set advertising data
     memset(&advdata, 0, sizeof(advdata));
-    
-    advdata.name_type               = BLE_ADVDATA_FULL_NAME;
-    advdata.include_appearance      = true;
+    advdata.name_type               = BLE_ADVDATA_NO_NAME;
+    //advdata.include_appearance      = true;
     advdata.flags.size              = sizeof(flags);
     advdata.flags.p_data            = &flags;
-    advdata.uuids_complete.uuid_cnt = sizeof(adv_uuids) / sizeof(adv_uuids[0]);
-    advdata.uuids_complete.p_uuids  = adv_uuids;
+    advdata.uuids_complete.uuid_cnt	= sizeof(adv_uuids) / sizeof(adv_uuids[0]);
+    advdata.uuids_complete.p_uuids	= adv_uuids;
+    manuf_data.company_identifier 	= 0xFFFF;
+    manuf_data.data.size			= 3;
+    manuf_data.data.p_data			= spp_key;
+    advdata.p_manuf_specific_data	= &manuf_data;
+
+    memset(&scanrsp, 0, sizeof(scanrsp));
+    scanrsp.name_type				= BLE_ADVDATA_FULL_NAME;
+    scanrsp.include_appearance		= true;
     
-    err_code = ble_advdata_set(&advdata, NULL);
+    err_code = ble_advdata_set(&advdata, &scanrsp);
     APP_ERROR_CHECK(err_code);
 }
 
@@ -427,6 +467,20 @@ void advertising_init(void)
 static void services_init(void)
 {
     // YOUR_JOB: Add code to initialize the services used by the application.
+	uint32_t err_code;
+
+	ble_vns_init_t vns_init;
+	vns_init.version = 0x0100;
+	err_code = ble_vns_init(&m_vns, &vns_init);
+	APP_ERROR_CHECK(err_code);
+
+	ble_sps_init_t sps_init;
+	fifo_init(&ble_sps_txFifo, ble_sps_txFifoData, sizeof(ble_sps_txFifoData));
+	fifo_init(&ble_sps_rxFifo, ble_sps_rxFifoData, sizeof(ble_sps_rxFifoData));
+	sps_init.p_txFifo = &ble_sps_txFifo;
+	sps_init.p_rxFifo = &ble_sps_rxFifo;
+	err_code = ble_sps_init(&m_sps, &sps_init);
+	APP_ERROR_CHECK(err_code);
 }
 
 
@@ -458,10 +512,11 @@ static void on_conn_params_evt(ble_conn_params_evt_t * p_evt)
 {
     uint32_t err_code;
     
-    APP_ERROR_CHECK_BOOL(p_evt->evt_type == BLE_CONN_PARAMS_EVT_FAILED);
-    
-    err_code = sd_ble_gap_disconnect(m_conn_handle, BLE_HCI_CONN_INTERVAL_UNACCEPTABLE);
-    APP_ERROR_CHECK(err_code);
+    if(p_evt->evt_type == BLE_CONN_PARAMS_EVT_FAILED)
+    {
+        err_code = sd_ble_gap_disconnect(m_conn_handle, BLE_HCI_CONN_INTERVAL_UNACCEPTABLE);
+        APP_ERROR_CHECK(err_code);
+    }
 }
 
 
@@ -663,6 +718,8 @@ static void ble_evt_dispatch(ble_evt_t * p_ble_evt)
     YOUR_JOB: Add service ble_evt handlers calls here, like, for example:
     ble_bas_on_ble_evt(&m_bas, p_ble_evt);
     */
+    ble_vns_on_ble_evt(&m_vns, p_ble_evt);
+    ble_sps_on_ble_evt(&m_sps, p_ble_evt);
 }
 
 
@@ -905,10 +962,10 @@ int main(void) {
     ble_stack_init();
     scheduler_init();
     gap_params_init();
-    advertising_init();
     services_init();
     conn_params_init();
     sec_params_init();
+    advertising_init();
 
     app_uart_put_string("\r\n");
     app_uart_put_string("\r\n");
@@ -918,19 +975,24 @@ int main(void) {
     // Start execution
     timers_start();
 
-    //advertising_start();
+    advertising_start();
 
     // Enter main loop
     for (;;) {
         app_sched_execute();
 
-        if (app_uart_get(&c) == NRF_SUCCESS) {
+        while (app_uart_get(&c) == NRF_SUCCESS) {
+        	cmdline_newChar(c);
+        }
+
+        while (ble_sps_get_char(&m_sps, &c)) {
         	cmdline_newChar(c);
         }
 
         //power_manage();
     }
 }
+
 
 /** 
  * @}

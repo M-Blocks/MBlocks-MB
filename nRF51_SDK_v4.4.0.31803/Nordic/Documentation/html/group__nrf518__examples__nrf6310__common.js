@@ -1,0 +1,27 @@
+var group__nrf518__examples__nrf6310__common =
+[
+    [ "Blinky Example", "group__gpio__example.html", "group__gpio__example" ],
+    [ "Button Debouncer Example", "group__debouncer__example.html", "group__debouncer__example" ],
+    [ "Example Template", "group__nrf__templates__example.html", "group__nrf__templates__example" ],
+    [ "External sensors", "group__external__sensors.html", "group__external__sensors" ],
+    [ "Flash Write Example", "group__flashwrite__example.html", "group__flashwrite__example" ],
+    [ "GPIOTE Example", "group__nrf__gpiote__example.html", "group__nrf__gpiote__example" ],
+    [ "Motor Control Example", "group__simple__motor__control.html", "group__simple__motor__control" ],
+    [ "PPI Example", "group__ppi__example.html", "group__ppi__example" ],
+    [ "PWM Analyzer Example", "group__pwm__analyzer__example.html", "group__pwm__analyzer__example" ],
+    [ "PWM example", "group__pwm__example.html", "group__pwm__example" ],
+    [ "Pin Change Interrupt Example", "group__pin__change__int__example.html", "group__pin__change__int__example" ],
+    [ "RAM Retention Example", "group__ram__retention__example.html", "group__ram__retention__example" ],
+    [ "Radio Receiver Example", "group__nrf__dev__radio__rx__example.html", "group__nrf__dev__radio__rx__example" ],
+    [ "Radio Test Example", "group__nrf__radio__test__example.html", "group__nrf__radio__test__example" ],
+    [ "Radio Transmitter Example", "group__nrf__dev__radio__tx__example.html", "group__nrf__dev__radio__tx__example" ],
+    [ "Random Number Generator Example", "group__rng__example.html", "group__rng__example" ],
+    [ "Real-time Clock Example", "group__rtc__example.html", "group__rtc__example" ],
+    [ "SPI master Loopback Example", "group__spi__master__example.html", "group__spi__master__example" ],
+    [ "TWI Master Example", "group__twi__master__example.html", "group__twi__master__example" ],
+    [ "Temperature Example", "group__temperature__example.html", "group__temperature__example" ],
+    [ "Timer Example", "group__nrf__dev__timer__example.html", "group__nrf__dev__timer__example" ],
+    [ "UART Example", "group__uart__example.html", "group__uart__example" ],
+    [ "UICR config example", "group__uicr__config__example.html", null ],
+    [ "nRF6350 Radio Configuration Example", "group__n_r_f6350__radio__configuration__example.html", "group__n_r_f6350__radio__configuration__example" ]
+];

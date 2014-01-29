@@ -1,0 +1,27 @@
+var group__nrf514__examples__nrf6310__common =
+[
+    [ "Blinky Example", "group__foftt__gpio__example.html", "group__foftt__gpio__example" ],
+    [ "Button Debouncer Example", "group__foftt__debouncer__example.html", "group__foftt__debouncer__example" ],
+    [ "Example Template", "group__foftt__nrf__templates__example.html", "group__foftt__nrf__templates__example" ],
+    [ "External sensors", "group__nrf514__examples__external__sensors.html", "group__nrf514__examples__external__sensors" ],
+    [ "Flash Write Example", "group__foftt__flashwrite__example.html", "group__foftt__flashwrite__example" ],
+    [ "GPIOTE Example", "group__foftt__nrf__gpiote__example.html", "group__foftt__nrf__gpiote__example" ],
+    [ "Motor Control Example", "group__foftt__simple__motor__control.html", "group__foftt__simple__motor__control" ],
+    [ "PPI Example", "group__foftt__ppi__example.html", "group__foftt__ppi__example" ],
+    [ "PWM Analyzer Example", "group__foftt__pwm__analyzer__example.html", "group__foftt__pwm__analyzer__example" ],
+    [ "PWM example", "group__foftt__pwm__example.html", "group__foftt__pwm__example" ],
+    [ "Pin Change Interrupt Example", "group__foftt__pin__change__int__example.html", "group__foftt__pin__change__int__example" ],
+    [ "RAM Retention Example", "group__foftt__ram__retention__example.html", "group__foftt__ram__retention__example" ],
+    [ "Radio Receiver Example", "group__foftt__nrf__dev__radio__rx__example.html", "group__foftt__nrf__dev__radio__rx__example" ],
+    [ "Radio Test Example", "group__foftt__nrf__radio__test__example.html", "group__foftt__nrf__radio__test__example" ],
+    [ "Radio Transmitter Example", "group__foftt__nrf__dev__radio__tx__example.html", "group__foftt__nrf__dev__radio__tx__example" ],
+    [ "Random Number Generator Example", "group__foftt__rng__example.html", "group__foftt__rng__example" ],
+    [ "Real-time Clock Example", "group__foftt__rtc__example.html", "group__foftt__rtc__example" ],
+    [ "SPI master Loopback Example", "group__foftt__spi__master__example.html", "group__foftt__spi__master__example" ],
+    [ "TWI Master Example", "group__foftt__twi__master__example.html", "group__foftt__twi__master__example" ],
+    [ "Temperature Example", "group__foftt__temperature__example.html", "group__foftt__temperature__example" ],
+    [ "Timer Example", "group__foftt__nrf__dev__timer__example.html", "group__foftt__nrf__dev__timer__example" ],
+    [ "UART Example", "group__foftt__uart__example.html", "group__foftt__uart__example" ],
+    [ "UICR config example", "group__foftt__uicr__config__example.html", null ],
+    [ "nRF6350 Radio Configuration Example", "group__foftt__n_r_f6350__radio__configuration__example.html", "group__foftt__n_r_f6350__radio__configuration__example" ]
+];

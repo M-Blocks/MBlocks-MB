@@ -1,0 +1,25 @@
+var searchData=
+[
+  ['handle',['handle',['../structble__gattc__include__t.html#af242d6e3b6108ea75e1eb236e94c8240',1,'ble_gattc_include_t::handle()'],['../structble__gattc__desc__t.html#af242d6e3b6108ea75e1eb236e94c8240',1,'ble_gattc_desc_t::handle()'],['../structble__gattc__write__params__t.html#af242d6e3b6108ea75e1eb236e94c8240',1,'ble_gattc_write_params_t::handle()'],['../structble__gattc__handle__value__t.html#af242d6e3b6108ea75e1eb236e94c8240',1,'ble_gattc_handle_value_t::handle()'],['../structble__gattc__evt__read__rsp__t.html#af242d6e3b6108ea75e1eb236e94c8240',1,'ble_gattc_evt_read_rsp_t::handle()'],['../structble__gattc__evt__write__rsp__t.html#af242d6e3b6108ea75e1eb236e94c8240',1,'ble_gattc_evt_write_rsp_t::handle()'],['../structble__gattc__evt__hvx__t.html#af242d6e3b6108ea75e1eb236e94c8240',1,'ble_gattc_evt_hvx_t::handle()'],['../structble__gatts__hvx__params__t.html#af242d6e3b6108ea75e1eb236e94c8240',1,'ble_gatts_hvx_params_t::handle()'],['../structble__gatts__evt__write__t.html#af242d6e3b6108ea75e1eb236e94c8240',1,'ble_gatts_evt_write_t::handle()'],['../structble__gatts__evt__read__t.html#af242d6e3b6108ea75e1eb236e94c8240',1,'ble_gatts_evt_read_t::handle()'],['../structble__gatts__evt__hvc__t.html#af242d6e3b6108ea75e1eb236e94c8240',1,'ble_gatts_evt_hvc_t::handle()']]],
+  ['handle_5fdecl',['handle_decl',['../structble__gattc__char__t.html#a9fc577cf237995767dc46b3d78e2ed54',1,'ble_gattc_char_t']]],
+  ['handle_5frange',['handle_range',['../structble__gattc__service__t.html#a93d33f7a932598b760c4a7933db29292',1,'ble_gattc_service_t']]],
+  ['handle_5fvalue',['handle_value',['../structble__gattc__char__t.html#a82d02719a5a8647ad9fe3983a3287eda',1,'ble_gattc_char_t::handle_value()'],['../structble__gattc__evt__char__val__by__uuid__read__rsp__t.html#a150cc118e8227d991a1e6b889d659588',1,'ble_gattc_evt_char_val_by_uuid_read_rsp_t::handle_value()']]],
+  ['hba1c',['hba1c',['../structble__gls__meas__context__t.html#afe900a40b135bd3c822d32a932f01133',1,'ble_gls_meas_context_t']]],
+  ['header',['header',['../structble__evt__t.html#a50f33abba5627a26728ba30fffd9880a',1,'ble_evt_t']]],
+  ['hid_5fcontrol_5fpoint_5fhandles',['hid_control_point_handles',['../structble__hids__s.html#a19f94e464efe3fde2d32c82dcc2542d6',1,'ble_hids_s']]],
+  ['hid_5finformation',['hid_information',['../structble__hids__init__t.html#aabc2c6085c0d6caccf6ff29021c1d126',1,'ble_hids_init_t']]],
+  ['hid_5finformation_5fhandles',['hid_information_handles',['../structble__hids__s.html#af5ab8070c643dd8ccc7975038fc7996e',1,'ble_hids_s']]],
+  ['high',['high',['../unionushort__union__t.html#a740b59fa4e51e72ecf6ac3ee768c8c16',1,'ushort_union_t']]],
+  ['host_5fid_5freceived',['host_id_received',['../group__gzp__desktop__device__emulator__example.html#ga22d6ee8780ac4d80155c2cb145db16a4',1,'main_mouse_keyboard_emulator_nrf51.c']]],
+  ['hrcp_5fhandles',['hrcp_handles',['../structble__hrs__s.html#a8abb38d33b90b18c455e60d24e52baa7',1,'ble_hrs_s']]],
+  ['hrm_5fhandles',['hrm_handles',['../structble__hrs__s.html#af683c5e3e8c692ba6c20d8941483ce50',1,'ble_hrs_s']]],
+  ['hrs_5fbsl_5fattr_5fmd',['hrs_bsl_attr_md',['../structble__hrs__init__t.html#a2b688c05a8f04acd31acf2c55c3efc84',1,'ble_hrs_init_t']]],
+  ['hrs_5fhrm_5fattr_5fmd',['hrs_hrm_attr_md',['../structble__hrs__init__t.html#a670a4c608f847ac03bd66005b30068c3',1,'ble_hrs_init_t']]],
+  ['hts_5fmeas_5fattr_5fmd',['hts_meas_attr_md',['../structble__hts__init__t.html#a188b4254ad3703b757be25ee8be51817',1,'ble_hts_init_t']]],
+  ['hts_5ftemp_5ftype_5fattr_5fmd',['hts_temp_type_attr_md',['../structble__hts__init__t.html#a16dae749ef3313142013d5e8e958e28a',1,'ble_hts_init_t']]],
+  ['hvc',['hvc',['../structble__gatts__evt__t.html#ab2a040df9dc3a000d4f087d602cf4d20',1,'ble_gatts_evt_t']]],
+  ['hvx',['hvx',['../structble__gattc__evt__t.html#a11d86f3f0b98ca1f800a9a1a8f955f87',1,'ble_gattc_evt_t']]],
+  ['hw_5frev_5fstr',['hw_rev_str',['../structble__dis__init__t.html#af569ccba2c37863c84d7c6bc59fafea1',1,'ble_dis_init_t']]],
+  ['hw_5frevision',['hw_revision',['../structpage80__data__t.html#afdd6b67706877043c6d70ae63969c301',1,'page80_data_t']]],
+  ['hw_5fversion',['hw_version',['../structhrm__page3__data__t.html#aef0fcec04ecbb93297198dd84ccaa790',1,'hrm_page3_data_t']]]
+];

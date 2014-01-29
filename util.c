@@ -14,11 +14,17 @@
 
 #include "app_uart.h"
 
+#include "ble_sps.h"
+
 #include "util.h"
+
+extern ble_sps_t m_sps;
 
 uint32_t app_uart_put_string(char *str) {
 	uint32_t i = 0;
 	uint32_t err_code = NRF_SUCCESS;
+
+	ble_sps_put_string(&m_sps, str);
 
 	while (str[i] != '\0') {
 		err_code = app_uart_put(str[i++]);

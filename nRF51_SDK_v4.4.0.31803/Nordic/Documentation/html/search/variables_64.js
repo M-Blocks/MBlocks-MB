@@ -1,0 +1,25 @@
+var searchData=
+[
+  ['data',['data',['../structble__advdata__manuf__data__t.html#a52ebf147190879b03b057d7b80ec185d',1,'ble_advdata_manuf_data_t::data()'],['../structble__advdata__service__data__t.html#a52ebf147190879b03b057d7b80ec185d',1,'ble_advdata_service_data_t::data()'],['../structble__gattc__evt__read__rsp__t.html#aa86e1085c6a16f60258f29c9d5fc2144',1,'ble_gattc_evt_read_rsp_t::data()'],['../structble__gattc__evt__write__rsp__t.html#aa86e1085c6a16f60258f29c9d5fc2144',1,'ble_gattc_evt_write_rsp_t::data()'],['../structble__gattc__evt__hvx__t.html#aa86e1085c6a16f60258f29c9d5fc2144',1,'ble_gattc_evt_hvx_t::data()'],['../structble__gatts__evt__write__t.html#aa86e1085c6a16f60258f29c9d5fc2144',1,'ble_gatts_evt_write_t::data()'],['../structble__l2cap__evt__rx__t.html#aa86e1085c6a16f60258f29c9d5fc2144',1,'ble_l2cap_evt_rx_t::data()'],['../structantfs__event__return__t.html#a71e694efa49f526cd5dfbed852eb0e5b',1,'antfs_event_return_t::data()'],['../unionushort__union__t.html#aa6e451eccf9519b0809baad41f5ab241',1,'ushort_union_t::data()'],['../unionulong__union__t.html#a1e43bf7d608e87228b625cca2c04d641',1,'ulong_union_t::data()']]],
+  ['data_5fbytes',['data_bytes',['../unionulong__union__t.html#a26c538c52ae0871384783d7e9390d46b',1,'ulong_union_t']]],
+  ['data_5ffile_5findex',['data_file_index',['../structantfs__dir__struct__t.html#a64a89a0fd70e214c8cca24b3e30f1793',1,'antfs_dir_struct_t']]],
+  ['data_5flen',['data_len',['../structble__hids__rep__map__init__t.html#ac78cff7af99787faad2a285dffdde08e',1,'ble_hids_rep_map_init_t']]],
+  ['data_5fpayload',['data_payload',['../group__gzll__device__ack__payload__example.html#gaf177574a6e50e9b58f4154d9879cc4c3',1,'data_payload():&#160;main_device_ack_payload.c'],['../group__gzll__host__ack__payload__example.html#gaecd3b86b70d2342166a306a3f5681219',1,'data_payload():&#160;main_host_ack_payload.c']]],
+  ['data_5frate_5f',['data_rate_',['../group__n_r_f6350__radio__configuration__example__main.html#gae43cda81a5028826aaf50531d5c89b7a',1,'data_rate_():&#160;main.c'],['../group__foftt__n_r_f6350__radio__configuration__example__main.html#gae43cda81a5028826aaf50531d5c89b7a',1,'data_rate_():&#160;main.c']]],
+  ['database',['database',['../group__gzp__source__device.html#ga41423eb04d340262c0504abeebb9b90b',1,'nrf_gzp_device.c']]],
+  ['date',['date',['../structantfs__dir__header__t.html#aec570426e59e0687a276a5e7b49cc251',1,'antfs_dir_header_t::date()'],['../structantfs__dir__struct__t.html#aec570426e59e0687a276a5e7b49cc251',1,'antfs_dir_struct_t::date()']]],
+  ['debounce_5ftime_5fin_5fms',['debounce_time_in_ms',['../structdeb__t.html#a6bab3d9d5512cfffe4a8e5ec54a9a0ef',1,'deb_t']]],
+  ['delayms_5f',['delayms_',['../group__n_r_f6350__radio__configuration__example__main.html#ga158f564b78fb9c8f35f242dc3eaa9f43',1,'delayms_():&#160;main.c'],['../group__foftt__n_r_f6350__radio__configuration__example__main.html#ga158f564b78fb9c8f35f242dc3eaa9f43',1,'delayms_():&#160;main.c']]],
+  ['desc',['desc',['../structble__gatts__char__pf__t.html#aa84f518194963d8c2c4a4f989ab30e04',1,'ble_gatts_char_pf_t']]],
+  ['desc_5fdisc_5frsp',['desc_disc_rsp',['../structble__gattc__evt__t.html#af2a53cd4186601d47cd6de5c7cbaffcd',1,'ble_gattc_evt_t']]],
+  ['desc_5fuuid',['desc_uuid',['../structble__gatts__attr__context__t.html#af296e28e58ce9c9cabbc757c4374dec5',1,'ble_gatts_attr_context_t']]],
+  ['descs',['descs',['../structble__gattc__evt__desc__disc__rsp__t.html#ac66f64bc45cf2fbd8714b65cee3e24bb',1,'ble_gattc_evt_desc_disc_rsp_t']]],
+  ['dfu_5fctrl_5fpt_5fhandles',['dfu_ctrl_pt_handles',['../structble__dfu__s.html#a092f5f6593ac8b6f17bbbaf72ceaee67',1,'ble_dfu_s']]],
+  ['dfu_5fpkt_5fhandles',['dfu_pkt_handles',['../structble__dfu__s.html#aa022441926142455605e5830628a5240',1,'ble_dfu_s']]],
+  ['dfu_5fstatus_5frep_5fhandles',['dfu_status_rep_handles',['../structble__dfu__s.html#a6cca6355a9b761b93212dad8e92df6f3',1,'ble_dfu_s']]],
+  ['dis_5fattr_5fmd',['dis_attr_md',['../structble__dis__init__t.html#aa3268ab4659686cb4202651e071af265',1,'ble_dis_init_t']]],
+  ['disconnect_5fon_5ffail',['disconnect_on_fail',['../structble__conn__params__init__t.html#a7a3f3aac03305ef8012ade05399b5449',1,'ble_conn_params_init_t']]],
+  ['disconnected',['disconnected',['../structble__gap__evt__t.html#a98f1005ba85566409eaa9746be65f4da',1,'ble_gap_evt_t']]],
+  ['div',['div',['../structble__gap__enc__info__t.html#aa1147a1ab6ff4c36934461ca71d73bef',1,'ble_gap_enc_info_t::div()'],['../structble__gap__evt__sec__info__request__t.html#aa1147a1ab6ff4c36934461ca71d73bef',1,'ble_gap_evt_sec_info_request_t::div()']]],
+  ['dyn_5fkey_5fok',['dyn_key_ok',['../group__gzp__desktop__device__emulator__example.html#ga0daf214f48a95ce4131ff37eb46fa4f0',1,'main_mouse_keyboard_emulator_nrf51.c']]]
+];

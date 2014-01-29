@@ -1,0 +1,27 @@
+var group___b_l_e___g_a_p___d_e_f_i_n_e_s =
+[
+    [ "GAP Address types", "group___b_l_e___g_a_p___a_d_d_r___t_y_p_e_s.html", "group___b_l_e___g_a_p___a_d_d_r___t_y_p_e_s" ],
+    [ "GAP Advertisement Flags", "group___b_l_e___g_a_p___a_d_v___f_l_a_g_s.html", "group___b_l_e___g_a_p___a_d_v___f_l_a_g_s" ],
+    [ "GAP Advertising and Scan Response Data format", "group___b_l_e___g_a_p___a_d___t_y_p_e___d_e_f_i_n_i_t_i_o_n_s.html", "group___b_l_e___g_a_p___a_d___t_y_p_e___d_e_f_i_n_i_t_i_o_n_s" ],
+    [ "GAP Advertising filter policies", "group___b_l_e___g_a_p___a_d_v___f_i_l_t_e_r___p_o_l_i_c_i_e_s.html", "group___b_l_e___g_a_p___a_d_v___f_i_l_t_e_r___p_o_l_i_c_i_e_s" ],
+    [ "GAP Advertising interval max and min", "group___b_l_e___g_a_p___a_d_v___i_n_t_e_r_v_a_l_s.html", "group___b_l_e___g_a_p___a_d_v___i_n_t_e_r_v_a_l_s" ],
+    [ "GAP Advertising timeout values", "group___b_l_e___g_a_p___a_d_v___t_i_m_e_o_u_t___v_a_l_u_e_s.html", "group___b_l_e___g_a_p___a_d_v___t_i_m_e_o_u_t___v_a_l_u_e_s" ],
+    [ "GAP Advertising types", "group___b_l_e___g_a_p___a_d_v___t_y_p_e_s.html", "group___b_l_e___g_a_p___a_d_v___t_y_p_e_s" ],
+    [ "GAP Authentication Key Types", "group___b_l_e___g_a_p___a_u_t_h___k_e_y___t_y_p_e_s.html", "group___b_l_e___g_a_p___a_u_t_h___k_e_y___t_y_p_e_s" ],
+    [ "GAP Connection Parameters Limits", "group___b_l_e___g_a_p___c_p___l_i_m_i_t_s.html", "group___b_l_e___g_a_p___c_p___l_i_m_i_t_s" ],
+    [ "GAP Discovery modes", "group___b_l_e___g_a_p___d_i_s_c___m_o_d_e_s.html", "group___b_l_e___g_a_p___d_i_s_c___m_o_d_e_s" ],
+    [ "GAP IO Capabilities", "group___b_l_e___g_a_p___i_o___c_a_p_s.html", "group___b_l_e___g_a_p___i_o___c_a_p_s" ],
+    [ "GAP Roles", "group___b_l_e___g_a_p___r_o_l_e_s.html", "group___b_l_e___g_a_p___r_o_l_e_s" ],
+    [ "GAP Security Modes", "group___g_a_p___s_e_c___m_o_d_e_s.html", "group___g_a_p___s_e_c___m_o_d_e_s" ],
+    [ "GAP Security status", "group___b_l_e___g_a_p___s_e_c___s_t_a_t_u_s.html", "group___b_l_e___g_a_p___s_e_c___s_t_a_t_u_s" ],
+    [ "GAP Security status sources", "group___b_l_e___g_a_p___s_e_c___s_t_a_t_u_s___s_o_u_r_c_e_s.html", "group___b_l_e___g_a_p___s_e_c___s_t_a_t_u_s___s_o_u_r_c_e_s" ],
+    [ "GAP Timeout sources", "group___b_l_e___g_a_p___t_i_m_e_o_u_t___s_o_u_r_c_e_s.html", "group___b_l_e___g_a_p___t_i_m_e_o_u_t___s_o_u_r_c_e_s" ],
+    [ "GAP attribute security requirement setters", "group___b_l_e___g_a_p___c_o_n_n___s_e_c___m_o_d_e___s_e_t___m_a_c_r_o_s.html", "group___b_l_e___g_a_p___c_o_n_n___s_e_c___m_o_d_e___s_e_t___m_a_c_r_o_s" ],
+    [ "SVC return values specific to GAP", "group___b_l_e___e_r_r_o_r_s___g_a_p.html", "group___b_l_e___e_r_r_o_r_s___g_a_p" ],
+    [ "BLE_GAP_ADDR_LEN", "group___b_l_e___g_a_p___d_e_f_i_n_e_s.html#ga65d5382341d5a38c5a051ac7198ddb03", null ],
+    [ "BLE_GAP_ADV_MAX_SIZE", "group___b_l_e___g_a_p___d_e_f_i_n_e_s.html#ga6d6ae1b58ea2dc641e4dc30e8e2dcc0b", null ],
+    [ "BLE_GAP_DEVNAME_MAX_LEN", "group___b_l_e___g_a_p___d_e_f_i_n_e_s.html#gac2eb594dd57920a845941ba29990022d", null ],
+    [ "BLE_GAP_SEC_KEY_LEN", "group___b_l_e___g_a_p___d_e_f_i_n_e_s.html#gae54d6eefffc70a3ded9ebbede87e6a51", null ],
+    [ "BLE_GAP_WHITELIST_ADDR_MAX_COUNT", "group___b_l_e___g_a_p___d_e_f_i_n_e_s.html#ga0e1bde4f7e3b124dc8aa2e7b032b8313", null ],
+    [ "BLE_GAP_WHITELIST_IRK_MAX_COUNT", "group___b_l_e___g_a_p___d_e_f_i_n_e_s.html#ga748b090dc565a8499e9088ecebe8672b", null ]
+];
