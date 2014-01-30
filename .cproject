@@ -24,6 +24,8 @@
 								<option id="org.eclipse.cdt.build.core.settings.holder.symbols.819075249" name="Symbols" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="NRF51=1"/>
 									<listOptionValue builtIn="false" value="BOARD_NRF6310=1"/>
+									<listOptionValue builtIn="false" value="BLE_DEBUG"/>
+									<listOptionValue builtIn="false" value="ENABLE_BLE_COMMANDS=1"/>
 								</option>
 								<inputType id="org.eclipse.cdt.build.core.settings.holder.inType.1651649104" languageId="org.eclipse.cdt.core.assembly" languageName="Assembly" sourceContentType="org.eclipse.cdt.core.asmSource" superClass="org.eclipse.cdt.build.core.settings.holder.inType"/>
 							</tool>
@@ -38,7 +40,10 @@
 									<listOptionValue builtIn="false" value="&quot;C:\Program Files (x86)\GNU Tools ARM Embedded\4.8 2013q4\arm-none-eabi\include&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;C:\Program Files (x86)\GNU Tools ARM Embedded\4.8 2013q4\lib\gcc\arm-none-eabi\4.8.3\include&quot;"/>
 								</option>
-								<option id="org.eclipse.cdt.build.core.settings.holder.symbols.613855105" name="Symbols" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols"/>
+								<option id="org.eclipse.cdt.build.core.settings.holder.symbols.613855105" name="Symbols" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
+									<listOptionValue builtIn="false" value="BLE_DEBUG=1"/>
+									<listOptionValue builtIn="false" value="ENABLE_BLE_COMMANDS=1"/>
+								</option>
 								<inputType id="org.eclipse.cdt.build.core.settings.holder.inType.1399093535" languageId="org.eclipse.cdt.core.g++" languageName="GNU C++" sourceContentType="org.eclipse.cdt.core.cxxSource,org.eclipse.cdt.core.cxxHeader" superClass="org.eclipse.cdt.build.core.settings.holder.inType"/>
 							</tool>
 							<tool id="org.eclipse.cdt.build.core.settings.holder.1864511664" name="GNU C" superClass="org.eclipse.cdt.build.core.settings.holder">
@@ -54,6 +59,8 @@
 								</option>
 								<option id="org.eclipse.cdt.build.core.settings.holder.symbols.1633499216" name="Symbols" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__INLINE=__attribute__((always_inline))"/>
+									<listOptionValue builtIn="false" value="BLE_DEBUG=1"/>
+									<listOptionValue builtIn="false" value="ENABLE_BLE_COMMANDS=1"/>
 								</option>
 								<inputType id="org.eclipse.cdt.build.core.settings.holder.inType.1184251357" languageId="org.eclipse.cdt.core.gcc" languageName="GNU C" sourceContentType="org.eclipse.cdt.core.cSource,org.eclipse.cdt.core.cHeader" superClass="org.eclipse.cdt.build.core.settings.holder.inType"/>
 							</tool>

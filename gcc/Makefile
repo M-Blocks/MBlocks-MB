@@ -6,7 +6,8 @@ C_SOURCE_FILES += nrf_delay.c app_scheduler.c app_button.c app_gpiote.c app_time
 ## The Following files are only needed when the ble_debug_assert_handler() function is called from the app_error_handler() in main ##
 C_SOURCE_FILES += ble_debug_assert_handler.c ble_error_log.c ble_flash.c 
 
-#CFLAGS += -DBLE_DEBUG
+CFLAGS += -DBLE_DEBUG=0
+CFLAGS += -DENABLE_BLE_COMMANDS=1
 
 SDK_PATH = ../nRF51_SDK_v4.4.0.31803/Nordic/nrf51822/
 OUTPUT_FILENAME := MBlocks-MB

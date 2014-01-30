@@ -24,9 +24,11 @@ fifoSize_t fifo_getUsedSpace(const fifo_t *p_fifo) {
 		return 0;
 	} else if (p_fifo->full) {
 		return p_fifo->dataSize;
+	} else if (p_fifo->inPtr >= p_fifo->outPtr) {
+		return (p_fifo->inPtr - p_fifo->outPtr);
+	} else {
+		return p_fifo->dataSize - (p_fifo->outPtr - p_fifo->inPtr);
 	}
-
-	return (p_fifo->inPtr - p_fifo->outPtr);
 }
 
 fifoSize_t fifo_getFreeSpace(const fifo_t *p_fifo) {

@@ -24,7 +24,9 @@ uint32_t app_uart_put_string(char *str) {
 	uint32_t i = 0;
 	uint32_t err_code = NRF_SUCCESS;
 
+#if (ENABLE_BLE_COMMANDS == 1)
 	ble_sps_put_string(&m_sps, str);
+#endif
 
 	while (str[i] != '\0') {
 		err_code = app_uart_put(str[i++]);

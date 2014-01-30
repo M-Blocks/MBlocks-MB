@@ -81,8 +81,10 @@
 // YOUR_JOB: Modify these according to requirements.
 #define SECOND_1_25_MS_UNITS            800                                         /**< Definition of 1 second, when 1 unit is 1.25 ms. */
 #define SECOND_10_MS_UNITS              100                                         /**< Definition of 1 second, when 1 unit is 10 ms. */
-#define MIN_CONN_INTERVAL               (SECOND_1_25_MS_UNITS / 2)                  /**< Minimum acceptable connection interval (0.5 seconds), Connection interval uses 1.25 ms units. */
-#define MAX_CONN_INTERVAL               (SECOND_1_25_MS_UNITS)                      /**< Maximum acceptable connection interval (1 second), Connection interval uses 1.25 ms units. */
+//#define MIN_CONN_INTERVAL             (SECOND_1_25_MS_UNITS / 2)                  /**< Minimum acceptable connection interval (0.5 seconds), Connection interval uses 1.25 ms units. */
+#define MIN_CONN_INTERVAL               (SECOND_1_25_MS_UNITS / 100)                /**< Minimum acceptable connection interval (10 ms), Connection interval uses 1.25 ms units. */
+//#define MAX_CONN_INTERVAL             (SECOND_1_25_MS_UNITS)                      /**< Maximum acceptable connection interval (1 second), Connection interval uses 1.25 ms units. */
+#define MAX_CONN_INTERVAL               (SECOND_1_25_MS_UNITS / 10)                 /**< Maximum acceptable connection interval (100 ms), Connection interval uses 1.25 ms units. */
 #define SLAVE_LATENCY                   0                                           /**< Slave latency. */
 #define CONN_SUP_TIMEOUT                (4 * SECOND_10_MS_UNITS)                    /**< Connection supervisory timeout (4 seconds), Supervision Timeout uses 10 ms units. */
 #define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(20000, APP_TIMER_PRESCALER) /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (15 seconds). */
@@ -985,9 +987,11 @@ int main(void) {
         	cmdline_newChar(c);
         }
 
+#if (ENABLE_BLE_COMMANDS == 1)
         while (ble_sps_get_char(&m_sps, &c)) {
         	cmdline_newChar(c);
         }
+#endif
 
         //power_manage();
     }
