@@ -31,7 +31,6 @@
 #include "boards/nrf6310.h"
 #include "app_error.h"
 #include "app_uart.h"
-#include "nrf_gpio.h"
 #include "nrf51_bitfields.h"
 #include "ble.h"
 #include "ble_hci.h"
@@ -58,6 +57,7 @@
 #include "a4960.h"
 #include "sma.h"
 #include "power.h"
+#include "led.h"
 #include "commands.h"
 #include "cmdline.h"
 
@@ -70,8 +70,6 @@
 //#define WAKEUP_BUTTON_PIN               NRF6310_BUTTON_0                            /**< Button used to wake up the application. */
 // YOUR_JOB: Define any other buttons to be used by the applications:
 // #define MY_BUTTON_PIN                   NRF6310_BUTTON_1
-
-#define RSSI_CHANGED_LED_PIN_NO			LED_GREEN_PIN_NO
 
 #define APP_ADV_INTERVAL                64                                          /**< The advertising interval (in units of 0.625 ms. This value corresponds to 40 ms). */
 #define APP_ADV_TIMEOUT_IN_SECONDS      180                                         /**< The advertising timeout (in units of seconds). */
@@ -118,10 +116,6 @@ static void advertising_stop(void);
 static void gap_params_init(void);
 static void advertising_init(void);
 
-#if (0)
-static app_timer_id_t rssi_timer_id;
-static int8_t rssi = 127;
-#endif
 
 #if (0)
 static app_timer_id_t bldc_tacho_freq_update_timer_id;
@@ -151,12 +145,9 @@ ble_sps_t m_sps;
  * @param[in] line_num    Line number where the handler is called.
  * @param[in] p_file_name Pointer to the file name. 
  */
-void app_error_handler(uint32_t error_code, uint32_t line_num, const uint8_t * p_file_name)
-{
-	nrf_gpio_pin_set(LED_RED_PIN_NO);
-	nrf_gpio_pin_set(LED_GREEN_PIN_NO);
-    nrf_gpio_pin_set(LED_BLUE_PIN_NO);
-
+void app_error_handler(uint32_t error_code, uint32_t line_num, const uint8_t * p_file_name) {
+	led_setAllOff();
+	led_setState(LED_RED, LED_STATE_FAST_FLASH);
 
     // This call can be used for debug purposes during development of an application.
     // @note CAUTION: Activating this code will write the stack to flash on an error.
@@ -205,41 +196,9 @@ static void service_error_handler(uint32_t nrf_error)
 } */
 
 
-/**@brief LEDs initialization.
- *
- * @details Initializes all LEDs used by the application.
- */
-static void leds_init(void)
-{
-    GPIO_LED_CONFIG(LED_RED_PIN_NO);
-    GPIO_LED_CONFIG(LED_GREEN_PIN_NO);
-    GPIO_LED_CONFIG(LED_BLUE_PIN_NO);
-    
-    // YOUR_JOB: Add additional LED initialiazations if needed.
-}
-
 
 static void on_uart_evt(app_uart_evt_t *p_app_uart_event) {
-#if (0)
-	static uint8_t rxBuf[33];
-	static uint8_t rxBufPtr = 0;
-	uint8_t c;
-
-	if ((p_app_uart_event->evt_type == APP_UART_DATA_READY) &&
-			(app_uart_get(&c) != NRF_ERROR_NOT_FOUND)) {
-
-		if ((32 <= c) && (c <= 126) && (rxBufPtr + 1< sizeof(rxBuf))) { // Printable character
-			rxBuf[rxBufPtr++] = c;
-			rxBuf[rxBufPtr] = '\0';
-		} else if ((c == 8) && (rxBufPtr > 0)) { // Backspace
-			rxBuf[--rxBufPtr] = '\0';
-		} else if (((c == '\r') || (c == '\n')) && (rxBufPtr > 0)) { // Carriage return or new line
-			parse_command((char *)rxBuf);
-			rxBufPtr = 0;
-			rxBuf[rxBufPtr] = '\0';
-		}
-	}
-#endif
+	;
 }
 
 static void uart_init(void) {
@@ -248,8 +207,8 @@ static void uart_init(void) {
 
 	comm_params.rx_pin_no = UART_RX_PIN_NO;
 	comm_params.tx_pin_no = UART_TX_PIN_NO;
-	comm_params.rts_pin_no = UART_PIN_DISCONNECTED;
-	comm_params.cts_pin_no = UART_PIN_DISCONNECTED;
+	comm_params.rts_pin_no = (uint8_t)UART_PIN_DISCONNECTED;
+	comm_params.cts_pin_no = (uint8_t)UART_PIN_DISCONNECTED;
 	comm_params.flow_control = APP_UART_FLOW_CONTROL_DISABLED;
 	comm_params.use_parity = false;
 	comm_params.baud_rate = UART_BAUDRATE_BAUDRATE_Baud115200;
@@ -260,13 +219,6 @@ static void uart_init(void) {
 
 }
 
-#if (0)
-static void rssi_timeout_handler(void *p_context) {
-	UNUSED_PARAMETER(p_context);
-
-	rssi = 127;
-}
-#endif
 
 #if (0)
 static void bldc_tacho_freq_update_timer_hander(void *p_context) {
@@ -286,10 +238,9 @@ static void timers_init(void)
     // Initialize timer module, making it use the scheduler
     APP_TIMER_INIT(APP_TIMER_PRESCALER, APP_TIMER_MAX_TIMERS, APP_TIMER_OP_QUEUE_SIZE, true);
 
-#if (0)
-    err_code = app_timer_create(&rssi_timer_id, APP_TIMER_MODE_SINGLE_SHOT, rssi_timeout_handler);
+    /* Create a timer which will be used to flash the LEDs */
+    err_code = app_timer_create(&led_timer_id, APP_TIMER_MODE_REPEATED, led_timer_handler);
     APP_ERROR_CHECK(err_code);
-#endif
 
 #if (0)
     err_code = app_timer_create(&bldc_tacho_freq_update_timer_id, APP_TIMER_MODE_REPEATED, bldc_tacho_freq_update_timer_hander);
@@ -565,6 +516,10 @@ static void timers_start(void) {
     err_code = app_timer_start(m_app_timer_id, TIMER_INTERVAL, NULL);
     APP_ERROR_CHECK(err_code); */
 
+	/* Start the timer which controls the LEDs */
+	err_code = app_timer_start(led_timer_id, APP_TIMER_TICKS(100, APP_TIMER_PRESCALER), NULL);
+	APP_ERROR_CHECK(err_code);
+
 #if(0)
 	err_code = app_timer_start(bldc_tacho_freq_update_timer_id, APP_TIMER_TICKS(10, APP_TIMER_PRESCALER), NULL);
 	APP_ERROR_CHECK(err_code);
@@ -589,7 +544,8 @@ void advertising_start(void) {
 
     err_code = sd_ble_gap_adv_start(&adv_params);
     APP_ERROR_CHECK(err_code);
-    nrf_gpio_pin_set(LED_BLUE_PIN_NO);
+
+    led_setState(LED_BLUE, LED_STATE_ON);
 }
 
 void advertising_stop(void) {
@@ -597,7 +553,8 @@ void advertising_stop(void) {
 
 	err_code = sd_ble_gap_adv_stop();
 	APP_ERROR_CHECK(err_code);
-	nrf_gpio_pin_clear(LED_BLUE_PIN_NO);
+
+	led_setState(LED_BLUE, LED_STATE_OFF);
 }
 
 
@@ -614,37 +571,13 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
     switch (p_ble_evt->header.evt_id)
     {
         case BLE_GAP_EVT_CONNECTED:
-            nrf_gpio_pin_set(LED_RED_PIN_NO);
-            nrf_gpio_pin_clear(LED_BLUE_PIN_NO);
             m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
-
-            /* YOUR_JOB: Uncomment this part if you are using the app_button module to handle button
-                         events (assuming that the button events are only needed in connected
-                         state). If this is uncommented out here,
-                            1. Make sure that app_button_disable() is called when handling
-                               BLE_GAP_EVT_DISCONNECTED below.
-                            2. Make sure the app_button module is initialized.
-            err_code = app_button_enable();
-            */
-
-            err_code = sd_ble_gap_rssi_stop(m_conn_handle);
-            err_code = sd_ble_gap_rssi_start(m_conn_handle);
-
+        	led_setState(LED_BLUE, LED_STATE_SLOW_FLASH);
             break;
             
         case BLE_GAP_EVT_DISCONNECTED:
-            nrf_gpio_pin_clear(LED_RED_PIN_NO);
-            m_conn_handle = BLE_CONN_HANDLE_INVALID;
-
-            /* YOUR_JOB: Uncomment this part if you are using the app_button module to handle button
-                         events. This should be done to save power when not connected
-                         to a peer.
-            err_code = app_button_disable();
-            */
-
-            //err_code = sd_ble_gap_rssi_stop(m_conn_handle);
-            //if (err_code == NRF_SUCCESS) {}
-
+        	m_conn_handle = BLE_CONN_HANDLE_INVALID;
+        	led_setState(LED_BLUE, LED_STATE_OFF);
             advertising_start();
             break;
             
@@ -676,9 +609,8 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
             break;
 
         case BLE_GAP_EVT_TIMEOUT:
-            if (p_ble_evt->evt.gap_evt.params.timeout.src == BLE_GAP_TIMEOUT_SRC_ADVERTISEMENT)
-            { 
-                nrf_gpio_pin_clear(LED_BLUE_PIN_NO);
+            if (p_ble_evt->evt.gap_evt.params.timeout.src == BLE_GAP_TIMEOUT_SRC_ADVERTISEMENT) {
+            	led_setState(LED_BLUE, LED_STATE_OFF);
 
                 // Go to system-off mode (this function will not return; wakeup will cause a reset)
                 //GPIO_WAKEUP_BUTTON_CONFIG(WAKEUP_BUTTON_PIN);
@@ -687,14 +619,6 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
             break;
 
         case BLE_GAP_EVT_RSSI_CHANGED:
-#if (0)
-        	app_timer_stop(rssi_timer_id);
-        	rssi = p_ble_evt->evt.gap_evt.params.rssi_changed.rssi;
-        	/* In two 2 seconds, reset the RSSI to its default value of 127.
-        	 * This ensure that the RSSI command will never return an outdated
-        	 * RSSI value. */
-        	app_timer_start(rssi_timer_id, APP_TIMER_TICKS(2000, APP_TIMER_PRESCALER), NULL);
-#endif
         	break;
 
         default:
@@ -782,39 +706,15 @@ static void gpiote_init(void)
 
 /**@brief Power manager.
  */
-static void power_manage(void)
-{
+static void power_manage(void) {
+#if (0)
     uint32_t err_code = sd_app_event_wait();
     APP_ERROR_CHECK(err_code);
+#endif // 0
 }
 
 
-static void on_gpio_evt(uint32_t event_pins_low_to_high, uint32_t event_pins_high_to_low) {
-#if 0
-	/* Make the RTS pin the inverse of the CTS pin.  This allows us to test
-	 * neither pin is shorted to ground or VCC, that neither pin is open,
-	 * and that the two pins are not shorted together.  */
-	if (event_pins_low_to_high & (1<<10)) {
-		nrf_gpio_pin_clear(9);
-	} else if (event_pins_high_to_low & (1<<10)) {
-		nrf_gpio_pin_set(9);
-	}
-
-	/* Make the BT_LPM_ACKn pin the inverse of the BT_SLEEP pin */
-	if (event_pins_low_to_high & (1<<11)) {
-		nrf_gpio_pin_clear(16);
-	} else if (event_pins_high_to_low & (1<<11)) {
-		nrf_gpio_pin_set(16);
-	}
-
-	/* Make the BT_GPIO pin the XOR of the BT_CTS and BT_SLEEP pins */
-	if (nrf_gpio_pin_read(10) == nrf_gpio_pin_read(11)) {
-		nrf_gpio_pin_clear(12);
-	} else {
-		nrf_gpio_pin_set(12);
-	}
-#endif
-}
+static void on_gpio_evt(uint32_t event_pins_low_to_high, uint32_t event_pins_high_to_low) {}
 
 static void gpio_init(void) {
     app_gpiote_user_id_t p_user_id;
@@ -946,7 +846,7 @@ int main(void) {
 	while (NRF_CLOCK ->EVENTS_HFCLKSTARTED == 0);
 
     // Initialize
-    leds_init();
+    led_init();
 
     timers_init();
     gpiote_init();
@@ -993,7 +893,7 @@ int main(void) {
         }
 #endif
 
-        //power_manage();
+        power_manage();
     }
 }
 

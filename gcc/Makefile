@@ -1,6 +1,6 @@
 BOARD := BOARD_NRF6310
 
-C_SOURCE_FILES += main.c adc.c power.c util.c pwm.c freqcntr.c spi.c bldc.c a4960.c spi_master.c sma.c cmdline.c commands.c
+C_SOURCE_FILES += main.c adc.c power.c util.c pwm.c freqcntr.c spi.c bldc.c a4960.c spi_master.c sma.c led.c cmdline.c commands.c
 C_SOURCE_FILES += ble_sps.c fifo.c ble_vns.c
 C_SOURCE_FILES += nrf_delay.c app_scheduler.c app_button.c app_gpiote.c app_timer.c app_uart_fifo.c app_fifo.c ble_advdata.c ble_stack_handler.c ble_conn_params.c 
 ## The Following files are only needed when the ble_debug_assert_handler() function is called from the app_error_handler() in main ##
