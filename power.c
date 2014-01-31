@@ -18,6 +18,7 @@
 #include "adc.h"
 #include "pwm.h"
 #include "led.h"
+#include "bleApp.h"
 #include "power.h"
 
 #define CELL_CHARGED_THRESHOLD_MV			4250	/* Stop charging as soon as all cells rise to this voltage, really they should never rise over 4.2V and we should halt charging when the current falls sufficiently. */
@@ -42,6 +43,13 @@
 #define CHARGE_TIME_MAXIMUM_MS				10800000 /* Maximum time (3 hours) we run the charger before assuming something is wrong */
 
 #define RTC_TICKS_PER_MS					33		/* 32.768 ticks of the RTS per millisecond (32.768kHz RTC) */
+
+#define RUN_MODE_CURRENT_UA					12100
+#define BLE_ADVERTISING_CURRENT_UA			1500
+#define BLE_CONNECTED_CURRENT_UA			200
+#define LED0_CURRENT_UA						1800
+#define LED1_CURRENT_UA						2600
+#define LED2_CURRENT_UA						1200
 
 app_timer_id_t power_timer_id;
 
@@ -157,9 +165,22 @@ bool power_disableCharger() {
 	return true;
 }
 
-void power_setChargeState(power_chargeState_t state) {
-	chargeState = state;
+void power_setChargeState(power_chargeState_t newState) {
+	/* If we are changing from some other state to the DISCHARGE state, we
+	 * reset the charging timer because we may be moving directly from the
+	 * PRECHARGING or CHARGING state thereby skipping the STANDBY or OFF
+	 * states where the charging timer is normally reset. */
+	if ((chargeState != POWER_CHARGESTATE_DISCHARGE) &&
+			(newState == POWER_CHARGESTATE_DISCHARGE)) {
+		chargingTime_rtcTicks = 0;
+	}
+
+	chargeState = newState;
 	power_updateChargeState();
+}
+
+power_chargeState_t power_getChargeState() {
+	return chargeState;
 }
 
 void power_setDebug(bool enable) {
@@ -309,7 +330,23 @@ uint16_t power_getChargeCurrent_mA() {
 }
 
 uint16_t power_getEstimatedCurrentConsumption_mA() {
-	return 0;
+	uint32_t ledCurrent_uA[3] = {LED0_CURRENT_UA, LED1_CURRENT_UA, LED2_CURRENT_UA};
+	uint8_t led;
+	uint32_t uA = 0;
+
+	uA += RUN_MODE_CURRENT_UA;
+
+	if (bleApp_isConnected()) {
+		uA += BLE_CONNECTED_CURRENT_UA;
+	} else if (bleApp_isAdvertisingEnabled()) {
+		uA += BLE_ADVERTISING_CURRENT_UA;
+	}
+
+	for (led = 0; led < 3; led++) {
+		uA += (led_getDutyCycle_percent(led) * ledCurrent_uA[led]) / 100;
+	}
+
+	return uA / 1000;
 }
 
 bool power_isCellUndervoltage() {
@@ -786,10 +823,6 @@ void power_printDebugInfo() {
 	}
 
 	app_uart_put_string("\r\n");
-
-	snprintf(line, sizeof(line), "ChargingTime: %u RTC Ticks\r\n", chargingTime_rtcTicks);
-	app_uart_put_string(line);
-
 	snprintf(line, sizeof(line), "Charger State: %s   Error: %s              Time: %02u:%02u:%02u\r\n", stateStr, errStr, hours, minutes, seconds);
 	app_uart_put_string(line);
 	snprintf(line, sizeof(line), "Charger Current: %3umA      Est. Shunt Current: %3umA     Battery Current: %3umA\r\n", chargerCurrent_mA, estShuntCurrent_mA, batteryCurrent_mA);

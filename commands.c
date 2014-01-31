@@ -23,7 +23,9 @@
 #include "sma.h"
 #include "freqcntr.h"
 #include "cmdline.h"
+#include "bleApp.h"
 #include "ble_sps.h"
+#include "led.h"
 #include "commands.h"
 
 extern ble_sps_t m_sps;
@@ -47,6 +49,8 @@ static void cmdBLDCSetKP(const char *args);
 static void cmdBLDCSetKI(const char *args);
 /* SMA commands */
 static void cmdSMA(const char *args);
+/* LED commands */
+static void cmdLED(const char *args);
 /* BLE Serial Port Service Testing Commands */
 static void cmdBLETx(const char *args);
 static void cmdBLERx(const char *args);
@@ -75,6 +79,8 @@ static const char cmdBLDCSetKPStr[] = "bldckp";
 static const char cmdBLDCSetKIStr[] = "bldcki";
 /* SMA commands */
 static const char cmdSMAStr[] = "sma";
+/* LED commands */
+static const char cmdLEDStr[] = "led";
 /* BLE Serial Port Service Testing Commands */
 static const char cmdBLETxStr[] = "bletx";
 static const char cmdBLERxStr[] = "blerx";
@@ -104,12 +110,14 @@ static cmdFcnPair_t cmdTable[] = {
 	{cmdBLDCSetKPStr, cmdBLDCSetKP},
 	{cmdBLDCSetKIStr, cmdBLDCSetKI},
 	/* SMA commands */
-	{cmdSMAStr, cmdSMA},
+	//{cmdSMAStr, cmdSMA},
+	/* LED commands */
+	{cmdLEDStr, cmdLED},
 	/* BLE Serial Port Service Testing Commands */
 	{cmdBLETxStr, cmdBLETx},
 	{cmdBLERxStr, cmdBLERx},
 	{cmdBLEDisconStr, cmdBLEDiscon},
-	{cmdBLEAdvStr, cmdBLEAdvStr},
+	{cmdBLEAdvStr, cmdBLEAdv},
 	// Always end the command table with an emptry string and null pointer
 	{cmdEmptyStr, NULL}
 };
@@ -136,6 +144,10 @@ void cmdPWMSet(const char *args) {
 	}
 }
 
+/*****************************/
+/* Power management commands */
+/*****************************/
+
 void cmdVIn(const char *args) {
 	power_printVIn();
 }
@@ -147,6 +159,11 @@ void cmdVBat(const char *args) {
 void cmdICharge(const char *args) {
 	unsigned int iLimit_mA;
 	char str[50];
+
+	if (power_getChargeState() != POWER_CHARGESTATE_MANUAL) {
+		app_uart_put_string("Command only allowed when charge state set to Manual\r\n");
+		return;
+	}
 
 	if (sscanf(args, "%u", &iLimit_mA) == 1) {
 		if (power_setChargerCurrentLimit_mA(iLimit_mA)) {
@@ -163,6 +180,11 @@ void cmdBatShort(const char *args) {
 	char str[2];
 	int i;
 	uint8_t discharge;
+
+	if (power_getChargeState() != POWER_CHARGESTATE_MANUAL) {
+		app_uart_put_string("Command only allowed when charge state set to Manual\r\n");
+		return;
+	}
 
 	if (sscanf(args, "%u %u %u %u",
 			&shortBat[0], &shortBat[1], &shortBat[2], &shortBat[3]) == 4) {
@@ -220,6 +242,10 @@ void cmdCharge(const char *args) {
 		}
 	}
 }
+
+/**************************/
+/* Motor control commands */
+/**************************/
 
 void cmdBLDCSpeed(const char *args) {
 	char str[50];
@@ -402,6 +428,10 @@ void cmdBLDCSetKI(const char *args) {
 	app_uart_put_string(str);
 }
 
+/****************/
+/* SMA Commands */
+/****************/
+
 void cmdSMA(const char *args) {
 	int nArgs;
 	char str[50];
@@ -449,6 +479,28 @@ void cmdSMA(const char *args) {
 		}
 	}
 }
+
+/****************/
+/* LED Commands */
+/****************/
+void cmdLED(const char *args) {
+	char str[50];
+	unsigned int ledNum, ledState;
+
+	if (sscanf(args, "%u %u", &ledNum, &ledState) != 2) {
+		return;
+	}
+
+	if (led_setState(ledNum, ledState)) {
+		snprintf(str, sizeof(str), "Led %u state set to %u\r\n", ledNum, ledState);
+		app_uart_put_string(str);
+	}
+}
+
+
+/****************/
+/* BLE Commands */
+/****************/
 
 void cmdBLETx(const char *args) {
 	char txStr[150];
@@ -498,7 +550,7 @@ void cmdBLERx(const char *args) {
 	app_uart_put_string("\r\n");
 }
 
-void cmdBLEDisconnect(const char *args) {
+void cmdBLEDiscon(const char *args) {
 	uint32_t err_code;
 
 	if (m_sps.conn_handle == BLE_CONN_HANDLE_INVALID) {
@@ -512,6 +564,17 @@ void cmdBLEDisconnect(const char *args) {
 }
 
 void cmdBLEAdv(const char *args) {
-	cmdBLEDiscon("");
+	unsigned int binaryFlag;
+
+	if (sscanf(args, "%u", &binaryFlag) == 1) {
+		if (binaryFlag == 1) {
+			bleApp_setAdvertisingEnabled(true);
+			app_uart_put_string("Advertising enabled\r\n");
+		} else {
+			bleApp_setAdvertisingEnabled(false);
+			app_uart_put_string("Advertising disabled\r\n");
+		}
+
+	}
 }
 

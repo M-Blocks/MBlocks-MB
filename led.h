@@ -28,12 +28,18 @@ typedef enum {
 	LED_STATE_DOUBLE_BLINK
 } led_state_t;
 
+#define LED_STATE_IS_VALID(s)	((s == LED_STATE_OFF) || (s == LED_STATE_ON) || \
+								 (s == LED_STATE_SLOW_FLASH) || (s == LED_STATE_FAST_FLASH) || \
+								 (s == LED_STATE_SINGLE_BLINK) || (s == LED_STATE_DOUBLE_BLINK))
+
 extern app_timer_id_t led_timer_id;
 
 void led_init(void);
 void led_setAllOff(void);
 void led_setAllOn(void);
-void led_setState(uint8_t led, led_state_t state);
+bool led_setState(uint8_t led, led_state_t state);
+led_state_t led_getState(uint8_t led);
+uint32_t led_getDutyCycle_percent(uint8_t led);
 void led_timer_handler(void *p_context);
 
 #endif /* LED_H_ */

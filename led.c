@@ -43,10 +43,44 @@ void led_setAllOn() {
 	}
 }
 
-void led_setState(uint8_t led, led_state_t state) {
-	if (led < LED_COUNT) {
+bool led_setState(uint8_t led, led_state_t state) {
+	if ((led < LED_COUNT) && (LED_STATE_IS_VALID(state))) {
 		led_state[led] = state;
+		return true;
 	}
+
+	return false;
+}
+
+led_state_t led_getState(uint8_t led) {
+	if (led < LED_COUNT) {
+		return led_state[led];
+	}
+
+	return LED_STATE_OFF;
+}
+
+
+uint32_t led_getDutyCycle_percent(uint8_t led) {
+	if (led < LED_COUNT) {
+		if (led_state[led] == LED_STATE_OFF) {
+			return 0;
+		} else if (led_state[led] == LED_STATE_ON) {
+			return 100;
+		} else if (led_state[led] == LED_STATE_SLOW_FLASH) {
+			return 50;
+		} else if (led_state[led] == LED_STATE_FAST_FLASH) {
+			return 50;
+		} else if (led_state[led] == LED_STATE_SINGLE_BLINK) {
+			return 10;
+		} else if (led_state[led] == LED_STATE_DOUBLE_BLINK) {
+			return 20;
+		} else {
+			return 0;
+		}
+	}
+
+	return 0;
 }
 
 void led_timer_handler(void *p_context) {
@@ -87,6 +121,10 @@ void led_timer_handler(void *p_context) {
 			} else {
 				nrf_gpio_pin_clear(led_pin_number[led]);
 			}
+		} else {
+			/* If the state is unknown, set the state to OFF */
+			led_state[led] = LED_STATE_OFF;
+			nrf_gpio_pin_clear(led_pin_number[led]);
 		}
 	}
 }

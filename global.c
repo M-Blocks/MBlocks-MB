@@ -10,6 +10,5 @@
 
 #include "global.h"
 
-bool advertise = true;
 
 

@@ -316,7 +316,7 @@ uint32_t config_char_add(ble_sps_t * p_sps, const ble_sps_init_t * p_sps_init) {
     char_md.char_props.indicate = 1;
     char_md.char_props.write = 1;
     char_md.char_props.read = 0;
-    char_md.p_char_user_desc = "Configuration";
+    char_md.p_char_user_desc = (uint8_t *)"Configuration";
     char_md.char_user_desc_max_size = 13;
     char_md.char_user_desc_size = 13;
     char_md.p_user_desc_md = NULL;
@@ -392,7 +392,7 @@ uint32_t ackdata_char_add(ble_sps_t * p_sps, const ble_sps_init_t * p_sps_init) 
     char_md.char_props.indicate = 1;
     char_md.char_props.write = 1;
     char_md.char_props.read = 0;
-    char_md.p_char_user_desc = "Acknowledged Data Stream";
+    char_md.p_char_user_desc = (uint8_t *)"Acknowledged Data Stream";
     char_md.char_user_desc_max_size = 24;
     char_md.char_user_desc_size = 24;
     char_md.p_user_desc_md = NULL;

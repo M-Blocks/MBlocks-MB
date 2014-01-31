@@ -44,6 +44,7 @@ bool power_enableCharger(void);
 bool power_disableCharger(void);
 
 void power_setChargeState(power_chargeState_t state);
+power_chargeState_t power_getChargeState(void);
 
 void power_setDebug(bool enable);
 bool power_getDebug(void);
