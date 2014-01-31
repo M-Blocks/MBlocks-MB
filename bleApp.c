@@ -182,110 +182,15 @@ void bleApp_gapParamsInit() {
     ble_gap_conn_params_t   gap_conn_params;
     ble_gap_conn_sec_mode_t sec_mode;
 
-    ble_gatts_char_md_t char_md;
-    ble_gatts_attr_t attr;
-    ble_gatts_attr_md_t attr_md;
-    ble_uuid_t uuid;
-
-    uint16_t service_handle;
-    uint16_t char_handle;
-    uint16_t desc_handle;
-
-#if (1)
     BLE_GAP_CONN_SEC_MODE_SET_OPEN(&sec_mode);
 
     err_code = sd_ble_gap_device_name_set(&sec_mode, (uint8_t *)deviceName, strlen(deviceName));
     APP_ERROR_CHECK(err_code);
 
-#if (0)
-	/* We now add a descriptor attribute for the user description of the device
-	 * name. Here we configure its attribute's metadata to allow open reads but
-	 * no writes. */
-	memset(&attr_md, 0, sizeof(attr_md));
-	BLE_GAP_CONN_SEC_MODE_SET_OPEN(&attr_md.read_perm);
-	BLE_GAP_CONN_SEC_MODE_SET_NO_ACCESS(&attr_md.write_perm);
-	attr_md.vloc = BLE_GATTS_VLOC_STACK;
-
-	/* Indicate the that attribute is a user description descriptor */
-	BLE_UUID_BLE_ASSIGN(uuid, BLE_UUID_DESCRIPTOR_CHAR_USER_DESC);
-
-	/* Configure the value of the attribute. */
-	memset(&attr, 0, sizeof(attr));
-	attr.p_uuid = &uuid;
-	attr.p_attr_md = &attr_md;
-	attr.init_len = 11;
-	attr.init_offs = 0;
-	attr.max_len = 11;
-	attr.p_value = (uint8_t *)"Device Name";
-
-    err_code = sd_ble_gatts_descriptor_add(BLE_GATT_HANDLE_INVALID, &attr, &desc_handle);
-    APP_ERROR_CHECK(err_code);
-#endif
-#endif
-
-#if (0)
-    /* Create the GAP service */
-    BLE_UUID_BLE_ASSIGN(uuid, BLE_UUID_GAP);
-
-    err_code = sd_ble_gatts_service_add(BLE_GATTS_SRVC_TYPE_PRIMARY, &uuid, &service_handle);
-    APP_ERROR_CHECK(err_code);
-
-    /* We add two characteristics to the GAP serivce: */
-
-	/* The first characteristic is the device name, which should be read-able.
-	 * Here, we use the characteristics metadata to make the device name
-	 * characteristic readable.  We also add a user description field stating
-	 * what the characteristic represents. */
-	memset(&char_md, 0, sizeof(char_md));
-	char_md.char_props.read = 1;
-	char_md.p_char_user_desc = (uint8_t *)"Device Name";
-	char_md.char_user_desc_max_size = 11;
-	char_md.char_user_desc_size = 11;
-	char_md.p_user_desc_md = NULL;
-	char_md.p_char_pf = NULL;
-	char_md.p_cccd_md = NULL;
-	char_md.p_sccd_md = NULL;
-
-	/* The attribute is the part of the characteristic that holds data, in this
-	 * case, the device's actual name.  Here we configure its attribute's
-	 * metadata to allow open reads but no writes. */
-	memset(&attr_md, 0, sizeof(attr_md));
-	BLE_GAP_CONN_SEC_MODE_SET_OPEN(&attr_md.read_perm);
-	BLE_GAP_CONN_SEC_MODE_SET_NO_ACCESS(&attr_md.write_perm);
-	attr_md.vloc = BLE_GATTS_VLOC_STACK;
-
-	/* Set the UUID of the device name attribute correctly */
-	BLE_UUID_BLE_ASSIGN(uuid, BLE_UUID_GAP_CHARACTERISTIC_DEVICE_NAME);
-
-	/* Configure the device name attribute itself */
-	memset(&attr, 0, sizeof(attr));
-	attr.p_uuid = &uuid;
-	attr.p_attr_md = &attr_md;
-	attr.init_len = strlen(deviceName);
-	attr.init_offs = 0;
-	attr.max_len = strlen(deviceName);
-	attr.p_value = (uint8_t *)deviceName;
-
-	/* Finally, add the device name characteristic to the GAP service */
-	err_code = sd_ble_gatts_characteristic_add(service_handle, &char_md, &attr, &char_handle);
-	APP_ERROR_CHECK(err_code);
-
-#endif /* 0 */
-
-
     /* YOUR_JOB: Use an appearance value matching the application's use case.*/
     err_code = sd_ble_gap_appearance_set(BLE_APPEARANCE_UNKNOWN);
     APP_ERROR_CHECK(err_code);
 
-#if (0)
-    /* Add a user description to the appearance characteristic */
-    attr.p_value = (uint8_t *)"Appearance";
-
-    err_code = sd_ble_gatts_descriptor_add(BLE_GATT_HANDLE_INVALID, &attr, &handle);
-    APP_ERROR_CHECK(err_code);
-#endif /* 0 */
-
-#if (1)
     memset(&gap_conn_params, 0, sizeof(gap_conn_params));
 
     gap_conn_params.min_conn_interval = MIN_CONN_INTERVAL;
@@ -295,7 +200,6 @@ void bleApp_gapParamsInit() {
 
     err_code = sd_ble_gap_ppcp_set(&gap_conn_params);
     APP_ERROR_CHECK(err_code);
-#endif /* 1 */
 }
 
 

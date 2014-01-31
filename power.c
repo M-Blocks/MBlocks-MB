@@ -21,7 +21,7 @@
 #include "bleApp.h"
 #include "power.h"
 
-#define CELL_CHARGED_THRESHOLD_MV			4250	/* Stop charging as soon as all cells rise to this voltage, really they should never rise over 4.2V and we should halt charging when the current falls sufficiently. */
+#define CELL_CHARGED_THRESHOLD_MV			4200	/* Stop charging as soon as all cells rise to this voltage, really they should never rise over 4.2V and we should halt charging when the current falls sufficiently. */
 
 #define CELL_DISCHARGED_THRESHOLD_MV		3000	/* Stop discharging as soon as all cells fall to this voltage */
 

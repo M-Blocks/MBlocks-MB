@@ -266,8 +266,6 @@ static void power_manage(void) {
 }
 
 
-static void on_gpio_evt(uint32_t event_pins_low_to_high, uint32_t event_pins_high_to_low) {}
-
 static void gpio_init(void) {
     nrf_gpio_pin_clear(BAT1DISCHRG_PIN_NO);
     GPIO_PIN_CONFIG((BAT1DISCHRG_PIN_NO),
