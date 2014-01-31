@@ -109,7 +109,7 @@ static uint16_t                         m_conn_handle = BLE_CONN_HANDLE_INVALID;
 // YOUR_JOB: Modify these according to requirements (e.g. if other event types are to pass through
 //           the scheduler).
 #define SCHED_MAX_EVENT_DATA_SIZE       sizeof(app_timer_event_t)                   /**< Maximum size of scheduler events. Note that scheduler BLE stack events do not contain any data, as the events are being pulled from the stack in the event handler. */
-#define SCHED_QUEUE_SIZE                10                                          /**< Maximum number of events in the scheduler queue. */
+#define SCHED_QUEUE_SIZE                12                                          /**< Maximum number of events in the scheduler queue. */
 
 static void advertising_start(void);
 static void advertising_stop(void);
@@ -213,8 +213,8 @@ static void uart_init(void) {
 	comm_params.use_parity = false;
 	comm_params.baud_rate = UART_BAUDRATE_BAUDRATE_Baud115200;
 
-	//APP_UART_FIFO_INIT(&comm_params, 128, 512, on_uart_evt, 3, err_code);
-	APP_UART_FIFO_INIT(&comm_params, 128, 128, on_uart_evt, 3, err_code);
+	APP_UART_FIFO_INIT(&comm_params, 64, 512, on_uart_evt, 3, err_code);
+	//APP_UART_FIFO_INIT(&comm_params, 128, 128, on_uart_evt, 3, err_code);
 	APP_ERROR_CHECK(err_code);
 
 }
@@ -240,6 +240,9 @@ static void timers_init(void)
 
     /* Create a timer which will be used to flash the LEDs */
     err_code = app_timer_create(&led_timer_id, APP_TIMER_MODE_REPEATED, led_timer_handler);
+    APP_ERROR_CHECK(err_code);
+
+    err_code = app_timer_create(&power_timer_id, APP_TIMER_MODE_REPEATED, power_timerHandler);
     APP_ERROR_CHECK(err_code);
 
 #if (0)
@@ -520,6 +523,9 @@ static void timers_start(void) {
 	err_code = app_timer_start(led_timer_id, APP_TIMER_TICKS(100, APP_TIMER_PRESCALER), NULL);
 	APP_ERROR_CHECK(err_code);
 
+	/* Start timer which manages battery charging.  It will fire every 10 seconds. */
+	err_code = app_timer_start(power_timer_id, APP_TIMER_TICKS(10000, APP_TIMER_PRESCALER), NULL);
+
 #if(0)
 	err_code = app_timer_start(bldc_tacho_freq_update_timer_id, APP_TIMER_TICKS(10, APP_TIMER_PRESCALER), NULL);
 	APP_ERROR_CHECK(err_code);
@@ -543,7 +549,14 @@ void advertising_start(void) {
     adv_params.timeout     = APP_ADV_TIMEOUT_IN_SECONDS;
 
     err_code = sd_ble_gap_adv_start(&adv_params);
-    APP_ERROR_CHECK(err_code);
+    /* Allow invalid state errors, trap everything else.  We do this because we
+     * may already be advertising when we try to start advertising again, and
+     * that's okay. */
+    if (err_code == NRF_ERROR_INVALID_STATE) {
+    	;
+    } else {
+    	APP_ERROR_CHECK(err_code);
+    }
 
     led_setState(LED_BLUE, LED_STATE_ON);
 }
@@ -578,7 +591,9 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
         case BLE_GAP_EVT_DISCONNECTED:
         	m_conn_handle = BLE_CONN_HANDLE_INVALID;
         	led_setState(LED_BLUE, LED_STATE_OFF);
-            advertising_start();
+        	if (advertise) {
+        		advertising_start();
+        	}
             break;
             
         case BLE_GAP_EVT_SEC_PARAMS_REQUEST:
@@ -877,7 +892,9 @@ int main(void) {
     // Start execution
     timers_start();
 
-    advertising_start();
+    if (advertise) {
+    	advertising_start();
+    }
 
     // Enter main loop
     for (;;) {

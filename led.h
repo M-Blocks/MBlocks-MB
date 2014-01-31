@@ -28,7 +28,7 @@ typedef enum {
 	LED_STATE_DOUBLE_BLINK
 } led_state_t;
 
-app_timer_id_t led_timer_id;
+extern app_timer_id_t led_timer_id;
 
 void led_init(void);
 void led_setAllOff(void);

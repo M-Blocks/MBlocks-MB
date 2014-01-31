@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "nrf_gpio.h"
 #include "nrf_delay.h"
@@ -16,8 +17,40 @@
 #include "util.h"
 #include "adc.h"
 #include "pwm.h"
+#include "led.h"
 #include "power.h"
 
+#define CELL_CHARGED_THRESHOLD_MV			4250	/* Stop charging as soon as all cells rise to this voltage, really they should never rise over 4.2V and we should halt charging when the current falls sufficiently. */
+
+#define CELL_DISCHARGED_THRESHOLD_MV		3000	/* Stop discharging as soon as all cells fall to this voltage */
+
+#define CELL_RECHARGE_THRESHOLD_MV			3900	/* Start charging as soon as any cell falls below this voltage */
+#define CELL_PRECHARGE_THRESHOLD_MV			2800	/* Cell voltage below which we charge at a 0.1C rate */
+
+#define CELL_UNDERVOLTAGE_THRESHOLD_MV		2500	/* Cell voltage under which we assume something is wrong */
+#define CELL_OVERVOLTAGE_THRESHOLD_MV		4300	/* Cell voltage over which we assume something is wrong */
+
+#define MAXIMUM_IMBALANCE_MV				15		/* Maximum allowed imbalance between cells, over which we activate the cell's self-discharge switch */
+
+#define CHARGER_INPUT_VOLTAGE_THRESHOLD_MV	4250	/* Minimum input voltage needed before we start charging. */
+
+#define PRECHARGE_CURRENT_MA				12		/* Precharge current, ~0.1C */
+#define CHARGE_CURRENT_1C_MA				125		/* Normal 1C charge rate */
+#define CHARGE_CURRENT_MAX_MA				80		/* Current limit imposed by the charge itself */
+#define CHARGE_CURRENT_CUTOFF_THRESHOLD_MA	12		/* Once in constant voltage mode, current below which we stop the charging process */
+
+#define CHARGE_TIME_MAXIMUM_MS				10800000 /* Maximum time (3 hours) we run the charger before assuming something is wrong */
+
+#define RTC_TICKS_PER_MS					33		/* 32.768 ticks of the RTS per millisecond (32.768kHz RTC) */
+
+app_timer_id_t power_timer_id;
+
+static power_chargeState_t chargeState = POWER_CHARGESTATE_OFF;
+//static power_chargeState_t chargeState = POWER_CHARGESTATE_STANDBY;
+static power_chargeError_t chargeError = POWER_CHARGEERROR_NOERROR;
+static bool chargeTimerRunning = false;
+static uint32_t chargingTime_rtcTicks = 0;
+static bool debug = false;
 static uint8_t dischargeSwitchState = 0x00;
 static uint16_t chargeCurrentLimit_mA = 0;
 
@@ -124,10 +157,23 @@ bool power_disableCharger() {
 	return true;
 }
 
+void power_setChargeState(power_chargeState_t state) {
+	chargeState = state;
+	power_updateChargeState();
+}
+
+void power_setDebug(bool enable) {
+	debug = enable;
+}
+
+bool power_getDebug() {
+	return debug;
+}
+
 uint16_t power_getVIn_mV() {
 	/* VIN is divided by 2 with a resistor divider pair, so we multiply by 2 in
 	 * order to return the correct voltage. */
-	return 2 * adc_avg_mV(VINSENSE_ADC_CHNL, 8);
+	return 2 * adc_avg_mV(VINSENSE_ADC_CHNL, 32);
 }
 
 uint16_t power_getBatteryVoltage_mV(uint8_t batNum) {
@@ -170,7 +216,7 @@ uint16_t power_getBatteryVoltage_mV(uint8_t batNum) {
 
 	nrf_delay_ms(1);
 
-	offset_mV = adc_avg_mV(LIPROVBATOUT_ADC_CHNL, 8);
+	offset_mV = adc_avg_mV(LIPROVBATOUT_ADC_CHNL, 32);
 
 	if (batNum == 1) {
 		/* CTL3 Low, CTL4 Open */
@@ -196,7 +242,7 @@ uint16_t power_getBatteryVoltage_mV(uint8_t batNum) {
 
 	nrf_delay_ms(1);
 
-	offsetPlusFifthActual_mV = adc_avg_mV(LIPROVBATOUT_ADC_CHNL, 8);
+	offsetPlusFifthActual_mV = adc_avg_mV(LIPROVBATOUT_ADC_CHNL, 32);
 
 	/* Return both control lines to their high impedance state */
 	nrf_gpio_cfg_input(LIPROCTL3_PIN_NO, GPIO_PIN_CNF_PULL_Disabled);
@@ -207,6 +253,36 @@ uint16_t power_getBatteryVoltage_mV(uint8_t batNum) {
 	actual_mV = (offsetPlusFifthActual_mV - offset_mV) * 5;
 
 	return actual_mV;
+}
+
+uint16_t power_getBatteryVoltageMin_mV() {
+	uint8_t batNum;
+	uint16_t mV;
+	uint16_t minVoltage_mV = UINT16_MAX;
+
+	for (batNum = 1; batNum <= 4; batNum++) {
+		mV = power_getBatteryVoltage_mV(batNum);
+		if (mV < minVoltage_mV) {
+			minVoltage_mV = mV;
+		}
+	}
+
+	return minVoltage_mV;
+}
+
+uint16_t power_getBatteryVoltageMax_mV() {
+	uint8_t batNum;
+	uint16_t mV;
+	uint16_t maxVoltage_mV = 0;
+
+	for (batNum = 1; batNum <= 4; batNum++) {
+		mV = power_getBatteryVoltage_mV(batNum);
+		if (mV > maxVoltage_mV) {
+			maxVoltage_mV = mV;
+		}
+	}
+
+	return maxVoltage_mV;
 }
 
 uint16_t power_getBatteryPackVoltage_mV() {
@@ -230,6 +306,500 @@ uint16_t power_getChargeCurrent_mA() {
 	 * output to milliamps, we divide by 0.33 (i.e. multiply by 3) and then
 	 * divide by the sensor's gain. */
 	return (3 * rawVoltage_mV) / 50;
+}
+
+uint16_t power_getEstimatedCurrentConsumption_mA() {
+	return 0;
+}
+
+bool power_isCellUndervoltage() {
+	uint16_t minimum_mV;
+
+	minimum_mV = power_getBatteryVoltageMax_mV();
+
+	if (minimum_mV < CELL_UNDERVOLTAGE_THRESHOLD_MV) {
+		return true;
+	}
+
+	return false;
+}
+
+bool power_isCellOvervoltage() {
+	uint16_t maximum_mV;
+
+	maximum_mV = power_getBatteryVoltageMax_mV();
+
+	if (maximum_mV > CELL_OVERVOLTAGE_THRESHOLD_MV) {
+		return true;
+	}
+
+	return false;
+}
+
+bool power_isUndertemp() {
+	return false;
+}
+
+bool power_isOvertemp() {
+	return false;
+}
+
+void power_timerHandler(void *p_contex) {
+	power_updateChargeState();
+}
+
+void power_updateChargeState() {
+	uint8_t shorts = 0x00;
+	uint8_t batNum;
+	uint16_t minVoltage_mV, maxVoltage_mV;
+	bool updateAgain = false;
+	uint32_t currentTime_rtcTicks, elapsedTime_rtcTicks;
+
+	static uint32_t lastCallTime_rtcTicks = 0;
+
+	/* After the Lipo protection IC trips, or when the batteries are first
+	 * connected, it will appear to the processor that all batteries are
+	 * disconnected because all will read 0mV.  While normally, we consider
+	 * such low voltage an error severe enough to stop charging, we ignore
+	 * 0mV readings until we have at least attempted to activate the charger.
+	 * To accomplish this, we use the chargingAttempted flag, which essentially
+	 * masks low battery voltages until it has been set. */
+	static bool chargingAttempted = false;
+
+	/* Once we enter the ERROR state, the only way to leave the state is for
+	 * the user to remove the charging voltage.  We use this flag to keep track
+	 * of whether that has happened yet. */
+	static bool chargingVoltageRemoved = false;
+
+	/* Get the current time expressed as ticks of the 32.768kHz RTC */
+	app_timer_cnt_get(&currentTime_rtcTicks);
+
+	/* The RTC is only a 24-bit counter, so when subtracting the two
+	 * tick counts to find the elapsed number of ticks, we must mask out the
+	 * 8 most significant bits. */
+	elapsedTime_rtcTicks = 0x00FFFFFF & (currentTime_rtcTicks - lastCallTime_rtcTicks);
+
+	/* Save the current tick count for next time */
+	lastCallTime_rtcTicks = currentTime_rtcTicks;
+
+	/* Unless the updateAgain flag is set, we only execute this do loop once.
+	 * We typically set the updateAgain flag when switching states so that the
+	 * actions of the new state are carried about before returning to the
+	 * caller. */
+	do {
+		/* If this is not the first iteration of the loop, indicate that no
+		 * additional time has elapsed since the first iteration. */
+		if (updateAgain) {
+			elapsedTime_rtcTicks = 0;
+		}
+
+		/* Assume that this will be the last iteration of the loop.  If the
+		 * state is changed, we will re-set this flag. */
+		updateAgain = false;
+
+		/* Find the lowest and highest voltages among all four cells. */
+		minVoltage_mV = power_getBatteryVoltageMin_mV();
+		maxVoltage_mV = power_getBatteryVoltageMax_mV();
+
+		/* Check for errors and jump to the ERROR state if any are found. */
+		if (power_isCellOvervoltage() &&
+				chargingAttempted && (chargingTime_rtcTicks / RTC_TICKS_PER_MS > 1000)) {
+			/* If we have at least attempted to charge the batteries for 1sec,
+			 * (in order to reset the Lipo protection IC) and one or more still
+			 * has a voltage above the over-voltage threshold we enter the
+			 * ERROR state. */
+			chargeState = POWER_CHARGESTATE_ERROR;
+			chargeError = POWER_CHARGEERROR_OVERVOLTAGE;
+		} else if  (power_isCellUndervoltage() &&
+				chargingAttempted && (chargingTime_rtcTicks / RTC_TICKS_PER_MS > 1000)) {
+			/* If we have at least attempted to charge the batteries for 1sec,
+			 * (in order to reset the Lipo protection IC) and one or more still
+			 * has a voltage below the under-voltage threshold we enter the
+			 * ERROR state. */
+			chargeState = POWER_CHARGESTATE_ERROR;
+			chargeError = POWER_CHARGEERROR_UNDERVOLTAGE;
+		} else if (power_isOvertemp()) {
+			chargeState = POWER_CHARGESTATE_ERROR;
+			chargeError = POWER_CHARGEERROR_OVERTEMP;
+		} else if (power_isUndertemp()) {
+			chargeState = POWER_CHARGESTATE_ERROR;
+			chargeError = POWER_CHARGEERROR_UNDERTEMP;
+		} else if (chargeTimerRunning &&
+				(chargingTime_rtcTicks / RTC_TICKS_PER_MS >= CHARGE_TIME_MAXIMUM_MS)) {
+			/* If the charger has not reached the STANDBY state within a
+			 * specified time limit, we assume something has gone wrong. */
+			chargeState = POWER_CHARGESTATE_ERROR;
+			chargeError = POWER_CHARGEERROR_TIMEOUT;
+		}
+
+		if (chargeState == POWER_CHARGESTATE_OFF) {
+			/* Turn off the charger and open all battery discharge switches so
+			 * that we do not drain current through the shorting resistors. */
+			power_disableCharger();
+			power_setDischargeSwitches(0x00);
+
+			/* Stop and reset the charge timer */
+			chargeTimerRunning = 0;
+			chargingTime_rtcTicks = 0;
+
+			/* When entering the off state, clear any errors which have
+			 * previously occurred. */
+			chargeError = POWER_CHARGEERROR_NOERROR;
+
+			/* Turn off the green LED. */
+			led_setState(LED_GREEN, LED_STATE_OFF);
+		} else if (chargeState == POWER_CHARGESTATE_MANUAL) {
+			/* In the MANUAL state, we leave it up to the user to set the charge
+			 * current and the states of the battery discharge switches and to
+			 * enable or disable the charger IC. */
+
+			/* When entering this state, we clear any error, but that is not to
+			 * say that error detection is turned off. Errors can still be
+			 * detected above and will still move the FSM to the ERROR state.*/
+			chargeError = POWER_CHARGEERROR_NOERROR;
+
+			/* Start the charge timer if it is not already running.  If it is
+			 * already running, update it with the amount of elapsed time since
+			 * the last call. */
+			if (!chargeTimerRunning) {
+				chargingTime_rtcTicks = 0;
+				chargeTimerRunning = true;
+			} else {
+				chargingTime_rtcTicks += elapsedTime_rtcTicks;
+			}
+
+			/* Turn the green LED on solid to indicate that we are in the ON
+			 * state and that the user has control of the current and discharge
+			 * switches. */
+			led_setState(LED_GREEN, LED_STATE_ON);
+		} else if ((chargeState == POWER_CHARGESTATE_PRECHARGE) ||
+				(chargeState == POWER_CHARGESTATE_CHARGING)) {
+			/* If the charger loses its external input voltage, we revert to
+			 * the STANDBY state. */
+			if (power_getVIn_mV() < CHARGER_INPUT_VOLTAGE_THRESHOLD_MV) {
+				chargeState = POWER_CHARGESTATE_STANDBY;
+				updateAgain = true;
+				break;
+			}
+
+			/* If we are currently in the PRECHARGE state but the the minimum
+			 * cell voltage is above the threshold which necessitates a reduced
+			 * charging current, we skip the PRECHARGE state and go directly to
+			 * the CHARGING state. */
+			if ((chargeState == POWER_CHARGESTATE_PRECHARGE) &&
+					(minVoltage_mV > CELL_PRECHARGE_THRESHOLD_MV)) {
+				chargeState = POWER_CHARGESTATE_CHARGING;
+			}
+
+			/* If we are CHARGING state and all cell voltages are above the
+			 * fully charged threshold voltage and the charging current has
+			 * fallen below the current cutoff threshold (adjusted for
+			 * whatever current the microprocessor and other circuitry is
+			 * consuming, we assume that charging is complete. */
+			if ((chargeState == POWER_CHARGESTATE_CHARGING) &&
+					(minVoltage_mV >= CELL_CHARGED_THRESHOLD_MV) &&
+					(power_getChargeCurrent_mA() <
+							CHARGE_CURRENT_CUTOFF_THRESHOLD_MA +
+							power_getEstimatedCurrentConsumption_mA())) {
+				chargeState = POWER_CHARGESTATE_STANDBY;
+				updateAgain = true;
+				break;
+			}
+
+			/* Start the charge timer if it is not already running.  If it is
+			 * already running, update it with the amount of elapsed time since
+			 * the last call. */
+			if (!chargeTimerRunning) {
+				chargingTime_rtcTicks = 0;
+				chargeTimerRunning = true;
+			} else {
+				chargingTime_rtcTicks += elapsedTime_rtcTicks;
+			}
+
+			/* Single-flash the LED to indicate that charging is underway */
+			led_setState(LED_GREEN, LED_STATE_SINGLE_BLINK);
+
+			if (chargeState == POWER_CHARGESTATE_PRECHARGE) {
+				/* Set the charger's output current limit to 0.1*C plus
+				 * whatever we estimate the processor and other circuitry to be
+				 * consuming.*/
+				power_setChargerCurrentLimit_mA(PRECHARGE_CURRENT_MA +
+						power_getEstimatedCurrentConsumption_mA());
+			} else {
+				/* If we are not precharging, we set the current to the maximum
+				 * value which does not harm the charger.  This limit is lower
+				 * than the approved charge rate for the batteries. */
+				power_setChargerCurrentLimit_mA(CHARGE_CURRENT_MAX_MA);
+			}
+
+			/* Turning on the charger IC starts the flow of current. */
+			power_enableCharger();
+
+			/* Indicate that we have attempted to charge the batteries.  This
+			 * flag is only ever cleared when the unit loses power completely.
+			 * Until this flag is set, we ignore under-voltage conditions
+			 * because it could be that the Lipo protection IC has tripped
+			 * making it impossible to measure the battery voltages. */
+			chargingAttempted = true;
+
+			/* If we have not been charging the batteries for at least 1sec,
+			 * we do not connect any of the battery shorting resistors.  This
+			 * allows the voltages to stabilize so that we can make a better
+			 * decision about which batteries to short. */
+			if (chargingTime_rtcTicks / RTC_TICKS_PER_MS < 1000) {
+				power_setDischargeSwitches(0x00);
+				break;
+			}
+
+			/* We only reach this point if we have been charging for at least
+			 * 1 sec.  Here we decide which of the discharge switches to close
+			 * in order to keep the batteries balanced as they charge. */
+
+			/* Check whether each of the 4 battery voltages is greater than the
+			 * voltage of the most discharged cell by more than the maximum
+			 * imbalance threshold. If one is, we will short a resistor across its
+			 * terminals to reduce its charge rate. */
+			for (batNum = 1; batNum <= 4; batNum++) {
+				if (power_getBatteryVoltage_mV(batNum) > minVoltage_mV + MAXIMUM_IMBALANCE_MV) {
+					shorts |= (0x01 << (batNum-1));
+				}
+			}
+
+			/* If the fact that we resampled all battery voltages resulted in
+			 * enough variation to short all discharge switches, keep them all
+			 * open. */
+			if (shorts == 0x0F) {
+				shorts = 0x00;
+			}
+
+			power_setDischargeSwitches(shorts);
+		} else if (chargeState == POWER_CHARGESTATE_STANDBY) {
+			/* If there is an old error when we enter this state, jump to the
+			 * ERROR state.  This is necessary because the user may try to
+			 * force us into the STANDBY state to start charging, but we do
+			 * not want to start charging if there is some type of error. */
+			if (chargeError != POWER_CHARGEERROR_NOERROR) {
+				chargeState = POWER_CHARGESTATE_ERROR;
+				updateAgain = true;
+				break;
+			}
+
+			/* If a single cell is below the recharge threshold voltage, and
+			 * there is sufficient input voltage to the charger, we start the
+			 * charging process.  We always jump to the PRECHARGE state, but
+			 * from there we can immediately jump to the CHARGING state. */
+			if ((minVoltage_mV < CELL_RECHARGE_THRESHOLD_MV) &&
+					(power_getVIn_mV() > CHARGER_INPUT_VOLTAGE_THRESHOLD_MV)) {
+				chargeState = POWER_CHARGESTATE_PRECHARGE;
+				updateAgain = true;
+				break;
+			}
+
+			/* Now that charging is complete, we can stop the charge timer, but
+			 * we do not reset the time.  We turn off the green LED and also
+			 * disable the charger and disconnect all of the cell-shorting
+			 * resistors.*/
+			chargeTimerRunning = false;
+			led_setState(LED_GREEN, LED_STATE_OFF);
+			power_disableCharger();
+			power_setDischargeSwitches(0x00);
+		} else if (chargeState == POWER_CHARGESTATE_DISCHARGE) {
+			/* If all cells are below the nominal discharge voltage, we are
+			 * done discharging.  Consequently, proceed to the OFF state, which
+			 * will stop discharging and open all of the switches.  From there,
+			 * the user will have to restart the charging process manually. */
+			if (maxVoltage_mV < CELL_DISCHARGED_THRESHOLD_MV) {
+				chargeState = POWER_CHARGESTATE_OFF;
+				updateAgain = true;
+				break;
+			}
+
+			/* Start/update the charge timer */
+			if (!chargeTimerRunning) {
+				chargingTime_rtcTicks = 0;
+				chargeTimerRunning = true;
+			} else {
+				chargingTime_rtcTicks += elapsedTime_rtcTicks;
+			}
+
+			/* When discharging, flash the green LED */
+			led_setState(LED_GREEN, LED_STATE_SLOW_FLASH);
+
+			/* Check whether each of the 4 battery voltages is greater than the
+			 * voltage of the most discharged cell by more than the maximum
+			 * imbalance threshold. If one is, we will short a resistor across its
+			 * terminals to speed it discharge. */
+			for (batNum = 1; batNum <= 4; batNum++) {
+				if (power_getBatteryVoltage_mV(batNum) > minVoltage_mV + MAXIMUM_IMBALANCE_MV) {
+					shorts |= (0x01 << (batNum-1));
+				}
+			}
+
+			/* If the cell voltages are all balanced, we turn on all discharged
+			 * switches so that there are resistors shorted across all four cells.
+			 */
+			if (shorts == 0x00) {
+				shorts = 0x0F;
+			}
+
+			/* Disable charging and close the appropriate discharge switches so
+			 * that we drain current from the batteries. */
+			power_disableCharger();
+			power_setDischargeSwitches(shorts);
+		} else if (chargeState == POWER_CHARGESTATE_ERROR) {
+			/* When we encounter an error, we stop charging, open all of the
+			 * discharge switches, stop the charger timer, and reset it to 0.*/
+			power_disableCharger();
+			power_setDischargeSwitches(0x00);
+			chargeTimerRunning = false;
+			chargingTime_rtcTicks = 0;
+
+			/* Fast-flash the LED to indicate a problem */
+			led_setState(LED_GREEN, LED_STATE_FAST_FLASH);
+
+			/* In the error state, we wait for the supply voltage to the
+			 * charger IC to be removed.  Once it has been, we set the
+			 * chargingVoltageRemoved flag.  We use this way as a way to
+			 * force the charging voltage to be removed and then re-applied
+			 * in order to exit the ERROR state. */
+			if (power_getVIn_mV() < CHARGER_INPUT_VOLTAGE_THRESHOLD_MV) {
+				chargingVoltageRemoved = true;
+				break;
+			}
+
+			/* At this point, the supply voltage to the charger IC must be
+			 * enough to trigger charging, so if the voltage has previously
+			 * been removed, we start the charging process and thereby exit
+			 * the ERROR state. */
+			if (chargingVoltageRemoved) {
+				chargingVoltageRemoved = false;
+				/* Once in the STANDBY state, the code will re-evaluate
+				 * whether the actual battery voltage is low enough to start
+				 * a new charge cycle. */
+				chargeState = POWER_CHARGESTATE_STANDBY;
+				/* When leaving the ERROR state we clear the error code. */
+				chargeError = POWER_CHARGEERROR_NOERROR;
+				updateAgain = true;
+				break;
+			}
+		}
+
+		if (debug) {
+			power_printDebugInfo();
+		}
+	} while (updateAgain);
+}
+
+
+void power_printDebugInfo() {
+	char stateStr[20];
+	char errStr[20];
+
+	unsigned int hours, minutes, seconds;
+
+	unsigned int chargerCurrent_mA, estShuntCurrent_mA, batteryCurrent_mA;
+
+	unsigned int cell1_mV, cell2_mV, cell3_mV, cell4_mV, pack_mV, input_mV;
+	char cell1ShortedStr[4], cell2ShortedStr[4], cell3ShortedStr[4], cell4ShortedStr[4];
+
+	char line[100];
+
+	if (chargeState == POWER_CHARGESTATE_OFF) {
+		strncpy(stateStr, "Off       ", sizeof(stateStr));
+	} else if (chargeState == POWER_CHARGESTATE_MANUAL) {
+		strncpy(stateStr, "Manual    ", sizeof(stateStr));
+	} else if (chargeState == POWER_CHARGESTATE_PRECHARGE) {
+		strncpy(stateStr, "Pre-charge", sizeof(stateStr));
+	} else if (chargeState == POWER_CHARGESTATE_CHARGING) {
+		strncpy(stateStr, "Charging  ", sizeof(stateStr));
+	} else if (chargeState == POWER_CHARGESTATE_STANDBY) {
+		strncpy(stateStr, "Standby   ", sizeof(stateStr));
+	} else if (chargeState == POWER_CHARGESTATE_DISCHARGE) {
+		strncpy(stateStr, "Discharge ", sizeof(stateStr));
+	} else if (chargeState == POWER_CHARGESTATE_ERROR) {
+		strncpy(stateStr, "Error     ", sizeof(stateStr));
+	} else {
+		strncpy(stateStr, "Unknown   ", sizeof(stateStr));
+	}
+
+	if (chargeError == POWER_CHARGEERROR_NOERROR) {
+		strncpy(errStr, "-                ", sizeof(errStr));
+	} else if (chargeError == POWER_CHARGEERROR_OVERVOLTAGE) {
+		strncpy(errStr, "Over-voltage     ", sizeof(errStr));
+	} else if (chargeError == POWER_CHARGEERROR_UNDERVOLTAGE) {
+		strncpy(errStr, "Under-voltage    ", sizeof(errStr));
+	} else if (chargeError == POWER_CHARGEERROR_OVERTEMP) {
+		strncpy(errStr, "Over-temperature ", sizeof(errStr));
+	} else if (chargeError == POWER_CHARGEERROR_UNDERTEMP) {
+		strncpy(errStr, "Under-temperature", sizeof(errStr));
+	} else if (chargeError == POWER_CHARGEERROR_TIMEOUT) {
+		strncpy(errStr, "Time-out         ", sizeof(errStr));
+	} else {
+		strncpy(errStr, "Unknown          ", sizeof(errStr));
+	}
+
+	seconds = (unsigned int)(chargingTime_rtcTicks / (RTC_TICKS_PER_MS * 1000));
+
+	hours = seconds / 3600;
+	seconds -= hours * 3600;
+
+	minutes = seconds / 60;
+	seconds -= minutes * 60;
+
+	chargerCurrent_mA = power_getChargeCurrent_mA();
+	estShuntCurrent_mA = power_getEstimatedCurrentConsumption_mA();
+	if (chargerCurrent_mA > estShuntCurrent_mA) {
+		batteryCurrent_mA = chargerCurrent_mA - estShuntCurrent_mA;
+	} else {
+		batteryCurrent_mA = 0;
+	}
+
+	cell1_mV = power_getBatteryVoltage_mV(1);
+	cell2_mV = power_getBatteryVoltage_mV(2);
+	cell3_mV = power_getBatteryVoltage_mV(3);
+	cell4_mV = power_getBatteryVoltage_mV(4);
+	pack_mV = power_getBatteryPackVoltage_mV();
+	input_mV = power_getVIn_mV();
+
+	if (power_getDischargeSwitches() & 0x01) {
+		strncpy(cell1ShortedStr, "(s)", sizeof(cell1ShortedStr));
+	} else {
+		strncpy(cell1ShortedStr, "   ", sizeof(cell1ShortedStr));
+	}
+
+	if (power_getDischargeSwitches() & 0x02) {
+		strncpy(cell2ShortedStr, "(s)", sizeof(cell2ShortedStr));
+	} else {
+		strncpy(cell2ShortedStr, "   ", sizeof(cell2ShortedStr));
+	}
+
+	if (power_getDischargeSwitches() & 0x04) {
+		strncpy(cell3ShortedStr, "(s)", sizeof(cell3ShortedStr));
+	} else {
+		strncpy(cell3ShortedStr, "   ", sizeof(cell3ShortedStr));
+	}
+
+	if (power_getDischargeSwitches() & 0x08) {
+		strncpy(cell4ShortedStr, "(s)", sizeof(cell4ShortedStr));
+	} else {
+		strncpy(cell4ShortedStr, "   ", sizeof(cell4ShortedStr));
+	}
+
+	app_uart_put_string("\r\n");
+
+	snprintf(line, sizeof(line), "ChargingTime: %u RTC Ticks\r\n", chargingTime_rtcTicks);
+	app_uart_put_string(line);
+
+	snprintf(line, sizeof(line), "Charger State: %s   Error: %s              Time: %02u:%02u:%02u\r\n", stateStr, errStr, hours, minutes, seconds);
+	app_uart_put_string(line);
+	snprintf(line, sizeof(line), "Charger Current: %3umA      Est. Shunt Current: %3umA     Battery Current: %3umA\r\n", chargerCurrent_mA, estShuntCurrent_mA, batteryCurrent_mA);
+	app_uart_put_string(line);
+	app_uart_put_string("Cell#1         Cell#2         Cell#3         Cell#4         Pack          Input \r\n");
+	snprintf(line, sizeof(line), "%4umV %s     %4umV %s     %4umV %s     %4umV %s     %5umV       %4umV\r\n",
+			cell1_mV, cell1ShortedStr, cell2_mV, cell2ShortedStr, cell3_mV, cell3ShortedStr, cell4_mV, cell4ShortedStr, pack_mV, input_mV);
+	app_uart_put_string(line);
+	app_uart_put_string("\r\n");
+
 }
 
 void power_printDischargeSwitchState() {
@@ -279,3 +849,4 @@ void power_printChargeCurrent() {
 	snprintf(str, sizeof(str), "Charging current: %umA\r\n", mA);
 	app_uart_put_string(str);
 }
+

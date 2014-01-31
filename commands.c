@@ -9,8 +9,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "ble_hci.h";
-#include "ble_gap.h";
+#include "ble_hci.h"
+#include "ble_gap.h"
 
 #include "app_error.h"
 #include "app_uart.h"
@@ -50,7 +50,8 @@ static void cmdSMA(const char *args);
 /* BLE Serial Port Service Testing Commands */
 static void cmdBLETx(const char *args);
 static void cmdBLERx(const char *args);
-static void cmdBLEDisconnect(const char *args);
+static void cmdBLEDiscon(const char *args);
+static void cmdBLEAdv(const char *args);
 
 
 // These string are what the command line processes looking for the user to
@@ -78,6 +79,7 @@ static const char cmdSMAStr[] = "sma";
 static const char cmdBLETxStr[] = "bletx";
 static const char cmdBLERxStr[] = "blerx";
 static const char cmdBLEDisconStr[] = "blediscon";
+static const char cmdBLEAdvStr[] = "bleadv";
 static const char cmdEmptyStr[] = "";
 
 // This table correlates the command strings above to the actual functions that
@@ -106,7 +108,8 @@ static cmdFcnPair_t cmdTable[] = {
 	/* BLE Serial Port Service Testing Commands */
 	{cmdBLETxStr, cmdBLETx},
 	{cmdBLERxStr, cmdBLERx},
-	{cmdBLEDisconStr, cmdBLEDisconnect},
+	{cmdBLEDisconStr, cmdBLEDiscon},
+	{cmdBLEAdvStr, cmdBLEAdvStr},
 	// Always end the command table with an emptry string and null pointer
 	{cmdEmptyStr, NULL}
 };
@@ -183,16 +186,37 @@ void cmdBatShort(const char *args) {
 
 void cmdCharge(const char *args) {
 	char str[50];
+	int nArgs;
 
-	if (sscanf(args, "%4s", str) == 1) {
-		if (strncmp(str, "on", 2) == 0) {
-			power_enableCharger();
-		} else if (strncmp(str, "off", 3) == 0) {
-			power_disableCharger();
+	nArgs = sscanf(args, "%50s", str);
+
+	if (nArgs == -1) {
+		/* With no arguments, put the charger into automatic mode. */
+		power_setChargeState(POWER_CHARGESTATE_STANDBY);
+		app_uart_put_string("Charge state set to Automatic\r\n");
+	} else if (nArgs == 1) {
+		if (strncmp(str, "off", 3) == 0) {
+			power_setChargeState(POWER_CHARGESTATE_OFF);
+			app_uart_put_string("Charge state set to Off\r\n");
+		} else if (strncmp(str, "manual", 6) == 0) {
+			power_setChargeState(POWER_CHARGESTATE_MANUAL);
+			app_uart_put_string("Charge state set to Manual\r\n");
 		} else if (strncmp(str, "auto", 4) == 0) {
-			;
-		} else if (strncmp(str, "?", 1) == 0) {
-			;
+			power_setChargeState(POWER_CHARGESTATE_STANDBY);
+			app_uart_put_string("Charge state set to Automatic\r\n");
+		} else if (strncmp(str, "discharge", 9) == 0) {
+			power_setChargeState(POWER_CHARGESTATE_DISCHARGE);
+			app_uart_put_string("Charge state set to Discharge\r\n");
+		} else if (strncmp(str, "info", 4) == 0) {
+			power_printDebugInfo();
+		} else if (strncmp(str, "debug", 5) == 0) {
+			if (power_getDebug()) {
+				power_setDebug(false);
+				app_uart_put_string("Charge debug output disabled\r\n");
+			} else {
+				power_setDebug(true);
+				app_uart_put_string("Charge debug output enabled\r\n");
+			}
 		}
 	}
 }
@@ -441,7 +465,7 @@ void cmdBLETx(const char *args) {
 		return;
 	}
 
-	if (ble_sps_put_string(&m_sps, txStr)) {
+	if (ble_sps_put_string(&m_sps, (uint8_t *)txStr)) {
 		snprintf(respStr, sizeof(respStr), "Placed %lu-character string in BLE SPS transmit buffer\r\n", nChars);
 	} else {
 		snprintf(respStr, sizeof(respStr), "Failed to place %lu-character string in BLE SPS transmit buffer\r\n", nChars);
@@ -485,5 +509,9 @@ void cmdBLEDisconnect(const char *args) {
 	app_uart_put_string("BLE disconnecting\r\n");
 	err_code = sd_ble_gap_disconnect(m_sps.conn_handle, BLE_HCI_CONN_INTERVAL_UNACCEPTABLE);
 	APP_ERROR_CHECK(err_code);
+}
+
+void cmdBLEAdv(const char *args) {
+	cmdBLEDiscon("");
 }
 

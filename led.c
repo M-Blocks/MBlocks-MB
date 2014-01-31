@@ -12,6 +12,8 @@
 
 #define COUNT_PERIOD	20
 
+app_timer_id_t led_timer_id;
+
 static uint8_t led_pin_number[LED_COUNT] = {LED_RED_PIN_NO, LED_GREEN_PIN_NO, LED_BLUE_PIN_NO};
 static led_state_t led_state[LED_COUNT];
 
