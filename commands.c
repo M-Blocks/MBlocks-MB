@@ -110,7 +110,7 @@ static cmdFcnPair_t cmdTable[] = {
 	{cmdBLDCSetKPStr, cmdBLDCSetKP},
 	{cmdBLDCSetKIStr, cmdBLDCSetKI},
 	/* SMA commands */
-	//{cmdSMAStr, cmdSMA},
+	{cmdSMAStr, cmdSMA},
 	/* LED commands */
 	{cmdLEDStr, cmdLED},
 	/* BLE Serial Port Service Testing Commands */
@@ -226,6 +226,9 @@ void cmdCharge(const char *args) {
 		} else if (strncmp(str, "auto", 4) == 0) {
 			power_setChargeState(POWER_CHARGESTATE_STANDBY);
 			app_uart_put_string("Charge state set to Automatic\r\n");
+		} else if (strncmp(str, "force", 5) == 0) {
+			power_setChargeState(POWER_CHARGESTATE_PRECHARGE);
+			app_uart_put_string("Charge state set to PRECHARGE\r\n");
 		} else if (strncmp(str, "discharge", 9) == 0) {
 			power_setChargeState(POWER_CHARGESTATE_DISCHARGE);
 			app_uart_put_string("Charge state set to Discharge\r\n");
@@ -435,11 +438,11 @@ void cmdBLDCSetKI(const char *args) {
 void cmdSMA(const char *args) {
 	int nArgs;
 	char str[50];
-	uint32_t time_ms, current_mA;
+	unsigned int uintTemp;
 
 	smaState_t smaState;
 
-	nArgs = sscanf(args, "%1s %lu %lu", str, &time_ms, &current_mA);
+	nArgs = sscanf(args, "%20s %u", str, &uintTemp);
 
 	if (nArgs == -1) {
 		/* With no arguments, we return the current SMA state */
@@ -449,8 +452,8 @@ void cmdSMA(const char *args) {
 			snprintf(str, sizeof(str), "SMA State: EXTENDED\r\n");
 		} else if (smaState == SMA_STATE_RETRACTING) {
 			snprintf(str, sizeof(str), "SMA State: RETRACTING\r\n");
-		} else if (smaState == SMA_STATE_RETRACTED) {
-			snprintf(str, sizeof(str), "SMA State: RETRACTED\r\n");
+		} else if (smaState == SMA_STATE_HOLDING) {
+			snprintf(str, sizeof(str), "SMA State: HOLDING\r\n");
 		} else if (smaState == SMA_STATE_EXTENDING) {
 			snprintf(str, sizeof(str), "SMA State: EXTENDING\r\n");
 		} else {
@@ -461,21 +464,45 @@ void cmdSMA(const char *args) {
 		return;
 	}
 
-	if (nArgs >= 1) {
-		if (str[0] == 'r') {
-			if (nArgs == 2) {
-				sma_retractTime_ms(time_ms);
-				snprintf(str, sizeof(str), "Retracting SMA for %lus\r\n", time_ms);
-				app_uart_put_string(str);
-			} else if (nArgs == 3) {
-				sma_retractTimeCurrent_ms_mA(time_ms, current_mA);
-				snprintf(str, sizeof(str), "Retracting SMA for %lus with %lumA\r\n", time_ms, current_mA);
+
+	if (strncmp(str, "retractcurrent", 14) == 0) {
+		if (nArgs == 2) {
+			if (sma_setRetractCurrent_mA(uintTemp)) {
+				snprintf(str, sizeof(str), "SMA retract current set to %umA\r\n", sma_getRetractCurrent_mA());
 				app_uart_put_string(str);
 			}
-		} else if (str[0] == 'e') {
-			sma_extend();
-			snprintf(str, sizeof(str), "Extending SMA\r\n");
+		} else {
+			snprintf(str, sizeof(str), "SMA retract current is %umA\r\n", sma_getRetractCurrent_mA());
 			app_uart_put_string(str);
+		}
+	} else if (strncmp(str, "retracttime", 11) == 0) {
+		if (nArgs == 2) {
+			if (sma_setRetractTime_ms(uintTemp)) {
+				snprintf(str, sizeof(str), "SMA retract time set to %ums\r\n", sma_getRetractTime_ms());
+				app_uart_put_string(str);
+			}
+		} else {
+			snprintf(str, sizeof(str), "SMA retract time is %ums\r\n", sma_getRetractTime_ms());
+			app_uart_put_string(str);
+		}
+	} else if (strncmp(str, "holdcurrent", 11) == 0) {
+		if (nArgs == 2) {
+			if (sma_setHoldCurrent_mA(uintTemp)) {
+				snprintf(str, sizeof(str), "SMA hold current set to %umA\r\n", sma_getHoldCurrent_mA());
+				app_uart_put_string(str);
+			}
+		} else {
+			snprintf(str, sizeof(str), "SMA hold current is %umA\r\n", sma_getHoldCurrent_mA());
+			app_uart_put_string(str);
+		}
+	} else if ((nArgs == 2) && (strncmp(str, "retract", 7) == 0)) {
+		if (sma_retract(uintTemp, NULL)) {
+			snprintf(str, sizeof(str), "SMA retracting with %ums hold time...\r\n", uintTemp);
+			app_uart_put_string(str);
+		}
+	} else if ((nArgs == 1) && (strncmp(str, "extend", 6) == 0)) {
+		if (sma_extend(NULL)) {
+			app_uart_put_string("SMA extending...\r\n");
 		}
 	}
 }

@@ -53,8 +53,8 @@
 
 app_timer_id_t power_timer_id;
 
-static power_chargeState_t chargeState = POWER_CHARGESTATE_OFF;
-//static power_chargeState_t chargeState = POWER_CHARGESTATE_STANDBY;
+//static power_chargeState_t chargeState = POWER_CHARGESTATE_OFF;
+static power_chargeState_t chargeState = POWER_CHARGESTATE_STANDBY;
 static power_chargeError_t chargeError = POWER_CHARGEERROR_NOERROR;
 static bool chargeTimerRunning = false;
 static uint32_t chargingTime_rtcTicks = 0;
@@ -172,6 +172,16 @@ void power_setChargeState(power_chargeState_t newState) {
 	 * states where the charging timer is normally reset. */
 	if ((chargeState != POWER_CHARGESTATE_DISCHARGE) &&
 			(newState == POWER_CHARGESTATE_DISCHARGE)) {
+		chargingTime_rtcTicks = 0;
+	}
+
+	/* Likewise, if we are changing from some state other than CHARGING to
+	 * PRECHARGE, we reset the charging timer because we may be moving directly
+	 * from the DISCHARGE state thereby skipping the STANDBY or OFF states
+	 * where the charging timer is normally reset. */
+	if ((chargeState != POWER_CHARGESTATE_PRECHARGE) &&
+			(chargeState != POWER_CHARGESTATE_CHARGING) &&
+			(newState == POWER_CHARGESTATE_PRECHARGE)) {
 		chargingTime_rtcTicks = 0;
 	}
 
