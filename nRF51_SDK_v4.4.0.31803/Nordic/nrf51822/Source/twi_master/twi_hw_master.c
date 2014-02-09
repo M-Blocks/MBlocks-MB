@@ -94,14 +94,14 @@ static bool twi_master_read(uint8_t *data, uint8_t data_length, bool issue_stop_
     }
     else if (data_length == 1)
     {
-        NRF_PPI->CH[0].TEP = (uint32_t)&NRF_TWI1->TASKS_STOP;
+        NRF_PPI->CH[TWI_MASTER_PPI_CHANNEL].TEP = (uint32_t)&NRF_TWI1->TASKS_STOP;
     }
     else
     {
-        NRF_PPI->CH[0].TEP = (uint32_t)&NRF_TWI1->TASKS_SUSPEND;
+        NRF_PPI->CH[TWI_MASTER_PPI_CHANNEL].TEP = (uint32_t)&NRF_TWI1->TASKS_SUSPEND;
     }
     
-    NRF_PPI->CHENSET          = PPI_CHENSET_CH0_Msk;
+    NRF_PPI->CHENSET          = TWI_MASTER_PPI_CHENSET_MASK;
     NRF_TWI1->EVENTS_RXDREADY = 0;
     NRF_TWI1->TASKS_STARTRX   = 1;
     
@@ -122,7 +122,7 @@ static bool twi_master_read(uint8_t *data, uint8_t data_length, bool issue_stop_
             { 
                 // Do nothing.
             }
-            NRF_PPI->CHENCLR = PPI_CHENCLR_CH0_Msk;
+            NRF_PPI->CHENCLR = TWI_MASTER_PPI_CHENCLR_MASK;
             return false;
         }
 
@@ -131,7 +131,7 @@ static bool twi_master_read(uint8_t *data, uint8_t data_length, bool issue_stop_
         /* Configure PPI to stop TWI master before we get last BB event */
         if (--data_length == 1)
         {
-            NRF_PPI->CH[0].TEP = (uint32_t)&NRF_TWI1->TASKS_STOP;
+            NRF_PPI->CH[TWI_MASTER_PPI_CHANNEL].TEP = (uint32_t)&NRF_TWI1->TASKS_STOP;
         }
 
         if (data_length == 0)
@@ -149,7 +149,7 @@ static bool twi_master_read(uint8_t *data, uint8_t data_length, bool issue_stop_
         // Do nothing.
     }
 
-    NRF_PPI->CHENCLR = PPI_CHENCLR_CH0_Msk;
+    NRF_PPI->CHENCLR = TWI_MASTER_PPI_CHENCLR_MASK;
     return true;
 }
 
@@ -255,9 +255,9 @@ bool twi_master_init(void)
     NRF_TWI1->PSELSCL         = TWI_MASTER_CONFIG_CLOCK_PIN_NUMBER;
     NRF_TWI1->PSELSDA         = TWI_MASTER_CONFIG_DATA_PIN_NUMBER;
     NRF_TWI1->FREQUENCY       = TWI_FREQUENCY_FREQUENCY_K100 << TWI_FREQUENCY_FREQUENCY_Pos;
-    NRF_PPI->CH[0].EEP        = (uint32_t)&NRF_TWI1->EVENTS_BB;
-    NRF_PPI->CH[0].TEP        = (uint32_t)&NRF_TWI1->TASKS_SUSPEND;
-    NRF_PPI->CHENCLR          = PPI_CHENCLR_CH0_Msk;
+    NRF_PPI->CH[TWI_MASTER_PPI_CHANNEL].EEP = (uint32_t)&NRF_TWI1->EVENTS_BB;
+    NRF_PPI->CH[TWI_MASTER_PPI_CHANNEL].TEP = (uint32_t)&NRF_TWI1->TASKS_SUSPEND;
+    NRF_PPI->CHENCLR          = TWI_MASTER_PPI_CHENCLR_MASK;
     NRF_TWI1->ENABLE          = TWI_ENABLE_ENABLE_Enabled << TWI_ENABLE_ENABLE_Pos;
 
     return twi_master_clear_bus();

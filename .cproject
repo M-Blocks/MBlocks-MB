@@ -27,6 +27,9 @@
 									<listOptionValue builtIn="false" value="BLE_DEBUG"/>
 									<listOptionValue builtIn="false" value="ENABLE_BLE_COMMANDS=1"/>
 								</option>
+								<option id="org.eclipse.cdt.build.core.settings.holder.incpaths.1661044748" name="Include Paths" superClass="org.eclipse.cdt.build.core.settings.holder.incpaths" valueType="includePath">
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB}&quot;"/>
+								</option>
 								<inputType id="org.eclipse.cdt.build.core.settings.holder.inType.1651649104" languageId="org.eclipse.cdt.core.assembly" languageName="Assembly" sourceContentType="org.eclipse.cdt.core.asmSource" superClass="org.eclipse.cdt.build.core.settings.holder.inType"/>
 							</tool>
 							<tool id="org.eclipse.cdt.build.core.settings.holder.1716540617" name="GNU C++" superClass="org.eclipse.cdt.build.core.settings.holder">
@@ -39,6 +42,7 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nRF51_SDK_v4.4.0.31803/Nordic/nrf51822/Include/gcc}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;C:\Program Files (x86)\GNU Tools ARM Embedded\4.8 2013q4\arm-none-eabi\include&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;C:\Program Files (x86)\GNU Tools ARM Embedded\4.8 2013q4\lib\gcc\arm-none-eabi\4.8.3\include&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB}&quot;"/>
 								</option>
 								<option id="org.eclipse.cdt.build.core.settings.holder.symbols.613855105" name="Symbols" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="BLE_DEBUG=1"/>
@@ -48,6 +52,7 @@
 							</tool>
 							<tool id="org.eclipse.cdt.build.core.settings.holder.1864511664" name="GNU C" superClass="org.eclipse.cdt.build.core.settings.holder">
 								<option id="org.eclipse.cdt.build.core.settings.holder.incpaths.532485751" name="Include Paths" superClass="org.eclipse.cdt.build.core.settings.holder.incpaths" valueType="includePath">
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nRF51_SDK_v4.4.0.31803/Nordic/nrf51822/Include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nRF51_SDK_v4.4.0.31803/Nordic/nrf51822/Include/ble/softdevice}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nRF51_SDK_v4.4.0.31803/Nordic/nrf51822/Include/ble/ble_services}&quot;"/>

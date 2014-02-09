@@ -53,6 +53,7 @@
 #include "pwm.h"
 #include "freqcntr.h"
 #include "spi.h"
+#include "twi_master.h"
 #include "bldc.h"
 #include "a4960.h"
 #include "sma.h"
@@ -391,6 +392,7 @@ int main(void) {
 
     gpio_init();
     uart_init();
+    twi_master_init();
     sma_init();
     pwm_init();
     bldc_init();
@@ -415,7 +417,7 @@ int main(void) {
     timers_start();
 
     if (bleApp_isAdvertisingEnabled()) {
-    	bleApp_advertisingStart();
+    	//bleApp_advertisingStart();
     }
 
     // Enter main loop

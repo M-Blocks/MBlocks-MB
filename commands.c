@@ -23,6 +23,7 @@
 #include "sma.h"
 #include "freqcntr.h"
 #include "cmdline.h"
+#include "mechbrake.h"
 #include "bleApp.h"
 #include "ble_sps.h"
 #include "led.h"
@@ -47,6 +48,8 @@ static void cmdBLDCCurrent(const char *args);
 static void cmdBLDCRPM(const char *args);
 static void cmdBLDCSetKP(const char *args);
 static void cmdBLDCSetKI(const char *args);
+/* Brake commands */
+static void cmdBrake(const char *args);
 /* SMA commands */
 static void cmdSMA(const char *args);
 /* LED commands */
@@ -79,6 +82,8 @@ static const char cmdBLDCSetKPStr[] = "bldckp";
 static const char cmdBLDCSetKIStr[] = "bldcki";
 /* SMA commands */
 static const char cmdSMAStr[] = "sma";
+/* Mechanical brake commands */
+static const char cmdBrakeStr[] = "brake";
 /* LED commands */
 static const char cmdLEDStr[] = "led";
 /* BLE Serial Port Service Testing Commands */
@@ -111,6 +116,8 @@ static cmdFcnPair_t cmdTable[] = {
 	{cmdBLDCSetKIStr, cmdBLDCSetKI},
 	/* SMA commands */
 	{cmdSMAStr, cmdSMA},
+	/* Mechanical brake commands */
+	{cmdBrakeStr, cmdBrake},
 	/* LED commands */
 	{cmdLEDStr, cmdLED},
 	/* BLE Serial Port Service Testing Commands */
@@ -505,6 +512,29 @@ void cmdSMA(const char *args) {
 			app_uart_put_string("SMA extending...\r\n");
 		}
 	}
+}
+
+/*****************************/
+/* Mechanical brake commands */
+/*****************************/
+void cmdBrake(const char *args) {
+	char str[5];
+	unsigned int current_mA, time_ms;
+	mechbrake_dir_t dir;
+
+	if (sscanf(args, "%5s %u %u", str, &current_mA, &time_ms) != 3) {
+		return;
+	}
+
+	if (strncmp(str, "cw", 2) == 0) {
+		dir = MECHBRAKE_DIR_CW;
+	} else if (strncmp(str, "ccw", 3) == 0) {
+		dir = MECHBRAKE_DIR_CCW;
+	} else {
+		return;
+	}
+
+	mechbrake_actuate(dir, (uint16_t)current_mA, (uint8_t)time_ms);
 }
 
 /****************/
