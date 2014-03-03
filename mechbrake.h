@@ -16,6 +16,6 @@ typedef enum {
 	MECHBRAKE_DIR_CCW = 1
 } mechbrake_dir_t;
 
-bool mechbrake_actuate(mechbrake_dir_t direction, uint16_t current_mA, uint8_t time_ms);
+bool mechbrake_actuate(mechbrake_dir_t direction, uint16_t current_mA, uint16_t time_ms);
 
 #endif /* MECHBRAKE_H_ */

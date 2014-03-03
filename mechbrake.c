@@ -13,8 +13,8 @@
 #include "db.h"
 #include "mechbrake.h"
 
-bool mechbrake_actuate(mechbrake_dir_t direction, uint16_t current_mA, uint8_t time_ms) {
-	uint8_t twiBuf[5];
+bool mechbrake_actuate(mechbrake_dir_t direction, uint16_t current_mA, uint16_t time_ms) {
+	uint8_t twiBuf[6];
 
 	twiBuf[0] = DB_BRAKE_CMD;
 
@@ -29,7 +29,8 @@ bool mechbrake_actuate(mechbrake_dir_t direction, uint16_t current_mA, uint8_t t
 	twiBuf[2] = (current_mA >> 0) & 0xFF;
 	twiBuf[3] = (current_mA >> 8) & 0xFF;
 
-	twiBuf[4] = time_ms;
+	twiBuf[4] = (time_ms >> 0) & 0xFF;
+	twiBuf[5] = (time_ms >> 8) & 0xFF;
 
 	return twi_master_transfer((DB_TWI_ADDR << 1), twiBuf, sizeof(twiBuf), true);
 }

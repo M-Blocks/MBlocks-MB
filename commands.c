@@ -534,7 +534,7 @@ void cmdBrake(const char *args) {
 		return;
 	}
 
-	mechbrake_actuate(dir, (uint16_t)current_mA, (uint8_t)time_ms);
+	mechbrake_actuate(dir, (uint16_t)current_mA, (uint16_t)time_ms);
 }
 
 /****************/

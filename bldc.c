@@ -234,10 +234,18 @@ bool bldc_run(bool reverse) {
 	 * motor). */
 	runReg &= ~(0x01 << A4960_BRAKE_POSN);
 
+	/* Before starting the motor with the run bit, write the modified run
+	 * register back to the A4960.  If the direction bit is set at the
+	 * same time as the run bit, it will be ignored. */
+	if (!a4960_writeReg(A4960_RUN_REG_ADDR, runReg, NULL)) {
+		return false;
+	}
+
 	/* Set the run bit */
 	runReg |= (0x01 << A4960_RUN_POSN);
 
-	/* Write the modified run register back to the A4960 */
+	/* Re-write the modified run register back to the A4960, now with the run
+	 * bit set. */
 	if (!a4960_writeReg(A4960_RUN_REG_ADDR, runReg, NULL)) {
 		return false;
 	}
