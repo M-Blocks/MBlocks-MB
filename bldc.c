@@ -223,6 +223,13 @@ bool bldc_run(bool reverse) {
 		return false;
 	}
 
+	/* Clear the run bit.  It will still be set if the motor was stopped with
+	 * the electronic brake. */
+	runReg &= ~(0x01 << A4960_RUN_POSN);
+	if (!a4960_writeReg(A4960_RUN_REG_ADDR, runReg, NULL)) {
+		return false;
+	}
+
 	/* Set the reverse bit iif requested by the caller */
 	if (reverse) {
 		runReg |= (0x01 << A4960_DIRECTION_POSN);
