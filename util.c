@@ -39,22 +39,41 @@ uint32_t app_uart_put_string(char *str) {
 }
 
 bool delay_ms(uint32_t ms) {
-	uint32_t startTicks;
-	uint32_t nowTicks;
+    uint32_t startTicks;
+    uint32_t nowTicks;
+    uint32_t elapsedTicks;
+    uint32_t scheduleTicks;
+    uint32_t intermediaryTicks;
 
-	if (app_timer_cnt_get(&startTicks) != NRF_SUCCESS) {
-		return false;
-	}
+    if (app_timer_cnt_get(&startTicks) != NRF_SUCCESS) {
+        return false;
+    }
+    if (app_timer_cnt_get(&scheduleTicks) != NRF_SUCCESS) {
+        return false;
+    }
 
-	do {
-		if (app_timer_cnt_get(&nowTicks) != NRF_SUCCESS) {
-			return false;
-		}
+    do {
+        if (app_timer_cnt_get(&nowTicks) != NRF_SUCCESS) {
+            return false;
+        }
 
-		if ((nowTicks - startTicks) * 1000 >= 32768) {
-			return true;
-		}
-	} while (1);
+        /* The RTC is only a 24-bit counter, so when subtracting the two
+         * tick counts to find the elapsed number of ticks, we must mask out the
+         * 8 most significant bits. */
+        elapsedTicks = 0x00FFFFFF & (nowTicks - startTicks);
+        intermediaryTicks = elapsedTicks - scheduleTicks;
 
-	return false;
+        if (intermediaryTicks > 500){
+        	app_sched_execute();
+            if (app_timer_cnt_get(&scheduleTicks) != NRF_SUCCESS) {
+            	return false;
+            }
+        }
+
+        if (elapsedTicks * 1000 >= 32768 * ms) {
+            return true;
+        }
+    } while (1);
+
+    return false;
 }
