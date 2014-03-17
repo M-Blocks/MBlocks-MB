@@ -417,7 +417,7 @@ int main(void) {
     timers_start();
 
     if (bleApp_isAdvertisingEnabled()) {
-    	//bleApp_advertisingStart();
+    	bleApp_advertisingStart();
     }
 
     // Enter main loop
