@@ -18,7 +18,6 @@
 #include "pins.h"
 #include "util.h"
 #include "adc.h"
-#include "pwm.h"
 #include "sma.h"
 
 #define SMA_DEBUG	1

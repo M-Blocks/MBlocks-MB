@@ -521,7 +521,7 @@ bool ble_sps_put_char(ble_sps_t *p_sps, uint8_t c) {
 	return false;
 }
 
-bool ble_sps_put_string(ble_sps_t *p_sps, uint8_t *str) {
+bool ble_sps_put_string(ble_sps_t *p_sps, const uint8_t *str) {
 	fifoSize_t length;
 
 	if (p_sps->conn_handle == BLE_CONN_HANDLE_INVALID) {

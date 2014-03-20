@@ -12,8 +12,6 @@
 
 #include "cmdline.h"
 
-#define MAX_CMDSTR_LEN 96
-
 static const cmdFcnPair_t *cmdTable;
 static char cmdStr[MAX_CMDSTR_LEN] = "";
 

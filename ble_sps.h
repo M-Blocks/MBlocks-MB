@@ -58,7 +58,7 @@ uint32_t ble_sps_init(ble_sps_t * p_sps, const ble_sps_init_t * p_sps_init);
 void ble_sps_on_ble_evt(ble_sps_t * p_lbs, ble_evt_t * p_ble_evt);
 
 bool ble_sps_put_char(ble_sps_t *p_sps, uint8_t c);
-bool ble_sps_put_string(ble_sps_t *p_sps, uint8_t *str);
+bool ble_sps_put_string(ble_sps_t *p_sps, const uint8_t *str);
 bool ble_sps_get_char(ble_sps_t *p_sps, uint8_t *c);
 
 #endif // BLE_SPS_H__

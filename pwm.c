@@ -20,8 +20,7 @@
 #include "pwm.h"
 
 #define PWM0_PIN_NO	PRECHRGEN_PIN_NO
-#define PWM1_PIN_NO	SMAIREF_PIN_NO
-#define PWM2_PIN_NO	BLDCIREF_PIN_NO
+#define PWM1_PIN_NO	BLDCIREF_PIN_NO
 
 /* This is the period, in counts, of the PWM output.  Each individual channel
  * can have an on-time period anywhere between 0 and this number, inclusive.*/
@@ -30,8 +29,8 @@
 
 static bool initialized = false;
 
-static uint32_t onPeriods[3] = {0, 0, 0};
-static uint32_t pwmPinNos[3] = {PWM0_PIN_NO, PWM1_PIN_NO, PWM2_PIN_NO};
+static uint32_t onPeriods[2] = {0, 0};
+static uint32_t pwmPinNos[2] = {PWM0_PIN_NO, PWM1_PIN_NO};
 
 void pwm_init() {
 	/* Stop and clear the timer */
@@ -62,7 +61,7 @@ void pwm_init() {
 	/* CC[0] is used to set the period of the PWM */
 	NRF_TIMER2->CC[0] = PERIOD;
 
-	/* Un-configure GPIO task/event blocks 0, 1, and 2.  As soon as the
+	/* Un-configure GPIO task/event blocks 0 and 1.  As soon as the
 	 * the duty cycle of a PWM channel is set to something other than 0, the
 	 * code must configure the corresponding task/event block as a task which
 	 * toggles the GPIO pin in response to each incoming event.  Setting the
@@ -71,7 +70,6 @@ void pwm_init() {
 	 * or low explicitly) so the PWM outputs would not behave correctly. */
 	nrf_gpiote_unconfig(0);
 	nrf_gpiote_unconfig(1);
-	nrf_gpiote_unconfig(2);
 
 	/* Set the PWM pins to 0 until they are turned on. */
 	nrf_gpio_pin_clear(PWM0_PIN_NO);
@@ -79,9 +77,6 @@ void pwm_init() {
 
 	nrf_gpio_pin_clear(PWM1_PIN_NO);
 	nrf_gpio_pin_dir_set(PWM1_PIN_NO, NRF_GPIO_PIN_DIR_OUTPUT);
-
-	nrf_gpio_pin_clear(PWM2_PIN_NO);
-	nrf_gpio_pin_dir_set(PWM2_PIN_NO, NRF_GPIO_PIN_DIR_OUTPUT);
 
 	/* Compare match on channel 0 is also used to reset the counter to 0. */
 	NRF_PPI->CH[0].EEP = (uint32_t)&NRF_TIMER2->EVENTS_COMPARE[0];
@@ -104,20 +99,13 @@ void pwm_init() {
 	NRF_PPI->CH[4].EEP = (uint32_t)&NRF_TIMER2->EVENTS_COMPARE[2];
 	NRF_PPI->CH[4].TEP = (uint32_t)&NRF_GPIOTE->TASKS_OUT[1];
 
-	NRF_PPI->CH[5].EEP = (uint32_t)&NRF_TIMER2->EVENTS_COMPARE[0];
-	NRF_PPI->CH[5].TEP = (uint32_t)&NRF_GPIOTE->TASKS_OUT[2];
 
-	NRF_PPI->CH[6].EEP = (uint32_t)&NRF_TIMER2->EVENTS_COMPARE[3];
-	NRF_PPI->CH[6].TEP = (uint32_t)&NRF_GPIOTE->TASKS_OUT[2];
-
-	/* Enable PPI channels 0:6 */
+	/* Enable PPI channels 0:4 */
 	NRF_PPI->CHEN |= (PPI_CHEN_CH0_Enabled << PPI_CHEN_CH0_Pos) |
 			(PPI_CHEN_CH1_Enabled << PPI_CHEN_CH1_Pos) |
 			(PPI_CHEN_CH2_Enabled << PPI_CHEN_CH2_Pos) |
 			(PPI_CHEN_CH3_Enabled << PPI_CHEN_CH3_Pos) |
-			(PPI_CHEN_CH4_Enabled << PPI_CHEN_CH4_Pos) |
-			(PPI_CHEN_CH5_Enabled << PPI_CHEN_CH5_Pos) |
-			(PPI_CHEN_CH6_Enabled << PPI_CHEN_CH6_Pos);
+			(PPI_CHEN_CH4_Enabled << PPI_CHEN_CH4_Pos);
 
 	/* Start counting */
 	NRF_TIMER2->TASKS_START = 1;
@@ -134,7 +122,7 @@ bool pwm_setOnPeriod(unsigned int channel, uint32_t onPeriod) {
 	}
 
 	/* Validate the arguments */
-	if (channel > 2) {
+	if (channel > 1) {
 		return false;
 	}
 
@@ -155,7 +143,7 @@ bool pwm_setOnPeriod(unsigned int channel, uint32_t onPeriod) {
 	NRF_TIMER2->TASKS_CLEAR = 1;
 
 
-	for (i=0; i<=2; i++) {
+	for (i=0; i<=1; i++) {
 		/* We iterate over all channels because we must force all channels with
 		 * an on-period great than 0 to initially drive their outputs high
 		 * given that we just reset the counter to 0.  */
@@ -196,7 +184,7 @@ bool pwm_setOnPeriod(unsigned int channel, uint32_t onPeriod) {
 }
 
 uint32_t pwm_getOnPeriod(unsigned int channel) {
-	if (!initialized || (channel > 2)) {
+	if (!initialized || (channel > 1)) {
 		return 0;
 	}
 

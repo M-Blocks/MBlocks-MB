@@ -108,12 +108,16 @@ $(OBJECT_DIRECTORY)/%.o: %.c
 # Do the actual compilation
 	$(CC) $(CFLAGS) $(INCLUDEPATHS) -c -o $@ $<
 
+updateGitVersion:
+	bash -c "../bin/update_gitVersionStr.sh ../gitversion_template.h ../gitversion.h"
+	bash -c "../bin/update_gitVersionStr.sh ../gitversion_template.c ../gitversion.c"
+
 ## Assemble .s files
 $(OBJECT_DIRECTORY)/%.o: %.s
 	$(CC) $(ASMFLAGS) $(INCLUDEPATHS) -c -o $@ $<
 
 ## Link C and assembler objects to an .out file
-$(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).out: $(BUILD_DIRECTORIES) $(C_OBJECTS) $(ASSEMBLER_OBJECTS)
+$(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).out: $(BUILD_DIRECTORIES) updateGitVersion $(C_OBJECTS) $(ASSEMBLER_OBJECTS)
 	$(CC) $(LDFLAGS) $(C_OBJECTS) $(ASSEMBLER_OBJECTS) -o $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).out
 
 ## Create binary .bin file from the .out file

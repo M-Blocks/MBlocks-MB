@@ -11,11 +11,11 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-typedef enum {
-	MECHBRAKE_DIR_CW = 0,
-	MECHBRAKE_DIR_CCW = 1
-} mechbrake_dir_t;
+typedef struct {
+	int16_t current_mA;
+	uint16_t time_ms;
+} coilCurrentStep_t;
 
-bool mechbrake_actuate(mechbrake_dir_t direction, uint16_t current_mA, uint16_t time_ms);
+bool mechbrake_actuate(uint8_t stepCount, const coilCurrentStep_t *steps);
 
 #endif /* MECHBRAKE_H_ */

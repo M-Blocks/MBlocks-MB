@@ -8,6 +8,8 @@
 #ifndef CMDLINE_H_
 #define CMDLINE_H_
 
+#define MAX_CMDSTR_LEN 96
+
 typedef struct {
     const char *cmd;
     void (*fcn)(const char *);

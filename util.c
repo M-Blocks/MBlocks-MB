@@ -20,12 +20,12 @@
 
 extern ble_sps_t m_sps;
 
-uint32_t app_uart_put_string(char *str) {
+uint32_t app_uart_put_string(const char *str) {
 	uint32_t i = 0;
 	uint32_t err_code = NRF_SUCCESS;
 
 #if (ENABLE_BLE_COMMANDS == 1)
-	ble_sps_put_string(&m_sps, (uint8_t *)str);
+	ble_sps_put_string(&m_sps, (const uint8_t *)str);
 #endif
 
 	while (str[i] != '\0') {

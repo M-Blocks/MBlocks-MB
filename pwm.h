@@ -12,8 +12,7 @@
 #include <stdbool.h>
 
 #define PRECHRGEN_PWM_CHNL	0
-#define SMAIREF_PWM_CHNL	1
-#define BLDCIREF_PWM_CHNL	2
+#define BLDCIREF_PWM_CHNL	1
 
 void pwm_init(void);
 bool pwm_setOnPeriod(unsigned int channel, uint32_t onPeriod);

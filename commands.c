@@ -16,9 +16,11 @@
 #include "app_uart.h"
 
 #include "util.h"
+#include "gitversion.h"
 #include "pwm.h"
 #include "adc.h"
 #include "power.h"
+#include "db.h"
 #include "bldc.h"
 #include "sma.h"
 #include "freqcntr.h"
@@ -49,6 +51,7 @@ static void cmdBLDCRPM(const char *args);
 static void cmdBLDCSetKP(const char *args);
 static void cmdBLDCSetKI(const char *args);
 /* Brake commands */
+static void cmdSimpleBrake(const char *args);
 static void cmdBrake(const char *args);
 /* SMA commands */
 static void cmdSMA(const char *args);
@@ -63,7 +66,7 @@ static void cmdBLEAdv(const char *args);
 static void cmdJump(const char *args);
 static void cmdJumpR(const char *args);
 static void cmdSeq(const char *args);
-static void cmdProg(char *args);
+static void cmdProg(const char *args);
 static void cmdDelay(const char *args);
 static void cmdWobble(const char *args);
 
@@ -90,7 +93,8 @@ static const char cmdBLDCSetKIStr[] = "bldcki";
 /* SMA commands */
 static const char cmdSMAStr[] = "sma";
 /* Mechanical brake commands */
-static const char cmdBrakeStr[] = "brake";
+static const char cmdSimpleBrakeStr[] = "brake";
+static const char cmdBrakeStr[] = "brakeseq";
 /* LED commands */
 static const char cmdLEDStr[] = "led";
 /* BLE Serial Port Service Testing Commands */
@@ -131,6 +135,7 @@ static cmdFcnPair_t cmdTable[] = {
 	/* SMA commands */
 	{cmdSMAStr, cmdSMA},
 	/* Mechanical brake commands */
+	{cmdSimpleBrakeStr, cmdSimpleBrake},
 	{cmdBrakeStr, cmdBrake},
 	/* LED commands */
 	{cmdLEDStr, cmdLED},
@@ -154,8 +159,19 @@ void commands_init() {
 }
 
 void cmdVersion(const char *args) {
+	char db_gitVersionStr[64];
+
+	if (!db_getVersion(db_gitVersionStr, sizeof(db_gitVersionStr))) {
+		strcpy(db_gitVersionStr, "<unavailable>");
+	}
+
 	app_uart_put_string("\r\n");
-	app_uart_put_string("MBlocks v2.0\r\n");
+	app_uart_put_string("MB Firmware: ");
+	app_uart_put_string(gitVersionStr);
+	app_uart_put_string("\r\n");
+	app_uart_put_string("DB Firmware: ");
+	app_uart_put_string(db_gitVersionStr);
+	app_uart_put_string("\r\n");
 	app_uart_put_string("\r\n");
 }
 
@@ -537,25 +553,99 @@ void cmdSMA(const char *args) {
 /*****************************/
 /* Mechanical brake commands */
 /*****************************/
-void cmdBrake(const char *args) {
+void cmdSimpleBrake(const char *args) {
 	char str[5];
 	unsigned int current_mA, time_ms;
-	mechbrake_dir_t dir;
+	coilCurrentStep_t step;
 
 	if (sscanf(args, "%5s %u %u", str, &current_mA, &time_ms) != 3) {
 		return;
 	}
 
-	if (strncmp(str, "cw", 2) == 0) {
-		dir = MECHBRAKE_DIR_CW;
-	} else if (strncmp(str, "ccw", 3) == 0) {
-		dir = MECHBRAKE_DIR_CCW;
+	if (strncmp(str, "f", 1) == 0) {
+		;
+	} else if (strncmp(str, "r", 1) == 0) {
+		current_mA = -current_mA;
 	} else {
 		return;
 	}
 
-	app_uart_put_string("Brake!");
-	mechbrake_actuate(dir, (uint16_t)current_mA, (uint16_t)time_ms);
+	step.current_mA = (int16_t)current_mA;
+	step.time_ms = (uint16_t)time_ms;
+
+	/* Stop the motor (without electric brake) before actuating the mechanical
+	 * brake. */
+	bldc_stop(false);
+
+	if (mechbrake_actuate(1, &step)) {
+		app_uart_put_string("Mechanical brake actuated\r\n");
+	}
+
+}
+
+
+void cmdBrake(const char *args) {
+	char str[MAX_CMDSTR_LEN];
+	char *substr;
+	unsigned int stepCount, i;
+	coilCurrentStep_t steps[8];
+	int current_mA;
+	unsigned int time_ms;
+
+	strncpy(str, args, sizeof(str)-1);
+	str[sizeof(str)-1] = '\0';
+
+	/* Look for the colon that divides the step count from the first step. */
+	if ((substr = strtok(str, ":")) == NULL) {
+		return;
+	}
+
+	/* Interpret the first token (i.e. text before the colon) to the step
+	 * count. */
+	if (sscanf(substr, "%u", &stepCount) != 1) {
+		return;
+	}
+
+	/* We limit ourselves to 8 steps so as to not over-run the steps array. */
+	if (stepCount > 8) {
+		stepCount = 8;
+	}
+
+	/* Each of the promised steps is separated by a semicolon.  Here we
+	 * iterate over them, extracting the current and time for each. */
+	for (i=0; i<stepCount; i++) {
+		/* If we did not find the next token, break out of the for loop before
+		 * it completes. */
+		if ((substr = strtok(NULL, ";")) == NULL) {
+			break;
+		}
+
+		/* If we cannot interpret the step as a current and time, something is
+		 * wrong with the formatting and we break out of the for loop. */
+		if (sscanf(substr, "%d %u", &current_mA, &time_ms) != 2) {
+			break;
+		}
+
+		steps[i].current_mA = (int16_t)current_mA;
+		steps[i].time_ms = (uint16_t)time_ms;
+	}
+
+	/* Before naturally terminating the for loop, i will be incremented one
+	 * final time so that it will be equal to stepCount if we found all
+	 * steps promised by the step count. If i does not match the promised
+	 * step count, something is wrong and we return without executing the
+	 * brake command. */
+	if (i != stepCount) {
+		return;
+	}
+
+	/* Stop the motor (without electric brake) before actuating the mechanical
+	 * brake. */
+	bldc_stop(false);
+
+	if (mechbrake_actuate(stepCount, steps)) {
+		app_uart_put_string("Mechanical brake actuated\r\n");
+	}
 }
 
 /****************/
@@ -661,7 +751,7 @@ void cmdJump(const char *args){
 	unsigned int speed;
 	//unsigned int time;
 
-	nArgs = sscanf(args, "%u %u", &speed);
+	nArgs = sscanf(args, "%u", &speed);
 
 	char temp[50];
 	snprintf(temp, sizeof(temp), "Speed: %u \r\n", speed);
@@ -695,7 +785,7 @@ void cmdJumpR(const char *args){
 	unsigned int speed;
 	//unsigned int time;
 
-	nArgs = sscanf(args, "%u %u", &speed);
+	nArgs = sscanf(args, "%u", &speed);
 
 	char temp[50];
 	snprintf(temp, sizeof(temp), "Speed: %u \r\n", speed);
@@ -747,16 +837,19 @@ void cmdSeq(const char *args){
 	}
 }
 
-void cmdProg(char *args){
+void cmdProg(const char *args){
 	//allows the user to send a sequence of commands, including delays, to be executed
 	//commands must be separated by semicolons
 
+	char str[MAX_CMDSTR_LEN];
+
+	strncpy(str, args, sizeof(str)-1);
+	str[sizeof(str)-1] = '\0';
+
 	app_uart_put_string("Started executing program.\r\n");
 
-	const char delimiters[] = ";";
 	char *token;
-
-	token = strtok(args, delimiters);
+	token = strtok(str, ";");
 
 	while(token != NULL){
 		if(token[0] == ' ') token++;
@@ -764,7 +857,7 @@ void cmdProg(char *args){
 			app_uart_put_string("Executed command.\r\n");
 		else
 			app_uart_put_string("Failed to execute command.\r\n");
-		token = strtok (NULL, delimiters);
+		token = strtok (NULL, ";");
 	}
 
 	app_uart_put_string("Requested program completed.\r\n");
