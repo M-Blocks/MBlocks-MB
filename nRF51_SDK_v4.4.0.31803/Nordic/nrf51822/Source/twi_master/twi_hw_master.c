@@ -21,6 +21,8 @@
 #include "nrf_error.h"
 #include "nrf_assert.h"
 
+#include "global.h"
+
 /* Max cycles approximately to wait on RXDREADY and TXDREADY event, 
  * This is optimized way instead of using timers, this is not power aware. */
 #define MAX_TIMEOUT_LOOPS             (20000UL)        /**< MAX while loops to wait for RXD/TXD event */

@@ -41,13 +41,13 @@ static void cmdVBat(const char *args);
 static void cmdICharge(const char *args);
 static void cmdBatShort(const char *args);
 static void cmdCharge(const char *args);
+static void cmdVBATSW(const char *args);
 /* Motor control commands */
+static void cmdBLDCAccel(const char *args);
 static void cmdBLDCSpeed(const char *args);
-static void cmdBLDCRun(const char *args);
 static void cmdBLDCStop(const char *args);
-static void cmdBLDCOff(const char *args);
-static void cmdBLDCCurrent(const char *args);
 static void cmdBLDCRPM(const char *args);
+static void cmdBLDCDirReverse(const char *args);
 static void cmdBLDCSetKP(const char *args);
 static void cmdBLDCSetKI(const char *args);
 /* Brake commands */
@@ -81,13 +81,13 @@ static const char cmdVBatStr[] = "vbat";
 static const char cmdIChargeStr[] = "icharge";
 static const char cmdBatShortStr[] = "batshort";
 static const char cmdChargeStr[] = "charge";
+static const char cmdVBATSWStr[] = "vbatsw";
 /* Motor control commands */
+static const char cmdBLDCAccelStr[] = "bldcaccel";
 static const char cmdBLDCSpeedStr[] = "bldcspeed";
-static const char cmdBLDCRunStr[] = "bldcrun";
 static const char cmdBLDCStopStr[] = "bldcstop";
-static const char cmdBLDCOffStr[] = "bldcoff";
-static const char cmdBLDCCurrentStr[] = "bldci";
 static const char cmdBLDCRPMStr[] = "bldcrpm";
+static const char cmdBLDCDirRevStr[] = "bldcdirrev";
 static const char cmdBLDCSetKPStr[] = "bldckp";
 static const char cmdBLDCSetKIStr[] = "bldcki";
 /* SMA commands */
@@ -123,13 +123,13 @@ static cmdFcnPair_t cmdTable[] = {
 	{cmdIChargeStr, cmdICharge},
 	{cmdBatShortStr, cmdBatShort},
 	{cmdChargeStr, cmdCharge},
+	{cmdVBATSWStr, cmdVBATSW},
 	/* Motor control commands */
+	{cmdBLDCAccelStr, cmdBLDCAccel},
 	{cmdBLDCSpeedStr, cmdBLDCSpeed},
-	{cmdBLDCRunStr, cmdBLDCRun},
 	{cmdBLDCStopStr, cmdBLDCStop},
-	{cmdBLDCOffStr, cmdBLDCOff},
-	{cmdBLDCCurrentStr, cmdBLDCCurrent},
 	{cmdBLDCRPMStr, cmdBLDCRPM},
+	{cmdBLDCDirRevStr, cmdBLDCDirReverse},
 	{cmdBLDCSetKPStr, cmdBLDCSetKP},
 	{cmdBLDCSetKIStr, cmdBLDCSetKI},
 	/* SMA commands */
@@ -289,93 +289,77 @@ void cmdCharge(const char *args) {
 	}
 }
 
+void cmdVBATSW(const char *args) {
+	unsigned int enable;
+
+	if (sscanf(args, "%u", &enable) == 1) {
+		if (enable == 1) {
+			power_setVBATSWState(true);
+			app_uart_put_string("VBATSW turned on\r\n");
+		} else if (enable == 0) {
+			power_setVBATSWState(false);
+			app_uart_put_string("VBATSW turned off\r\n");
+		}
+	} else {
+		if (power_getVBATSWState()) {
+			app_uart_put_string("VBATSW is on\r\n");
+		} else {
+			app_uart_put_string("VBATSW is off\r\n");
+		}
+	}
+}
+
 /**************************/
 /* Motor control commands */
 /**************************/
 
+void cmdBLDCAccel(const char *args) {
+	char str[50];
+	unsigned int accel_mA, time_ms;
+
+	/* The user must specify 'f' or 'r' an acceleration current, in mA, and a time, in ms */
+	if (sscanf(args, "%1s %u %u", str, &accel_mA, &time_ms) != 3) {
+		return;
+	}
+
+	if (time_ms == 0) {
+		return;
+	}
+
+	if (str[0] == 'f') {
+		bldc_setAccel(accel_mA, time_ms, false);
+		app_uart_put_string("Accelerating BLDC motor forward\r\n");
+	} else if (str[0] == 'r') {
+		bldc_setAccel(accel_mA, time_ms, true);
+		app_uart_put_string("Accelerating BLDC motor in reverse\r\n");
+	}
+}
+
 void cmdBLDCSpeed(const char *args) {
 	char str[50];
 	unsigned int speed_rpm;
-	bool reverse;
 
-	/* The user must specify 'f' or 'r' and a speed, in RPM */
+	/* The user must specify 'f', 'r', 'c', or 'b' and a speed, in RPM */
 	if (sscanf(args, "%1s %u", str, &speed_rpm) != 2) {
 		return;
 	}
 
-	/* The first argument must either be 'f' for forward or 'r' for reverse */
-	if (str[0] == 'f') {
-		reverse = false;
-	} else if (str[0] == 'r') {
-		reverse = true;
-	} else {
-		return;
+	/* If the speed parameter is greater than 0, the first argument must either
+	 * be 'f' for forward, 'r' for reverse.  If the speed is 0, the first
+	 * argument must be 'c' for coast or 'b' for brake. */
+	if ((speed_rpm > 0) && (str[0] == 'f')) {
+		bldc_setSpeed(speed_rpm, false, false);
+		app_uart_put_string("Starting BLDC motor spinning forward\r\n");
+	} else if ((speed_rpm > 0) && (str[0] == 'r')) {
+		bldc_setSpeed(speed_rpm, true, false);
+		app_uart_put_string("Starting BLDC motor spinning in reverse\r\n");
+	} else if ((speed_rpm == 0) && (str[0] == 'c')) {
+		bldc_setSpeed(0, false, false);
+		app_uart_put_string("Stopping BLDC motor without electric brake\r\n");
+	} else if ((speed_rpm == 0) && (str[0] == 'b')) {
+		bldc_setSpeed(0, false, true);
+		app_uart_put_string("Stopping BLDC motor with electric brake\r\n");
 	}
-
-	bldc_setSpeed(speed_rpm, reverse);
-
-	if (!reverse) {
-		snprintf(str, sizeof(str), "Starting BLDC motor spinning forward\r\n");
-	} else {
-		snprintf(str, sizeof(str), "Starting BLDC motor spinning in reverse\r\n");
-	}
-	app_uart_put_string(str);
-}
-
-void cmdBLDCRun(const char *args) {
-	char str[50];
-	unsigned int iLimit_mA;
-	int nArgs;
-	bool reverse;
-
-	/* With no arguments, we simply supply power to the A4960 BLDC controller*/
-	if ((nArgs = sscanf(args, "%1s %u", str, &iLimit_mA)) == -1) {
-		bldc_on();
-		snprintf(str, sizeof(str), "BLDC controller turned on\r\n");
-		app_uart_put_string(str);
-		return;
-	}
-
-	/* The first argument must either be 'f' for forward or 'r' for reverse */
-	if (str[0] == 'f') {
-		reverse = false;
-	} else if (str[0] == 'r') {
-		reverse = true;
-	} else {
-		return;
-	}
-
-	/* If the A4960 BLDC controller is not already supplied with power, do so
-	 * now. */
-	if (!bldc_isOn() && bldc_on()) {
-		snprintf(str, sizeof(str), "BLDC controller turned on\r\n");
-		app_uart_put_string(str);
-	} else if (bldc_isOn()) {
-		;
-	} else {
-		snprintf(str, sizeof(str), "Failed to turn BLDC controller on\r\n");
-		app_uart_put_string(str);
-		return;
-	}
-
-	/* The second argument specifies the maximum current limit (as controlled
-	 * by the voltage at the REF input to the A4960).  If this argument is
-	 * present, set the corresponding voltage level now. */
-	if (nArgs == 2) {
-		bldc_setMaxCurrent_mA(iLimit_mA);
-
-		snprintf(str, sizeof(str), "BLDC current limit set to %umA\r\n", iLimit_mA);
-		app_uart_put_string(str);
-	}
-
-	if (!reverse) {
-		snprintf(str, sizeof(str), "Starting BLDC motor spinning forward\r\n");
-	} else {
-		snprintf(str, sizeof(str), "Starting BLDC motor spinning in reverse\r\n");
-	}
-	app_uart_put_string(str);
-
-	bldc_run(reverse);
 }
 
 void cmdBLDCStop(const char *args) {
@@ -383,42 +367,13 @@ void cmdBLDCStop(const char *args) {
 
 	if (sscanf(args, "%1s", str) == 1) {
 		if (str[0] == 'b') {
-			snprintf(str, sizeof(str), "Stopping BLDC motor with electric brake\r\n");
-			app_uart_put_string(str);
-
-			bldc_stop(true);
-		} else {
-			return;
+			cmdBLDCSpeed("b 0");
+		} else if (str[0] == 'c') {
+			cmdBLDCSpeed("c 0");
 		}
 	} else {
-		snprintf(str, sizeof(str), "Stopping BLDC motor without electric brake\r\n");
-		app_uart_put_string(str);
-
-		bldc_stop(false);
+		cmdBLDCSpeed("c 0");
 	}
-}
-
-void cmdBLDCOff(const char *args) {
-	char str[50];
-
-	bldc_off();
-
-	snprintf(str, sizeof(str), "BLDC controller turned off\r\n");
-	app_uart_put_string(str);
-}
-
-void cmdBLDCCurrent(const char *args) {
-	char str[50];
-	unsigned int iLimit_mA;
-
-	if (sscanf(args, "%u", &iLimit_mA) != 1) {
-		return;
-	}
-
-	bldc_setMaxCurrent_mA(iLimit_mA);
-
-	snprintf(str, sizeof(str), "BLDC current limit set to %umA\r\n", iLimit_mA);
-	app_uart_put_string(str);
 }
 
 void cmdBLDCRPM(const char *args) {
@@ -432,6 +387,26 @@ void cmdBLDCRPM(const char *args) {
 
 	snprintf(str, sizeof(str), "BLDC speed: %lu RPM\r\n", rpm);
 	app_uart_put_string(str);
+}
+
+void cmdBLDCDirReverse(const char *args) {
+	unsigned int reverse;
+
+	if (sscanf(args, "%u", &reverse) == 1) {
+		if (reverse == 1) {
+			bldc_setReverseDirections(true);
+			app_uart_put_string("BLDC directions reversed\r\n");
+		} else if (reverse == 0) {
+			bldc_setReverseDirections(false);
+			app_uart_put_string("BLDC directions set to normal\r\n");
+		}
+	} else {
+		if (bldc_getReverseDirections()) {
+			app_uart_put_string("BLDC directions are reversed\r\n");
+		} else {
+			app_uart_put_string("BLDC directions are normal\r\n");
+		}
+	}
 }
 
 void cmdBLDCSetKP(const char *args) {
@@ -575,7 +550,7 @@ void cmdSimpleBrake(const char *args) {
 
 	/* Stop the motor (without electric brake) before actuating the mechanical
 	 * brake. */
-	bldc_stop(false);
+	bldc_setSpeed(0, false, false);
 
 	if (mechbrake_actuate(1, &step)) {
 		app_uart_put_string("Mechanical brake actuated\r\n");
@@ -641,7 +616,7 @@ void cmdBrake(const char *args) {
 
 	/* Stop the motor (without electric brake) before actuating the mechanical
 	 * brake. */
-	bldc_stop(false);
+	bldc_setSpeed(0, false, false);
 
 	if (mechbrake_actuate(stepCount, steps)) {
 		app_uart_put_string("Mechanical brake actuated\r\n");

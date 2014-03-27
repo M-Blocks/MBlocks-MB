@@ -20,6 +20,7 @@
 #include "pwm.h"
 #include "a4960.h"
 #include "freqcntr.h"
+#include "power.h"
 #include "bldc.h"
 
 #define BLDC_DEBUG			0
@@ -29,7 +30,10 @@
 
 /* Resistors used in divider which sets maximum controller IC current */
 #define R30					10000
-#define R29					1000
+//#define R29				1000
+#define R29					2000
+
+#define ACCEL_CURRENT_MAX_MA	((((3300 * R29) / (R30 + R29)) * 1000) / (RSENSE_MILLIOHMS * ISENSE_GAIN))
 
 /* Number of points used in the variance calculation that determines whether
  * the motor has reached a steady state speed. */
@@ -48,15 +52,23 @@ static int32_t kp_denominator = 1;
 static int32_t ki_numerator = 5;
 static int32_t ki_denominator = 1000;
 
+static bool directionsReversed = false;
 
 static bool initialized = false;
-static bool bldcOn = false;
+static bool configured = false;
 static bool stable = false;
+static bool needToReconfigure = false;
 
 static bool bldcRunning = false;
 static uint16_t setSpeed_rpm;
-
+static bool accelModeActive = false;
 static app_timer_id_t bldc_speedControlTimerID;
+
+static bool bldc_config(void);
+static bool bldc_start(bool reverse);
+static bool bldc_stop(bool brake);
+
+static bool bldc_translateDirection(bool reverse);
 
 static bool bldc_setIRefRatio(uint8_t refRatio);
 static void bldc_speedControlTimerHandler(void *p_context);
@@ -69,59 +81,25 @@ bool bldc_init() {
     err_code = app_timer_create(&bldc_speedControlTimerID, APP_TIMER_MODE_REPEATED, bldc_speedControlTimerHandler);
     APP_ERROR_CHECK(err_code);
 
+    /* If the charging voltage is removed while the MBlock is charging, it
+     * causes a dip in the 3.3V supply.  This can reset the BLDC controller, so
+     * after this happens, we need to reconfigure the controller. */
+    power_registerImproperTerminationFlag(&needToReconfigure);
+
     initialized = true;
 
     return true;
 }
 
-bool bldc_on() {
-	if (!initialized) {
-		return false;
-	}
-
-	/* The BLDC controller IC's reset line also switches on the power stage of
-	 * the driver. */
-	nrf_gpio_pin_set(BLDCRESETN_PIN_NO);
-	bldcOn = true;
-
-	nrf_delay_ms(25);
-
-	if (!bldc_config()) {
-		/* If we fail to configure the controller's parameters, we turn it
-		 * off before returning failure. */
-		bldc_off();
-		return false;
-	}
-
-	return true;
-}
-
-bool bldc_off() {
-	if (!initialized) {
-		return false;
-	}
-
-	/* Stop the speed control timer to remove the control loop overhead */
-	app_timer_stop(bldc_speedControlTimerID);
-
-	/* Remove power from the BLDC controller */
-	nrf_gpio_pin_clear(BLDCRESETN_PIN_NO);
-
-	bldcOn = false;
-	setSpeed_rpm = 0;
-	stable = false;
-
-	return true;
-}
-
-bool bldc_isOn() {
-	return bldcOn;
-}
-
 bool bldc_config() {
-	if (!initialized || !bldcOn) {
+	if (!initialized || !power_getVBATSWState()) {
 		return false;
 	}
+
+	/* Pre-emptively clear the flag which indicates whether we need to
+	 * configure the BLDC controller as the result of the charging
+	 * voltage being removed while the module is still charging. */
+	needToReconfigure = false;
 
 	/* 50us commutation blank time, 1.6us blank time, 0.3us dead time */
 	if (!a4960_writeReg(A4960_CONFIG0_REG_ADDR,
@@ -208,15 +186,23 @@ bool bldc_config() {
 		return false;
 	}
 
+	configured = true;
+
 	return true;
 }
 
-bool bldc_run(bool reverse) {
+bool bldc_start(bool reverse) {
 	uint16_t runReg;
 
-	if (!initialized || !bldcOn) {
+	/* If the controller has not been initialized or its battery supply is off,
+	 * we return false. */
+	if (!initialized || !power_getVBATSWState()) {
 		return false;
 	}
+
+	/* Depending on how the 3 BLDC wires are connected, the direction in which
+	 * the motor spins will change. */
+	reverse = bldc_translateDirection(reverse);
 
 	/* Read the current value of the run register */
 	if (!a4960_readReg(A4960_RUN_REG_ADDR, &runReg)) {
@@ -265,7 +251,10 @@ bool bldc_run(bool reverse) {
 bool bldc_stop(bool brake) {
 	uint16_t runReg;
 
-	if (!initialized || !bldcOn) {
+	/* If the controller has not been initialized or its battery supply is off,
+	 * we return false. */
+	if (!initialized || !power_getVBATSWState()) {
+		bldcRunning = false;
 		return false;
 	}
 
@@ -283,6 +272,11 @@ bool bldc_stop(bool brake) {
 	     * bit is already set, but it it is not the motor is already stopped,
 	     * so the state of the brake bit does not matter. */
 		runReg |= (0x01 << A4960_BRAKE_POSN);
+		/* When using the brake, the brake bit is ignored unless the run bit is
+		 * also set.  If we are trying to brake the motor as it is coasting to
+		 * a stop, the run bit has already been cleared, so we must set it
+		 * again here. */
+		runReg |= (0x01 << A4960_RUN_POSN);
 	} else {
 		/* If we are allowing the motor to coast to a stop, we clear the run
 		 * bit.  The state of the brake bit does not matter once the run bit is
@@ -312,7 +306,7 @@ bool bldc_setMaxCurrent_mA(uint16_t iLimit_mA) {
 
 	/* We resistor-divide and low-pass filter a PWM output to generate a DC
 	 * level at the REF pin.  Here we back-calculate the DC voltage that we'd
-	 * want to aplpy to the input of the resistor divider. */
+	 * want to apply to the input of the resistor divider. */
 	bldciref_mV = ((R30 + R29) * vref_mV) / R29;
 
 	/* From the desired DC voltage at the input of the resistor divider, we
@@ -331,7 +325,7 @@ bool bldc_setMaxCurrent_mA(uint16_t iLimit_mA) {
 	return true;
 }
 
-bool bldc_setSpeed(uint16_t speed_rpm, bool reverse) {
+bool bldc_setSpeed(uint16_t speed_rpm, bool reverse, bool brake) {
 	uint32_t err_code;
 
 	if (!initialized) {
@@ -341,11 +335,18 @@ bool bldc_setSpeed(uint16_t speed_rpm, bool reverse) {
 	/* If the caller passed a speed of 0, we brake the motor in order to
 	 * decelerate it as rapidly as possible. */
 	if (speed_rpm == 0) {
-		bldc_stop(true);
+		bldc_stop(brake);
 		return true;
 	}
 
-	/* Limit the speed to about 22000 RPM.  With fresh batteries, we can hit
+	/* Turn on the BLDC controller IC and configure (or reconfigure) it if
+	 * necessary. */
+	power_setVBATSWState(true);
+	if (!configured || needToReconfigure) {
+		bldc_config();
+	}
+
+	/* Limit the speed to about 20000 RPM.  With fresh batteries, we can hit
 	 * ~25 KRPM, but 22 KRPM is more conservative. */
 	if (speed_rpm > 20000) {
 		speed_rpm = 20000;
@@ -353,15 +354,9 @@ bool bldc_setSpeed(uint16_t speed_rpm, bool reverse) {
 		speed_rpm = 3000;
 	}
 
-	/* Turn on the BLDC controller IC */
-	if (!bldc_isOn()) {
-		bldc_on();
-	}
-
 	/* Save the set point speed.  This will be used by the speed control
 	 * loop. */
 	setSpeed_rpm = speed_rpm;
-
 
 	/* At lower speeds, controller is unstable unless the control constant
 	 * are reduced because the output current levels are so low it is easy
@@ -374,13 +369,15 @@ bool bldc_setSpeed(uint16_t speed_rpm, bool reverse) {
 		bldc_setKI(5, 1000);
 	}
 
+	/* Start the motor running */
+	bldc_start(reverse);
+
 	/* Start the timer that will drive the control loop.  If the timer is
 	 * already running, this will be ignored and no harm will result. */
-	err_code = app_timer_start(bldc_speedControlTimerID, APP_TIMER_TICKS(20, APP_TIMER_PRESCALER), NULL);
+	accelModeActive = false;
+	err_code = app_timer_start(bldc_speedControlTimerID,
+			APP_TIMER_TICKS(20, APP_TIMER_PRESCALER), NULL);
 	APP_ERROR_CHECK(err_code);
-
-	/* Start the motor running */
-	bldc_run(reverse);
 
 	/* Manually call the control function immediately so that we do not have to
 	 * wait for the time to expire before sending a control signal to the
@@ -389,6 +386,68 @@ bool bldc_setSpeed(uint16_t speed_rpm, bool reverse) {
 	bldc_speedControlLoop(true);
 
 	return true;
+}
+
+bool bldc_setAccel(uint16_t accel_mA, uint16_t time_ms, bool reverse) {
+	uint32_t err_code;
+
+	if (!initialized) {
+		return false;
+	}
+
+	if (time_ms > 1000) {
+		time_ms = 1000;
+	}
+
+	if (accel_mA > ACCEL_CURRENT_MAX_MA) {
+		accel_mA = ACCEL_CURRENT_MAX_MA;
+	}
+
+	/* Turn on the BLDC controller IC and configure (or reconfigure) it if
+	 * necessary. */
+	power_setVBATSWState(true);
+	if (!configured || needToReconfigure) {
+		bldc_config();
+	}
+
+	/* Set the BLDC controller chip's software-controlled current limit to its
+	 * maximum value.  We will control acceleration solely though the voltage
+	 * on the IREF pin. */
+	bldc_setIRefRatio(0x0F);
+
+	/* Start driving voltage on the IREF pin of the A4960 and allow it to
+	 * stabilize. */
+	bldc_setMaxCurrent_mA(accel_mA);
+	delay_ms(25);
+
+	/* Start the motor spinning */
+	bldc_start(reverse);
+
+	/* Start the timer that, when it expires, will stop the motor.  The
+	 * accelModeActive flag indicates to the timer handler that it should
+	 * stop the motor when called, not attempt to regulate its speed. */
+	accelModeActive = true;
+	err_code = app_timer_start(bldc_speedControlTimerID,
+			APP_TIMER_TICKS(time_ms, APP_TIMER_PRESCALER), NULL);
+	APP_ERROR_CHECK(err_code);
+
+	return true;
+}
+
+void bldc_setReverseDirections(bool reverse) {
+	directionsReversed = reverse;
+}
+
+bool bldc_getReverseDirections() {
+	return directionsReversed;
+}
+
+bool bldc_translateDirection(bool reverse) {
+	if (directionsReversed) {
+		return (!reverse);
+	} else {
+		return reverse;
+	}
 }
 
 bool bldc_setKP(int32_t numerator, int32_t denominator) {
@@ -436,6 +495,20 @@ void bldc_speedControlTimerHandler(void *p_context) {
 bool bldc_setIRefRatio(uint8_t refRatio) {
 	uint16_t config1;
 
+	/* If the BLDC system has not been initialized or the BLDC controller does
+	 * not have power, return false as we cannot set the IREF ratio. */
+	if (!initialized || !power_getVBATSWState()) {
+		return false;
+	}
+
+	/* If we need to reconfigure the BLDC controller as the result of a power
+	 * glitch, we do so now before changing the IREF ratio.  If we did not
+	 * re-configure now, we would inevitably reconfigure later and over-write
+	 * the IREF ratio we're setting here with the default value. */
+	if (!configured || needToReconfigure) {
+		bldc_config();
+	}
+
 	/* The reference ratio is 6.25% * (refRatio + 1) where
 	 * 0 <= refRatio <= 15. */
 	if (refRatio > 0x0F) {
@@ -476,8 +549,24 @@ void bldc_speedControlLoop(bool reinit) {
 	static unsigned int negSaturationCount = 0;
 	static uint8_t iRefRatio = 15;
 
+	/* If there is something wrong, either the BLDC system has not been
+	 * initialized, the BLDC IC does not have battery power, the IC has not
+	 * been configured, the IC needs to be reconfigured as the result of a
+	 * power glitch, or the motor is not running, there is no reason for the
+	 * control loop to be executing.  Consequently, we stop the timer that
+	 * triggers the control loop and then we make sure that the motor is
+	 * stopped before returning. */
+	if (!initialized || !power_getVBATSWState() ||
+			!configured || needToReconfigure || !bldcRunning ) {
+		app_timer_stop(bldc_speedControlTimerID);
+		bldc_stop(false);
+		return;
+	}
 
-	if (!initialized || !bldcOn || !bldcRunning) {
+	if (accelModeActive) {
+		app_timer_stop(bldc_speedControlTimerID);
+		bldc_stop(false);
+		accelModeActive = false;
 		return;
 	}
 
@@ -545,7 +634,7 @@ void bldc_speedControlLoop(bool reinit) {
 
 		/* The length of time over which negative saturation must occur before
 		 * changing the current reference ratio is much greater than threshold
-		 * for positive saturing because the flywheel only decelerates due to
+		 * for positive saturating because the flywheel only decelerates due to
 		 * friction, where as the flywheel can be actively accelerated by
 		 * applying more current. */
 		if ((negSaturationCount > 50) && (iRefRatio > 0)) {
@@ -668,7 +757,11 @@ void bldc_updateStable(int32_t newestError) {
 }
 
 bool bldc_isStable() {
-	if (!bldcOn || !bldcRunning) {
+	/* If the controller does not have battery power or the motor is not
+	 * running, the motor is not actually spinning, so we say, by definition,
+	 * that the motor is not stable.  While this is not strictly true, it is
+	 * convenient. */
+	if (!power_getVBATSWState() || !bldcRunning) {
 		return false;
 	}
 

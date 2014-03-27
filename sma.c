@@ -17,10 +17,11 @@
 #include "global.h"
 #include "pins.h"
 #include "util.h"
+#include "power.h"
 #include "adc.h"
 #include "sma.h"
 
-#define SMA_DEBUG	1
+#define SMA_DEBUG	0
 
 #define MAX_CURRENT_MA					1515
 
@@ -130,6 +131,9 @@ bool sma_retract(uint16_t hold_ms, app_sched_event_handler_t smaEventHandler){
 		return false;
 	}
 
+	/* Supply power to the SMA circuitry */
+	power_setVBATSWState(true);
+
 	/* Save the hold time and the event handler pointer. */
 	holdTime_ms = hold_ms;
 	eventHandler = smaEventHandler;
@@ -227,6 +231,7 @@ void sma_timerHandler(void *p_context) {
 				if (eventHandler != NULL) {
 					app_sched_event_put((void *)&smaState, sizeof(smaState), eventHandler);
 				}
+				app_uart_put_string("SMA extending...\r\n");
 			}
 
 			/* Restart the timer so that it will expire after the recovery
@@ -247,6 +252,7 @@ void sma_timerHandler(void *p_context) {
 				if (eventHandler != NULL) {
 					app_sched_event_put((void *)&smaState, sizeof(smaState), eventHandler);
 				}
+				app_uart_put_string("SMA holding...\r\n");
 			}
 
 			/* Switch to using the holding duty cycle to PWM the SMA */
@@ -303,6 +309,8 @@ void sma_timerHandler(void *p_context) {
 		smaState = SMA_STATE_EXTENDED;
 		/* Just to be safe, we also stop the timer. */
 		app_timer_stop(sma_timerID);
+
+		app_uart_put_string("SMA extended\r\n");
 
 		/* If the caller has setup a callback to be executed once the SMA is
 		 * fully extended, we execute it here. */

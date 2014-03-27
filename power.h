@@ -34,6 +34,12 @@ typedef enum {
 
 extern app_timer_id_t power_timer_id;
 
+bool power_registerImproperTerminationFlag(bool *flag);
+bool power_unregisterImproperTerminationFlag(bool *flag);
+
+void power_setVBATSWState(bool enabled);
+bool power_getVBATSWState(void);
+
 bool power_setDischargeSwitches(uint8_t switches);
 uint8_t power_getDischargeSwitches(void);
 

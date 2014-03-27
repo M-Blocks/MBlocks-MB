@@ -12,14 +12,17 @@
 #include <stdbool.h>
 
 bool bldc_init(void);
-bool bldc_on(void);
-bool bldc_off(void);
-bool bldc_isOn(void);
-bool bldc_config(void);
-bool bldc_run(bool reverse);
-bool bldc_stop(bool brake);
+
+
+
 bool bldc_setMaxCurrent_mA(uint16_t mA);
-bool bldc_setSpeed(uint16_t speed_rpm, bool reverse);
+
+bool bldc_setSpeed(uint16_t speed_rpm, bool reverse, bool brake);
+bool bldc_setAccel(uint16_t accel, uint16_t time_ms, bool reverse);
+
+void bldc_setReverseDirections(bool reverse);
+bool bldc_getReverseDirections(void);
+
 bool bldc_setKP(int32_t numerator, int32_t denominator);
 bool bldc_getKP(int32_t *numerator, int32_t *denominator);
 bool bldc_setKI(int32_t numerator, int32_t denominator);

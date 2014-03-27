@@ -5,17 +5,22 @@
  *      Author: Kyle Gilpin
  */
 
+
 #include <stdint.h>
+#include <stdlib.h>
+
 #include "nordic_common.h"
 #include "nrf.h"
+#include "nrf_soc.h"
 #include "nrf51.h"
 #include "nrf51_bitfields.h"
 
 #include "app_error.h"
 #include "app_util.h"
 
-#include "adc.h"
+#include "global.h"
 
+#include "adc.h"
 
 uint16_t adc_read_mV(uint8_t channel) {
     uint32_t raw, mV;
@@ -26,7 +31,7 @@ uint16_t adc_read_mV(uint8_t channel) {
     }
 
     /* Disable the ADC before changing its configuration */
-    NRF_ADC->ENABLE     = ADC_ENABLE_ENABLE_Enabled;
+    NRF_ADC->ENABLE = ADC_ENABLE_ENABLE_Disabled << ADC_ENABLE_ENABLE_Pos;
 
     /* Disable ADC interrupt */
     NRF_ADC->INTENCLR = ADC_INTENSET_END_Msk;
@@ -43,7 +48,7 @@ uint16_t adc_read_mV(uint8_t channel) {
     NRF_ADC->EVENTS_END = 0;
 
     /* Enable the ADC */
-    NRF_ADC->ENABLE = ADC_ENABLE_ENABLE_Enabled;
+    NRF_ADC->ENABLE = ADC_ENABLE_ENABLE_Enabled << ADC_ENABLE_ENABLE_Pos;
 
     /* Start the conversion */
     NRF_ADC->TASKS_START = 1;

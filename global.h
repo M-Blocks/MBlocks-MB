@@ -30,4 +30,19 @@
 #define APP_TIMER_MAX_TIMERS            5                                           /**< Maximum number of simultaneously created timers. */
 #define APP_TIMER_OP_QUEUE_SIZE         5                                           /**< Size of timer operation queues. */
 
+#define ADC_PPI_CHANNEL 				(5)
+#define ADC_PPI_CHENSET_MASK			PPI_CHENSET_CH5_Msk
+#define ADC_PPI_CHENCLR_MASK			PPI_CHENCLR_CH5_Msk
+#define ADC_PPI_CHEN_MASK				PPI_CHEN_CH5_Msk
+
+#define	TWI_MASTER_PPI_CHANNEL			(6)
+#define TWI_MASTER_PPI_CHENSET_MASK		PPI_CHENSET_CH6_Msk
+#define TWI_MASTER_PPI_CHENCLR_MASK		PPI_CHENCLR_CH6_Msk
+#define TWI_MASTER_PPI_CHEN_MASK		PPI_CHEN_CH6_Msk
+
+#define	FREQCNTR_PPI_CHANNEL			(7)
+#define FREQCNTR_PPI_CHENSET_MASK		PPI_CHENSET_CH7_Msk
+#define FREQCNTR_PPI_CHENCLR_MASK		PPI_CHENCLR_CH7_Msk
+#define FREQCNTR_PPI_CHEN_MASK			PPI_CHEN_CH7_Msk
+
 #endif /* GLOBAL_H_ */

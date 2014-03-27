@@ -13,6 +13,7 @@
 #include "nrf_gpio.h"
 #include "nrf_delay.h"
 
+#include "global.h"
 #include "pins.h"
 #include "util.h"
 #include "adc.h"
@@ -33,7 +34,8 @@
 
 #define MAXIMUM_IMBALANCE_MV				15		/* Maximum allowed imbalance between cells, over which we activate the cell's self-discharge switch */
 
-#define CHARGER_INPUT_VOLTAGE_THRESHOLD_MV	4250	/* Minimum input voltage needed before we start charging. */
+#define CHARGER_INPUT_VOLTAGE_START_THRESHOLD_MV	4300	/* Minimum input voltage above which we start charging. */
+#define CHARGER_INPUT_VOLTAGE_STOP_THRESHOLD_MV		4100	/* Maximum input voltage below which we stop charging. */
 
 #define PRECHARGE_CURRENT_MA				12		/* Precharge current, ~0.1C */
 #define CHARGE_CURRENT_1C_MA				125		/* Normal 1C charge rate */
@@ -62,6 +64,66 @@ static bool debug = false;
 static uint8_t dischargeSwitchState = 0x00;
 static uint16_t chargeCurrentLimit_mA = 0;
 
+static bool VBATSWEnabled = false;
+
+
+/* These flags are set when VIN is removed while the charger is still active.
+ * When this happens, the 3.3V rail can dip sufficiently to reset the BLDC
+ * controller and possibly the IMU.  */
+#define IMPROP_TERM_FLAG_COUNT	4
+bool *impropTermFlags[IMPROP_TERM_FLAG_COUNT] = {NULL, NULL, NULL, NULL};
+
+static void power_setImproperTerminationFlags(void);
+
+bool power_registerImproperTerminationFlag(bool *flag) {
+	uint8_t i;
+
+	for (i=0; i<IMPROP_TERM_FLAG_COUNT; i++) {
+		if (impropTermFlags[i] == NULL) {
+			impropTermFlags[i] = flag;
+			return true;
+		}
+	}
+	return false;
+}
+
+bool power_unregisterImproperTerminationFlag(bool *flag) {
+	uint8_t i;
+
+	for (i=0; i<IMPROP_TERM_FLAG_COUNT; i++) {
+		if (impropTermFlags[i] == flag) {
+			impropTermFlags[i] = NULL;
+			return true;
+		}
+	}
+	return false;
+}
+
+void power_setImproperTerminationFlags() {
+	uint8_t i;
+
+	for (i=0; i<IMPROP_TERM_FLAG_COUNT; i++) {
+		if (impropTermFlags[i] != NULL) {
+			*impropTermFlags[i] = true;
+		}
+	}
+}
+
+void power_setVBATSWState(bool enabled) {
+	/* The BLDC controller IC's reset line also switches on the power stage of
+	 * the driver. */
+	if (enabled) {
+		nrf_gpio_pin_set(BLDCRESETN_PIN_NO);
+		VBATSWEnabled = true;
+	} else {
+		nrf_gpio_pin_clear(BLDCRESETN_PIN_NO);
+		VBATSWEnabled = false;
+	}
+}
+
+bool power_getVBATSWState() {
+	return VBATSWEnabled;
+}
 
 bool power_setDischargeSwitches(uint8_t switches) {
 	if (switches & 0xF0) {
@@ -392,17 +454,19 @@ bool power_isOvertemp() {
 }
 
 void power_timerHandler(void *p_contex) {
-	power_updateChargeState();
+		power_updateChargeState();
 }
 
 void power_updateChargeState() {
+	uint16_t vin_mV;
+	bool vinAbsent = false;
 	uint8_t shorts = 0x00;
 	uint8_t batNum;
 	uint16_t minVoltage_mV, maxVoltage_mV;
 	bool updateAgain = false;
 	uint32_t currentTime_rtcTicks, elapsedTime_rtcTicks;
 
-	static uint32_t lastCallTime_rtcTicks = 0;
+	static uint32_t lastStateUpdateTime_rtcTicks = 0;
 
 	/* After the Lipo protection IC trips, or when the batteries are first
 	 * connected, it will appear to the processor that all batteries are
@@ -424,10 +488,35 @@ void power_updateChargeState() {
 	/* The RTC is only a 24-bit counter, so when subtracting the two
 	 * tick counts to find the elapsed number of ticks, we must mask out the
 	 * 8 most significant bits. */
-	elapsedTime_rtcTicks = 0x00FFFFFF & (currentTime_rtcTicks - lastCallTime_rtcTicks);
+	elapsedTime_rtcTicks = 0x00FFFFFF & (currentTime_rtcTicks - lastStateUpdateTime_rtcTicks);
 
-	/* Save the current tick count for next time */
-	lastCallTime_rtcTicks = currentTime_rtcTicks;
+	if (((chargeState == POWER_CHARGESTATE_PRECHARGE) ||
+			(chargeState == POWER_CHARGESTATE_CHARGING)) &&
+			((vin_mV = power_getVIn_mV()) <= CHARGER_INPUT_VOLTAGE_STOP_THRESHOLD_MV)) {
+		/* Every time this function is executed, we check whether VIN has
+		 * fallen below the charging input threshold.  If it has, it indicates
+		 * that the external charger is no longer connected, so we immediately
+		 * stop trying to charge and then proceed to update the state machine.
+		 * If the charging voltage is suddenly removed, the charger will try to
+		 * charge the batteries from the 3.3V rail (which is supplied by the
+		 * batteries themselves).  In addition to just being inefficient, this
+		 * is particularly bad because the 3.3V regulator cannot supply enough
+		 * current to actually run the charger, and the 3.3V regulator over-
+		 * heats and the 3.3V rail browns-out. */
+		vinAbsent = true;
+		power_disableCharger();
+		power_setImproperTerminationFlags();
+	} else if (elapsedTime_rtcTicks >= APP_TIMER_TICKS(10000, APP_TIMER_PRESCALER)) {
+		/* If 10 seconds have elapsed since we last updated the charge state
+		 * machine, we will proceed to update the charge state again.  First,
+		 * we record the current time so that we'll know when to next update
+		 * the charge state. */
+		lastStateUpdateTime_rtcTicks = currentTime_rtcTicks;
+	} else {
+		/* Otherwise, if it is not yet time to update the charge state, we
+		 * return without doing anything else. */
+		return;
+	}
 
 	/* Unless the updateAgain flag is set, we only execute this do loop once.
 	 * We typically set the updateAgain flag when switching states so that the
@@ -523,7 +612,7 @@ void power_updateChargeState() {
 				(chargeState == POWER_CHARGESTATE_CHARGING)) {
 			/* If the charger loses its external input voltage, we revert to
 			 * the STANDBY state. */
-			if (power_getVIn_mV() < CHARGER_INPUT_VOLTAGE_THRESHOLD_MV) {
+			if (vinAbsent) {
 				chargeState = POWER_CHARGESTATE_STANDBY;
 				updateAgain = true;
 				break;
@@ -636,7 +725,7 @@ void power_updateChargeState() {
 			 * charging process.  We always jump to the PRECHARGE state, but
 			 * from there we can immediately jump to the CHARGING state. */
 			if ((minVoltage_mV < CELL_RECHARGE_THRESHOLD_MV) &&
-					(power_getVIn_mV() > CHARGER_INPUT_VOLTAGE_THRESHOLD_MV)) {
+					(power_getVIn_mV() >= CHARGER_INPUT_VOLTAGE_START_THRESHOLD_MV)) {
 				chargeState = POWER_CHARGESTATE_PRECHARGE;
 				updateAgain = true;
 				break;
@@ -709,7 +798,7 @@ void power_updateChargeState() {
 			 * chargingVoltageRemoved flag.  We use this way as a way to
 			 * force the charging voltage to be removed and then re-applied
 			 * in order to exit the ERROR state. */
-			if (power_getVIn_mV() < CHARGER_INPUT_VOLTAGE_THRESHOLD_MV) {
+			if (vinAbsent) {
 				chargingVoltageRemoved = true;
 				break;
 			}
@@ -730,11 +819,11 @@ void power_updateChargeState() {
 				break;
 			}
 		}
-
-		if (debug) {
-			power_printDebugInfo();
-		}
 	} while (updateAgain);
+
+	if (debug) {
+		power_printDebugInfo();
+	}
 }
 
 

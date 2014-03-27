@@ -49,6 +49,7 @@
 #include "global.h"
 #include "pins.h"
 #include "util.h"
+#include "gitversion.h"
 #include "adc.h"
 #include "pwm.h"
 #include "freqcntr.h"
@@ -65,8 +66,6 @@
 #include "bleApp.h"
 #include "ble_sps.h"
 #include "ble_vns.h"
-
-#define VERSION_STRING					"MBlocks-MB v1.0"
 
 //#define WAKEUP_BUTTON_PIN               NRF6310_BUTTON_0                            /**< Button used to wake up the application. */
 // YOUR_JOB: Define any other buttons to be used by the applications:
@@ -220,8 +219,8 @@ static void timers_start(void) {
 	err_code = app_timer_start(led_timer_id, APP_TIMER_TICKS(100, APP_TIMER_PRESCALER), NULL);
 	APP_ERROR_CHECK(err_code);
 
-	/* Start timer which manages battery charging.  It will fire every 10 seconds. */
-	err_code = app_timer_start(power_timer_id, APP_TIMER_TICKS(10000, APP_TIMER_PRESCALER), NULL);
+	/* Start timer which manages battery charging.  It will fire every 200 ms. */
+	err_code = app_timer_start(power_timer_id, APP_TIMER_TICKS(200, APP_TIMER_PRESCALER), NULL);
 
 #if(0)
 	err_code = app_timer_start(bldc_tacho_freq_update_timer_id, APP_TIMER_TICKS(10, APP_TIMER_PRESCALER), NULL);
@@ -410,14 +409,15 @@ int main(void) {
 
     app_uart_put_string("\r\n");
     app_uart_put_string("\r\n");
-    app_uart_put_string(VERSION_STRING);
+    app_uart_put_string("MBlocks-MB ");
+    app_uart_put_string(gitVersionStr);
     app_uart_put_string("\r\n");
 
     // Start execution
     timers_start();
 
     if (bleApp_isAdvertisingEnabled()) {
-    	//bleApp_advertisingStart();
+    	bleApp_advertisingStart();
     }
 
     // Enter main loop

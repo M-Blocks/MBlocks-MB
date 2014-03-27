@@ -13,5 +13,4 @@
 uint16_t adc_read_mV(uint8_t channel);
 uint16_t adc_avg_mV(uint8_t channel, uint8_t nsamples);
 
-
 #endif /* ADC_H_ */

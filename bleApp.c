@@ -114,7 +114,7 @@ void bleApp_onEvt(ble_evt_t * p_ble_evt) {
     {
         case BLE_GAP_EVT_CONNECTED:
             m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
-        	led_setState(LED_BLUE, LED_STATE_SLOW_FLASH);
+        	led_setState(LED_BLUE, LED_STATE_ON);
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:
@@ -377,7 +377,7 @@ void bleApp_advertisingStart() {
     	APP_ERROR_CHECK(err_code);
     }
 
-    led_setState(LED_BLUE, LED_STATE_ON);
+    led_setState(LED_BLUE, LED_STATE_SLOW_FLASH);
 }
 
 void bleApp_advertisingStop() {
