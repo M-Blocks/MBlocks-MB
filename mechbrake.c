@@ -14,10 +14,13 @@
 #include "db.h"
 #include "mechbrake.h"
 
+static bool directionsReversed = false;
+
 bool mechbrake_actuate(uint8_t stepCount, const coilCurrentStep_t *steps) {
 	uint8_t twiBuf[34];
 	uint8_t i;
 	uint32_t time_ms;
+	uint16_t current_mA;
 	bool rxSuccess;
 
 	/* If the number of steps provided by the user will over-run the buffer,
@@ -30,8 +33,14 @@ bool mechbrake_actuate(uint8_t stepCount, const coilCurrentStep_t *steps) {
 	twiBuf[1] = stepCount;
 
 	for (i=0; i<stepCount; i++) {
-		twiBuf[(4*i) + 2] = (steps[i].current_mA >> 0) & 0xFF;
-		twiBuf[(4*i) + 3] = (steps[i].current_mA >> 8) & 0xFF;
+		if (mechbrake_getReverseDirections()) {
+			current_mA = -steps[i].current_mA;
+		} else {
+			current_mA = steps[i].current_mA;
+		}
+
+		twiBuf[(4*i) + 2] = (current_mA >> 0) & 0xFF;
+		twiBuf[(4*i) + 3] = (current_mA >> 8) & 0xFF;
 		twiBuf[(4*i) + 4] = (steps[i].time_ms >> 0) & 0xFF;
 		twiBuf[(4*i) + 5] = (steps[i].time_ms >> 8) & 0xFF;
 	}
@@ -57,3 +66,12 @@ bool mechbrake_actuate(uint8_t stepCount, const coilCurrentStep_t *steps) {
 
 	return false;
 }
+
+void mechbrake_setReverseDirections(bool reverse) {
+	directionsReversed = reverse;
+}
+
+bool mechbrake_getReverseDirections() {
+	return directionsReversed;
+}
+

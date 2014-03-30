@@ -17,5 +17,7 @@ typedef struct {
 } coilCurrentStep_t;
 
 bool mechbrake_actuate(uint8_t stepCount, const coilCurrentStep_t *steps);
+void mechbrake_setReverseDirections(bool reverse);
+bool mechbrake_getReverseDirections(void);
 
 #endif /* MECHBRAKE_H_ */

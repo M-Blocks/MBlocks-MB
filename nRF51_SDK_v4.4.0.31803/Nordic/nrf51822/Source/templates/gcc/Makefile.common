@@ -50,6 +50,8 @@ LDFLAGS += -Xlinker -Map=$(LISTING_DIRECTORY)/$(OUTPUT_FILENAME).map
 LDFLAGS += --specs=nano.specs
 LDFLAGS += -mcpu=$(CPU) -mthumb -mabi=aapcs -L $(TEMPLATE_PATH) -T$(LINKER_SCRIPT)
 
+LIBFLAGS += -lm
+
 # Compiler flags
 CFLAGS += -mcpu=$(CPU) -mthumb -mabi=aapcs -D$(DEVICE)  -D$(BOARD) --std=gnu99
 CFLAGS += -Wall
@@ -88,10 +90,12 @@ vpath %.s $(ASSEMBLER_SOURCE_PATHS)
 .PHONY: debug
 debug:    CFLAGS += -DDEBUG -g3 -O0
 debug:    $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).bin $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).hex
+debug:    mergeHexWithSoftDevice
 
 .PHONY: release
 release:  CFLAGS += -DNDEBUG -O3
 release:  $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).bin $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).hex
+release:  mergeHexWithSoftDevice
 
 echostuff:
 	echo $(C_OBJECTS)
@@ -118,7 +122,7 @@ $(OBJECT_DIRECTORY)/%.o: %.s
 
 ## Link C and assembler objects to an .out file
 $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).out: $(BUILD_DIRECTORIES) updateGitVersion $(C_OBJECTS) $(ASSEMBLER_OBJECTS)
-	$(CC) $(LDFLAGS) $(C_OBJECTS) $(ASSEMBLER_OBJECTS) -o $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).out
+	$(CC) $(LDFLAGS) $(C_OBJECTS) $(ASSEMBLER_OBJECTS) $(LIBFLAGS) -o $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).out
 
 ## Create binary .bin file from the .out file
 $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).bin: $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).out
@@ -127,6 +131,9 @@ $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).bin: $(OUTPUT_BINARY_DIRECTORY)/$(
 ## Create binary .hex file from the .out file
 $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).hex: $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).out
 	$(OBJCOPY) -O ihex $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).out $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).hex
+
+mergeHexWithSoftDevice:
+	bash -c "../bin/mergehex.exe --merge ../softdevice/s110_nrf51822_5.2.1_softdevice.hex $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).hex --output $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_WithSoftDevice.hex"
 
 .PHONY: clean
 clean:

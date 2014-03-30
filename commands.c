@@ -8,6 +8,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 #include "ble_hci.h"
 #include "ble_gap.h"
@@ -47,16 +48,20 @@ static void cmdBLDCAccel(const char *args);
 static void cmdBLDCSpeed(const char *args);
 static void cmdBLDCStop(const char *args);
 static void cmdBLDCRPM(const char *args);
-static void cmdBLDCDirReverse(const char *args);
+static void cmdBLDCDirRev(const char *args);
 static void cmdBLDCSetKP(const char *args);
 static void cmdBLDCSetKI(const char *args);
 /* Brake commands */
 static void cmdSimpleBrake(const char *args);
 static void cmdBrake(const char *args);
+static void cmdBrakeDirRev(const char *args);
 /* SMA commands */
 static void cmdSMA(const char *args);
 /* LED commands */
 static void cmdLED(const char *args);
+/* Daughterboard commands */
+static void cmdDBReset(const char *args);
+static void cmdDBTemp(const char *args);
 /* BLE Serial Port Service Testing Commands */
 static void cmdBLETx(const char *args);
 static void cmdBLERx(const char *args);
@@ -95,8 +100,12 @@ static const char cmdSMAStr[] = "sma";
 /* Mechanical brake commands */
 static const char cmdSimpleBrakeStr[] = "brake";
 static const char cmdBrakeStr[] = "brakeseq";
+static const char cmdBrakeDirRevStr[] = "brakedirrev";
 /* LED commands */
 static const char cmdLEDStr[] = "led";
+/* Daughterboard commands */
+static const char cmdDBResetStr[] = "dbreset";
+static const char cmdDBTempStr[] = "dbtemp";
 /* BLE Serial Port Service Testing Commands */
 static const char cmdBLETxStr[] = "bletx";
 static const char cmdBLERxStr[] = "blerx";
@@ -129,7 +138,7 @@ static cmdFcnPair_t cmdTable[] = {
 	{cmdBLDCSpeedStr, cmdBLDCSpeed},
 	{cmdBLDCStopStr, cmdBLDCStop},
 	{cmdBLDCRPMStr, cmdBLDCRPM},
-	{cmdBLDCDirRevStr, cmdBLDCDirReverse},
+	{cmdBLDCDirRevStr, cmdBLDCDirRev},
 	{cmdBLDCSetKPStr, cmdBLDCSetKP},
 	{cmdBLDCSetKIStr, cmdBLDCSetKI},
 	/* SMA commands */
@@ -137,8 +146,12 @@ static cmdFcnPair_t cmdTable[] = {
 	/* Mechanical brake commands */
 	{cmdSimpleBrakeStr, cmdSimpleBrake},
 	{cmdBrakeStr, cmdBrake},
+	{cmdBrakeDirRevStr, cmdBrakeDirRev},
 	/* LED commands */
 	{cmdLEDStr, cmdLED},
+	/* Daughterboard commands */
+	{cmdDBResetStr, cmdDBReset},
+	{cmdDBTempStr, cmdDBTemp},
 	/* BLE Serial Port Service Testing Commands */
 	{cmdBLETxStr, cmdBLETx},
 	{cmdBLERxStr, cmdBLERx},
@@ -389,7 +402,7 @@ void cmdBLDCRPM(const char *args) {
 	app_uart_put_string(str);
 }
 
-void cmdBLDCDirReverse(const char *args) {
+void cmdBLDCDirRev(const char *args) {
 	unsigned int reverse;
 
 	if (sscanf(args, "%u", &reverse) == 1) {
@@ -623,6 +636,26 @@ void cmdBrake(const char *args) {
 	}
 }
 
+void cmdBrakeDirRev(const char *args) {
+	unsigned int reverse;
+
+	if (sscanf(args, "%u", &reverse) == 1) {
+		if (reverse == 1) {
+			mechbrake_setReverseDirections(true);
+			app_uart_put_string("Mechanical brake directions reversed\r\n");
+		} else if (reverse == 0) {
+			mechbrake_setReverseDirections(false);
+			app_uart_put_string("Mechanical brake directions set to normal\r\n");
+		}
+	} else {
+		if (mechbrake_getReverseDirections()) {
+			app_uart_put_string("Mechanical brake directions are reversed\r\n");
+		} else {
+			app_uart_put_string("Mechanical brake directions are normal\r\n");
+		}
+	}
+}
+
 /****************/
 /* LED Commands */
 /****************/
@@ -640,6 +673,32 @@ void cmdLED(const char *args) {
 	}
 }
 
+/**************************/
+/* Daughterboard Commands */
+/**************************/
+void cmdDBReset(const char *args) {
+	db_reset();
+	app_uart_put_string("Daughterboard reset\r\n");
+}
+
+void cmdDBTemp(const char *args) {
+	int16_t temperature_tenthDegC;
+	int16_t ip, fp;
+	char str[64];
+
+	if (db_getTemp(&temperature_tenthDegC)) {
+		ip = trunc((float)temperature_tenthDegC / 10.0);
+		fp = (float)temperature_tenthDegC - (float)ip * 10.0;
+		if (fp < 0) {
+			fp = -fp;
+		}
+
+		snprintf(str, sizeof(str), "Daughterboard temperature: %d.%d degC\r\n", ip, fp);
+		app_uart_put_string(str);
+	} else {
+		app_uart_put_string("Daughterboard temperature: <error>\r\n");
+	}
+}
 
 /****************/
 /* BLE Commands */

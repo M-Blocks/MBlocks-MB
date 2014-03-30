@@ -26,6 +26,8 @@ void cmdline_loadCmds(const cmdFcnPair_t cmds[]) {
 void cmdline_newChar(char c) {
 	size_t cmdStrLen;
 
+	c = tolower(c);
+
 	cmdStrLen = strlen(cmdStr);
 
 	if ((c == '\n') || (c == '\r')) {

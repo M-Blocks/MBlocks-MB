@@ -19,6 +19,7 @@
 
 #include "app_timer.h"
 
+#include "global.h"
 #include "pins.h"
 #include "freqcntr.h"
 
@@ -52,11 +53,11 @@ void freqcntr_init() {
 	/* Connect the rising-edge GPIOTE event to the counter's count task so that
 	 * we count the number of rising edges. */
 
-	NRF_PPI->CH[7].EEP = (uint32_t)&NRF_GPIOTE->EVENTS_IN[3];
-	NRF_PPI->CH[7].TEP = (uint32_t)&NRF_TIMER1->TASKS_COUNT;
+	NRF_PPI->CH[FREQCNTR_PPI_CHANNEL].EEP = (uint32_t)&NRF_GPIOTE->EVENTS_IN[3];
+	NRF_PPI->CH[FREQCNTR_PPI_CHANNEL].TEP = (uint32_t)&NRF_TIMER1->TASKS_COUNT;
 
 	/* Enable the PPI channel */
-	NRF_PPI->CHEN |= (PPI_CHEN_CH7_Enabled << PPI_CHEN_CH7_Pos);
+	NRF_PPI->CHENSET = FREQCNTR_PPI_CHENSET_MASK;
 
 	/* Enable counting */
 	NRF_TIMER1->TASKS_START = 1;

@@ -23,7 +23,7 @@
 #include "power.h"
 #include "bldc.h"
 
-#define BLDC_DEBUG			0
+#define BLDC_DEBUG			1
 
 #define RSENSE_MILLIOHMS	10
 #define ISENSE_GAIN			10

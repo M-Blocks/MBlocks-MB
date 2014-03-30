@@ -50,6 +50,7 @@
 #include "pins.h"
 #include "util.h"
 #include "gitversion.h"
+#include "db.h"
 #include "adc.h"
 #include "pwm.h"
 #include "freqcntr.h"
@@ -58,6 +59,7 @@
 #include "bldc.h"
 #include "a4960.h"
 #include "sma.h"
+#include "mpu6050.h"
 #include "power.h"
 #include "led.h"
 #include "commands.h"
@@ -374,6 +376,9 @@ static void gpio_init(void) {
  */
 int main(void) {
 	uint8_t c;
+	char str[64];
+	uint8_t strSize;
+	uint16_t bootCurrent_mA;
 
 	/* Start 16 MHz crystal oscillator */
 	NRF_CLOCK ->EVENTS_HFCLKSTARTED = 0;
@@ -394,7 +399,6 @@ int main(void) {
     twi_master_init();
     sma_init();
     pwm_init();
-    bldc_init();
     freqcntr_init();
     spi_init();
     commands_init();
@@ -407,17 +411,51 @@ int main(void) {
     bleApp_secParamsInit();
     bleApp_advertisingInit();
 
+    // Start execution
+    timers_start();
+
+    /* Reset the daughterboard by pulling the SCL line low for at least 2ms */
+    db_reset();
+
     app_uart_put_string("\r\n");
     app_uart_put_string("\r\n");
     app_uart_put_string("MBlocks-MB ");
     app_uart_put_string(gitVersionStr);
     app_uart_put_string("\r\n");
 
-    // Start execution
-    timers_start();
+    strSize = sizeof(str);
+    if (db_getVersion(str, &strSize)) {
+    	app_uart_put_string("DB: OK (");
+    	app_uart_put_string(str);
+    	app_uart_put_string(")\r\n");
+    } else {
+    	app_uart_put_string("DB: Fail\r\n");
+    }
+
+    if (bldc_init()) {
+    	app_uart_put_string("A4960: OK\r\n");
+    } else {
+    	app_uart_put_string("A4960: Fail\r\n");
+    }
+
+    if (mpu6050_init(MPU6050_I2C_ADDR)) {
+    	app_uart_put_string("MPU-6050: OK\r\n");
+    } else {
+    	app_uart_put_string("MPU-6050: Fail\r\n");
+    }
+
+    bootCurrent_mA = power_getChargeCurrent_mA();
+    if (bootCurrent_mA < 20) {
+    	snprintf(str, sizeof(str), "Boot current: OK (%u mA)\r\n", bootCurrent_mA);
+    } else {
+    	snprintf(str, sizeof(str), "Boot current: Fail (%u mA)\r\n", bootCurrent_mA);
+    }
+    app_uart_put_string(str);
+
+    app_uart_put_string("\r\n");
 
     if (bleApp_isAdvertisingEnabled()) {
-    	bleApp_advertisingStart();
+    	//bleApp_advertisingStart();
     }
 
     // Enter main loop
