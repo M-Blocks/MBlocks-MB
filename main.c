@@ -455,7 +455,7 @@ int main(void) {
     app_uart_put_string("\r\n");
 
     if (bleApp_isAdvertisingEnabled()) {
-    	//bleApp_advertisingStart();
+    	bleApp_advertisingStart();
     }
 
     // Enter main loop
