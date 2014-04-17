@@ -19,13 +19,35 @@ void db_reset() {
 
 	TWI_SCL_OUTPUT();
 	TWI_SCL_LOW();
-	delay_ms(5);
+	delay_ms(30);
 	TWI_SCL_HIGH();
 	TWI_SCL_INPUT();
 
+	/* Allow daughterboard time to boot */
+	delay_ms(5);
+}
+
+bool db_sleep(bool sleepEnabled) {
+	uint8_t twiBuf[2];
+
 	twi_master_init();
 
-	delay_ms(5);
+	twiBuf[0] = DB_SLEEP_CMD;
+	if (sleepEnabled) {
+		twiBuf[1] = 0x01;
+	} else {
+		twiBuf[1] = 0x00;
+	}
+
+	if (!twi_master_transfer((DB_TWI_ADDR << 1), twiBuf, 2, true)) {
+		twi_master_deinit();
+		return false;
+	}
+
+	/* After sending a sleep command, we do not attempt to read a response
+	 * because doing so will wake-up the daughterboard processor. */
+	twi_master_deinit();
+	return true;
 }
 
 bool db_getVersion(char *verStr, uint8_t verStrSize) {
@@ -33,18 +55,22 @@ bool db_getVersion(char *verStr, uint8_t verStrSize) {
 	uint32_t time_ms;
 	char *strPtr;
 
+	twi_master_init();
+
 	twiBuf[0] = DB_VERSION_CMD;
 
 	if (!twi_master_transfer((DB_TWI_ADDR << 1), twiBuf, 1, true)) {
+		twi_master_deinit();
 		return false;
 	}
 
-	delay_ms(DB_POLL_INTERVAL_MS);
+	delay_ms(DB_POLL_FIRST_INTERVAL_MS);
 
 	for (time_ms = 0; time_ms < DB_VERSION_TIMEOUT_MS; time_ms += DB_POLL_INTERVAL_MS) {
 		if (!twi_master_transfer((DB_TWI_ADDR << 1) | TWI_READ_BIT, twiBuf, sizeof(twiBuf), true)) {
 			/* If the daughterboard fails to respond to the I2C master read,
 			 * something is wrong, so we return failure. */
+			twi_master_deinit();
 			return false;
 		}
 
@@ -64,6 +90,7 @@ bool db_getVersion(char *verStr, uint8_t verStrSize) {
 				verStr[verStrSize-1] = '\0';
 			}
 
+			twi_master_deinit();
 			return true;
 		}
 
@@ -72,6 +99,7 @@ bool db_getVersion(char *verStr, uint8_t verStrSize) {
 		delay_ms(DB_POLL_INTERVAL_MS);
 	}
 
+	twi_master_deinit();
 	return false;
 }
 
@@ -79,30 +107,83 @@ bool db_getTemp(int16_t *temperature_tenthDegC) {
 	uint8_t twiBuf[4];
 	uint32_t time_ms;
 
+	twi_master_init();
+
 	twiBuf[0] = DB_TEMPERATURE_CMD;
 
 	if (!twi_master_transfer((DB_TWI_ADDR << 1), twiBuf, 1, true)) {
+		twi_master_deinit();
 		return false;
 	}
 
-	delay_ms(DB_POLL_INTERVAL_MS);
+	delay_ms(DB_POLL_FIRST_INTERVAL_MS);
 
 	for (time_ms = 0; time_ms < DB_TEMPERATURE_TIMEOUT_MS; time_ms += DB_POLL_INTERVAL_MS) {
+		if (twi_master_transfer((DB_TWI_ADDR << 1) | TWI_READ_BIT, twiBuf, sizeof(twiBuf), true)) {
+			/* If the daughterboard responds and echoes the command code in the the
+			 * first byte, and the second byte is 0x01, the temperature command was
+			 * successful. */
+			if ((twiBuf[0] == DB_TEMPERATURE_CMD) && (twiBuf[1] == 0x01)) {
+				/* The following two bytes contain the temperature in tenth of a
+				 * degree Celsius. */
+				*temperature_tenthDegC  = (twiBuf[2] << 0);
+				*temperature_tenthDegC |= (twiBuf[3] << 8);
+
+				twi_master_deinit();
+				return true;
+			}
+		}
+
+		/* If the daughterboard responded but has not yet processed the command
+		 * we delay and then try to read from the daughterboard again. */
+		delay_ms(DB_POLL_INTERVAL_MS);
+	}
+
+	twi_master_deinit();
+	return false;
+}
+
+bool db_setLEDs(bool redOn, bool greenOn, bool blueOn) {
+	uint8_t twiBuf[2];
+	uint32_t time_ms;
+
+	twi_master_init();
+
+	twiBuf[0] = DB_LED_CMD;
+
+	twiBuf[1] = 0x00;
+	if (redOn) {
+		twiBuf[1] |= 0x01;
+	}
+
+	if (greenOn) {
+		twiBuf[1] |= 0x02;
+	}
+
+	if (blueOn) {
+		twiBuf[1] |= 0x04;
+	}
+
+	if (!twi_master_transfer((DB_TWI_ADDR << 1), twiBuf, 2, true)) {
+		twi_master_deinit();
+		return false;
+	}
+
+	delay_ms(DB_POLL_FIRST_INTERVAL_MS);
+
+	for (time_ms = 0; time_ms < DB_LED_TIMEOUT_MS; time_ms += DB_POLL_INTERVAL_MS) {
 		if (!twi_master_transfer((DB_TWI_ADDR << 1) | TWI_READ_BIT, twiBuf, sizeof(twiBuf), true)) {
 			/* If the daughterboard fails to respond to the I2C master read,
 			 * something is wrong, so we return failure. */
+			twi_master_deinit();
 			return false;
 		}
 
 		/* If the daughterboard responds and echoes the command code in the the
 		 * first byte, and the second byte is 0x01, the temperature command was
 		 * successful. */
-		if ((twiBuf[0] == DB_TEMPERATURE_CMD) && (twiBuf[1] == 0x01)) {
-			/* The following two bytes contain the temperature in tenth of a
-			 * degree Celsius. */
-			*temperature_tenthDegC  = (twiBuf[2] << 0);
-			*temperature_tenthDegC |= (twiBuf[3] << 8);
-
+		if ((twiBuf[0] == DB_LED_CMD) && (twiBuf[1] == 0x01)) {
+			twi_master_deinit();
 			return true;
 		}
 
@@ -111,5 +192,6 @@ bool db_getTemp(int16_t *temperature_tenthDegC) {
 		delay_ms(DB_POLL_INTERVAL_MS);
 	}
 
+	twi_master_deinit();
 	return false;
 }

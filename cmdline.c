@@ -9,6 +9,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "cmdline.h"
 
@@ -26,7 +27,7 @@ void cmdline_loadCmds(const cmdFcnPair_t cmds[]) {
 void cmdline_newChar(char c) {
 	size_t cmdStrLen;
 
-	c = tolower(c);
+	c = (char)tolower((int)c);
 
 	cmdStrLen = strlen(cmdStr);
 

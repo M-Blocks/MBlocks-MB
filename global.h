@@ -26,11 +26,33 @@
 #define NEXT_CONN_PARAMS_UPDATE_DELAY   APP_TIMER_TICKS(5000, APP_TIMER_PRESCALER)  /**< Time between each call to sd_ble_gap_conn_param_update after the first (5 seconds). */
 #define MAX_CONN_PARAMS_UPDATE_COUNT    3                                           /**< Number of attempts before giving up the connection parameter negotiation. */
 
-#define APP_TIMER_PRESCALER             0                                           /**< Value of the RTC1 PRESCALER register. */
-#define APP_TIMER_MAX_TIMERS            5                                           /**< Maximum number of simultaneously created timers. */
-#define APP_TIMER_OP_QUEUE_SIZE         5                                           /**< Size of timer operation queues. */
+#define APP_TIMER_PRESCALER             9                                           /**< Value of the RTC1 PRESCALER register. */
+#define APP_TIMER_MAX_TIMERS            7                                           /**< Maximum number of simultaneously created timers. */
+#define APP_TIMER_OP_QUEUE_SIZE         2/*5*/                                      /**< Size of timer operation queues. */
+
+#define USEC_PER_APP_TIMER_TICK			((uint32_t)ROUNDED_DIV((APP_TIMER_PRESCALER + 1) * (uint64_t)1000000, (uint64_t)APP_TIMER_CLOCK_FREQ))
 
 #define MPU6050_I2C_ADDR				(0x68)
+
+#define PWM_CH0_RESET_PPI_CHANNEL		(1)
+#define PWM_CH0_RESET_PPI_CHENSET_MASK	(PPI_CHENSET_CH1_Msk)
+#define PWM_CH0_RESET_PPI_CHENCLR_MASK	(PPI_CHENCLR_CH1_Msk)
+#define PWM_CH0_RESET_PPI_CHEN_MASK		(PPI_CHEN_CH1_Msk)
+
+#define PWM_CH0_MATCH_PPI_CHANNEL		(2)
+#define PWM_CH0_MATCH_PPI_CHENSET_MASK	(PPI_CHENSET_CH2_Msk)
+#define PWM_CH0_MATCH_PPI_CHENCLR_MASK	(PPI_CHENCLR_CH2_Msk)
+#define PWM_CH0_MATCH_PPI_CHEN_MASK		(PPI_CHEN_CH2_Msk)
+
+#define PWM_CH1_RESET_PPI_CHANNEL		(3)
+#define PWM_CH1_RESET_PPI_CHENSET_MASK	(PPI_CHENSET_CH3_Msk)
+#define PWM_CH1_RESET_PPI_CHENCLR_MASK	(PPI_CHENCLR_CH3_Msk)
+#define PWM_CH1_RESET_PPI_CHEN_MASK		(PPI_CHEN_CH3_Msk)
+
+#define PWM_CH1_MATCH_PPI_CHANNEL		(4)
+#define PWM_CH1_MATCH_PPI_CHENSET_MASK	(PPI_CHENSET_CH4_Msk)
+#define PWM_CH1_MATCH_PPI_CHENCLR_MASK	(PPI_CHENCLR_CH4_Msk)
+#define PWM_CH1_MATCH_PPI_CHEN_MASK		(PPI_CHEN_CH4_Msk)
 
 #define	TWI_MASTER_PPI_CHANNEL			(5)
 #define TWI_MASTER_PPI_CHENSET_MASK		PPI_CHENSET_CH5_Msk
@@ -42,4 +64,9 @@
 #define FREQCNTR_PPI_CHENCLR_MASK		PPI_CHENCLR_CH7_Msk
 #define FREQCNTR_PPI_CHEN_MASK			PPI_CHEN_CH7_Msk
 
+#define PWM_CH0_GPIOTE_CHANNEL			(0)
+#define PWM_CH1_GPIOTE_CHANNEL			(1)
+#define FREQCNTR_GPIOTE_CHANNEL			(3)
+
 #endif /* GLOBAL_H_ */
+

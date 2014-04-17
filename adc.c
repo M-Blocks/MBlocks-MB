@@ -19,8 +19,49 @@
 #include "app_util.h"
 
 #include "global.h"
+#include "pins.h"
 
 #include "adc.h"
+
+bool adc_init() {
+	/* Make the VINSENSE, FRAMETEMP, LIPROVBATOUT, and ICHARGE pins inputs with
+	 * their input buffers disabled so that they do not consume current when
+	 * the pins are at a voltage somewhere between 0 and VCC. */
+	GPIO_PIN_CONFIG((VINSENSE_PIN_NO),
+			GPIO_PIN_CNF_DIR_Input,
+			GPIO_PIN_CNF_INPUT_Disconnect,
+			GPIO_PIN_CNF_PULL_Disabled,
+			GPIO_PIN_CNF_DRIVE_S0S1,
+			GPIO_PIN_CNF_SENSE_Disabled);
+
+	GPIO_PIN_CONFIG((FRAMETEMP_PIN_NO),
+			GPIO_PIN_CNF_DIR_Input,
+			GPIO_PIN_CNF_INPUT_Disconnect,
+			GPIO_PIN_CNF_PULL_Disabled,
+			GPIO_PIN_CNF_DRIVE_S0S1,
+			GPIO_PIN_CNF_SENSE_Disabled);
+
+	GPIO_PIN_CONFIG((LIPROVBATOUT_PIN_NO),
+			GPIO_PIN_CNF_DIR_Input,
+			GPIO_PIN_CNF_INPUT_Disconnect,
+			GPIO_PIN_CNF_PULL_Disabled,
+			GPIO_PIN_CNF_DRIVE_S0S1,
+			GPIO_PIN_CNF_SENSE_Disabled);
+
+	GPIO_PIN_CONFIG((ICHARGE_PIN_NO),
+			GPIO_PIN_CNF_DIR_Input,
+			GPIO_PIN_CNF_INPUT_Disconnect,
+			GPIO_PIN_CNF_PULL_Disabled,
+			GPIO_PIN_CNF_DRIVE_S0S1,
+			GPIO_PIN_CNF_SENSE_Disabled);
+
+	return true;
+}
+
+void adc_deinit() {
+	/* Nothing to do here */
+	;
+}
 
 uint16_t adc_read_mV(uint8_t channel) {
     uint32_t raw, mV;
@@ -70,6 +111,9 @@ uint16_t adc_read_mV(uint8_t channel) {
     /* Explicitly stop the ADC to lower current consumption.  This is a work-
      * around for PAN 028 rev 1.5m anomaly 1. */
     NRF_ADC->TASKS_STOP = 1;
+
+    /* Disable the ADC to reduce power consumption */
+    NRF_ADC->ENABLE = (ADC_ENABLE_ENABLE_Disabled << ADC_ENABLE_ENABLE_Pos);
 
     return mV;
 }

@@ -11,6 +11,7 @@
 #include <stdint.h>
 
 void freqcntr_init(void);
+void freqcntr_deinit(void);
 void freqcntr_updateFreq(void);
 uint32_t freqcntr_getFreq_Hz(void);
 

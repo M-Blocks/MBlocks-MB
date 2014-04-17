@@ -9,7 +9,10 @@
 #define ADC_H_
 
 #include <stdint.h>
+#include <stdbool.h>
 
+bool adc_init(void);
+void adc_deinit(void);
 uint16_t adc_read_mV(uint8_t channel);
 uint16_t adc_avg_mV(uint8_t channel, uint8_t nsamples);
 

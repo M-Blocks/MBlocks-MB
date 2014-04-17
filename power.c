@@ -13,6 +13,8 @@
 #include "nrf_gpio.h"
 #include "nrf_delay.h"
 
+#include "app_timer.h"
+
 #include "global.h"
 #include "pins.h"
 #include "util.h"
@@ -42,9 +44,7 @@
 #define CHARGE_CURRENT_MAX_MA				80		/* Current limit imposed by the charge itself */
 #define CHARGE_CURRENT_CUTOFF_THRESHOLD_MA	12		/* Once in constant voltage mode, current below which we stop the charging process */
 
-#define CHARGE_TIME_MAXIMUM_MS				10800000 /* Maximum time (3 hours) we run the charger before assuming something is wrong */
-
-#define RTC_TICKS_PER_MS					33		/* 32.768 ticks of the RTS per millisecond (32.768kHz RTC) */
+#define CHARGE_TIME_MAXIMUM_MS				4500000 /* Maximum time (2 hours) we run the charger before assuming something is wrong */
 
 #define RUN_MODE_CURRENT_UA					12100
 #define BLE_ADVERTISING_CURRENT_UA			1500
@@ -53,9 +53,8 @@
 #define LED1_CURRENT_UA						2600
 #define LED2_CURRENT_UA						1200
 
-app_timer_id_t power_timer_id;
+#define VBATSW_MAX_USERS					2
 
-//static power_chargeState_t chargeState = POWER_CHARGESTATE_OFF;
 static power_chargeState_t chargeState = POWER_CHARGESTATE_STANDBY;
 static power_chargeError_t chargeError = POWER_CHARGEERROR_NOERROR;
 static bool chargeTimerRunning = false;
@@ -66,14 +65,129 @@ static uint16_t chargeCurrentLimit_mA = 0;
 
 static bool VBATSWEnabled = false;
 
+static bool initialized = false;
+
+static app_timer_id_t powerTimerID = TIMER_NULL;
+void power_timerHandler(void *p_context);
 
 /* These flags are set when VIN is removed while the charger is still active.
  * When this happens, the 3.3V rail can dip sufficiently to reset the BLDC
  * controller and possibly the IMU.  */
-#define IMPROP_TERM_FLAG_COUNT	4
-bool *impropTermFlags[IMPROP_TERM_FLAG_COUNT] = {NULL, NULL, NULL, NULL};
-
+#define IMPROP_TERM_FLAG_COUNT			4
+static bool *impropTermFlags[IMPROP_TERM_FLAG_COUNT] = {NULL, NULL, NULL, NULL};
 static void power_setImproperTerminationFlags(void);
+
+/* These flags are set when VBATSW is turned off */
+#define VBATSW_TURNED_OFF_FLAG_COUNT	4
+static bool *vbatswTurnedOffFlags[VBATSW_TURNED_OFF_FLAG_COUNT] = {NULL, NULL, NULL, NULL};
+static void power_setVBATSWTurnedOffFlags(void);
+
+bool power_init() {
+	uint32_t err_code;
+
+	if (powerTimerID == TIMER_NULL) {
+		/* If the battery charging timer has not been initialized, go ahead and
+		 * create it now.  When it is created, powerTimerID will be updated so
+		 * that in the future we can tell that the timer already exists. */
+		err_code = app_timer_create(&powerTimerID, APP_TIMER_MODE_REPEATED, power_timerHandler);
+		APP_ERROR_CHECK(err_code);
+	}
+
+	/* Start timer which manages battery charging.  It will fire every 200 ms. */
+	err_code = app_timer_start(powerTimerID, APP_TIMER_TICKS(200, APP_TIMER_PRESCALER), NULL);
+	APP_ERROR_CHECK(err_code);
+
+    initialized = true;
+
+	return true;
+}
+
+void power_deinit() {
+	uint32_t err_code;
+
+	if (!initialized) {
+		return;
+	}
+
+	if (powerTimerID != TIMER_NULL) {
+		/* If the timer's ID is valid, stop the timer.  If it is not running
+		 * this does not do any harm. */
+		err_code = app_timer_stop(powerTimerID);
+		APP_ERROR_CHECK(err_code);
+	}
+
+	/* Drive both the LIPROCTL3 and LIPOCTL4 lines high to keep them from
+	 * floating and consuming extra current when in sleep mode. */
+    nrf_gpio_pin_set(LIPROCTL3_PIN_NO);
+	GPIO_PIN_CONFIG((LIPROCTL3_PIN_NO),
+    		GPIO_PIN_CNF_DIR_Output,
+    		GPIO_PIN_CNF_INPUT_Disconnect,
+    		GPIO_PIN_CNF_PULL_Disabled,
+    		GPIO_PIN_CNF_DRIVE_S0S1,
+    		GPIO_PIN_CNF_SENSE_Disabled);
+	nrf_gpio_pin_set(LIPROCTL4_PIN_NO);
+	GPIO_PIN_CONFIG((LIPROCTL4_PIN_NO),
+    		GPIO_PIN_CNF_DIR_Output,
+    		GPIO_PIN_CNF_INPUT_Disconnect,
+    		GPIO_PIN_CNF_PULL_Disabled,
+    		GPIO_PIN_CNF_DRIVE_S0S1,
+    		GPIO_PIN_CNF_SENSE_Disabled);
+
+	/* Drive the CHRGEN and PRECHRGEN lines low to disable the charger and
+	 * minimize current consumption. */
+    nrf_gpio_pin_clear(CHRGEN_PIN_NO);
+    GPIO_PIN_CONFIG((CHRGEN_PIN_NO),
+    		GPIO_PIN_CNF_DIR_Output,
+    		GPIO_PIN_CNF_INPUT_Disconnect,
+    		GPIO_PIN_CNF_PULL_Disabled,
+    		GPIO_PIN_CNF_DRIVE_S0S1,
+    		GPIO_PIN_CNF_SENSE_Disabled);
+
+    nrf_gpio_pin_clear(PRECHRGEN_PIN_NO);
+    GPIO_PIN_CONFIG((PRECHRGEN_PIN_NO),
+    		GPIO_PIN_CNF_DIR_Output,
+    		GPIO_PIN_CNF_INPUT_Disconnect,
+    		GPIO_PIN_CNF_PULL_Disabled,
+    		GPIO_PIN_CNF_DRIVE_S0S1,
+    		GPIO_PIN_CNF_SENSE_Disabled);
+
+    /* Drive all of the BATxDISCHRG pins low to keep the discharge MOFSETs off
+     * by default. */
+    nrf_gpio_pin_clear(BAT1DISCHRG_PIN_NO);
+    GPIO_PIN_CONFIG((BAT1DISCHRG_PIN_NO),
+    		GPIO_PIN_CNF_DIR_Output,
+    		GPIO_PIN_CNF_INPUT_Disconnect,
+    		GPIO_PIN_CNF_PULL_Disabled,
+    		GPIO_PIN_CNF_DRIVE_S0S1,
+    		GPIO_PIN_CNF_SENSE_Disabled);
+
+    nrf_gpio_pin_clear(BAT2DISCHRG_PIN_NO);
+    GPIO_PIN_CONFIG((BAT2DISCHRG_PIN_NO),
+    		GPIO_PIN_CNF_DIR_Output,
+    		GPIO_PIN_CNF_INPUT_Disconnect,
+    		GPIO_PIN_CNF_PULL_Disabled,
+    		GPIO_PIN_CNF_DRIVE_S0S1,
+    		GPIO_PIN_CNF_SENSE_Disabled);
+
+    nrf_gpio_pin_clear(BAT3DISCHRG_PIN_NO);
+    GPIO_PIN_CONFIG((BAT3DISCHRG_PIN_NO),
+    		GPIO_PIN_CNF_DIR_Output,
+    		GPIO_PIN_CNF_INPUT_Disconnect,
+    		GPIO_PIN_CNF_PULL_Disabled,
+    		GPIO_PIN_CNF_DRIVE_S0S1,
+    		GPIO_PIN_CNF_SENSE_Disabled);
+
+    nrf_gpio_pin_clear(BAT4DISCHRG_PIN_NO);
+    GPIO_PIN_CONFIG((BAT4DISCHRG_PIN_NO),
+    		GPIO_PIN_CNF_DIR_Output,
+    		GPIO_PIN_CNF_INPUT_Disconnect,
+    		GPIO_PIN_CNF_PULL_Disabled,
+    		GPIO_PIN_CNF_DRIVE_S0S1,
+    		GPIO_PIN_CNF_SENSE_Disabled);
+
+	initialized = false;
+}
+
 
 bool power_registerImproperTerminationFlag(bool *flag) {
 	uint8_t i;
@@ -109,15 +223,95 @@ void power_setImproperTerminationFlags() {
 	}
 }
 
-void power_setVBATSWState(bool enabled) {
-	/* The BLDC controller IC's reset line also switches on the power stage of
-	 * the driver. */
-	if (enabled) {
-		nrf_gpio_pin_set(BLDCRESETN_PIN_NO);
-		VBATSWEnabled = true;
-	} else {
+bool power_registerVBATSWTurnedOffFlag(bool *flag) {
+	uint8_t i;
+
+	for (i=0; i<IMPROP_TERM_FLAG_COUNT; i++) {
+		if (vbatswTurnedOffFlags[i] == NULL) {
+			vbatswTurnedOffFlags[i] = flag;
+			return true;
+		}
+	}
+	return false;
+}
+
+bool power_unregisterVBATSWTurnedOffFlag(bool *flag) {
+	uint8_t i;
+
+	for (i=0; i<IMPROP_TERM_FLAG_COUNT; i++) {
+		if (vbatswTurnedOffFlags[i] == flag) {
+			vbatswTurnedOffFlags[i] = NULL;
+			return true;
+		}
+	}
+	return false;
+}
+
+void power_setVBATSWTurnedOffFlags() {
+	uint8_t i;
+
+	for (i=0; i<IMPROP_TERM_FLAG_COUNT; i++) {
+		if (vbatswTurnedOffFlags[i] != NULL) {
+			*vbatswTurnedOffFlags[i] = true;
+		}
+	}
+}
+
+void power_setVBATSWState(vbatswUser_t userID, bool enabled) {
+	static bool activeUsers[VBATSW_MAX_USERS+1];
+	static bool firstCall = true;
+	unsigned int i;
+
+	/* The first time this function is called, initialize the activeUsers array
+	 * to indicate that there are no active users. */
+	if (firstCall) {
+		firstCall = false;
+		for (i = 0; i<=VBATSW_MAX_USERS; i++) {
+			activeUsers[i] = false;
+		}
+	}
+
+	/* The superuser is able to disable the VBATSW supply regardless of whether
+	 * other users have requested that the suply be turned on. */
+	if (userID == VBATSW_SUPERUSER) {
+		if (enabled) {
+			/* If the superuser requests the VBATSW supply be turned on, we do
+			 * so without setting any flags in the active users array. */
+			nrf_gpio_pin_set(BLDCRESETN_PIN_NO);
+			VBATSWEnabled = true;
+		} else {
+			/* If the superuser is wants to turn the VBATSW supply off, we
+			 * override all other active users. */
+			for (i=0; i<=VBATSW_MAX_USERS; i++) {
+				activeUsers[i] = false;
+			}
+			/* Then we turn off the VBATSW supply */
+			nrf_gpio_pin_clear(BLDCRESETN_PIN_NO);
+			VBATSWEnabled = false;
+			power_setVBATSWTurnedOffFlags();
+		}
+		return;
+	}
+
+	/* Return without doing anything if this funcation was passed an invalid
+	 * user ID. */
+	if (userID > VBATSW_MAX_USERS) {
+		return;
+	}
+
+	activeUsers[userID] = enabled;
+
+	for (i=0; i<=VBATSW_MAX_USERS; i++) {
+		if (activeUsers[i]) {
+			nrf_gpio_pin_set(BLDCRESETN_PIN_NO);
+			VBATSWEnabled = true;
+			return;
+		}
+
+		/* If we do not find any active users, turn off the VBATSW supply. */
 		nrf_gpio_pin_clear(BLDCRESETN_PIN_NO);
 		VBATSWEnabled = false;
+		power_setVBATSWTurnedOffFlags();
 	}
 }
 
@@ -290,9 +484,19 @@ uint16_t power_getBatteryVoltage_mV(uint8_t batNum) {
 		nrf_gpio_cfg_output(LIPROCTL4_PIN_NO);
 		nrf_gpio_pin_set(LIPROCTL4_PIN_NO);
 	} else if (batNum == 2) {
-		/* CTL3 Open, CTL4 Open */
-		nrf_gpio_cfg_input(LIPROCTL3_PIN_NO, GPIO_PIN_CNF_PULL_Disabled);
-		nrf_gpio_cfg_input(LIPROCTL4_PIN_NO, GPIO_PIN_CNF_PULL_Disabled);
+		/* CTL3 floating, CTL4 floating, with input buffers disabled */
+	    GPIO_PIN_CONFIG((LIPROCTL3_PIN_NO),
+	    		GPIO_PIN_CNF_DIR_Input,
+	    		GPIO_PIN_CNF_INPUT_Disconnect,
+	    		GPIO_PIN_CNF_PULL_Disabled,
+	    		GPIO_PIN_CNF_DRIVE_S0S1,
+	    		GPIO_PIN_CNF_SENSE_Disabled);
+	    GPIO_PIN_CONFIG((LIPROCTL4_PIN_NO),
+	    		GPIO_PIN_CNF_DIR_Input,
+	    		GPIO_PIN_CNF_INPUT_Disconnect,
+	    		GPIO_PIN_CNF_PULL_Disabled,
+	    		GPIO_PIN_CNF_DRIVE_S0S1,
+	    		GPIO_PIN_CNF_SENSE_Disabled);
 	} else if (batNum == 3) {
 		/* CTL3 High, CTL4 Low */
 		nrf_gpio_cfg_output(LIPROCTL3_PIN_NO);
@@ -312,34 +516,65 @@ uint16_t power_getBatteryVoltage_mV(uint8_t batNum) {
 	offset_mV = adc_avg_mV(LIPROVBATOUT_ADC_CHNL, 32);
 
 	if (batNum == 1) {
-		/* CTL3 Low, CTL4 Open */
+		/* CTL3 Low, CTL4 floating (with input buffer disabled) */
 		nrf_gpio_cfg_output(LIPROCTL3_PIN_NO);
 		nrf_gpio_pin_clear(LIPROCTL3_PIN_NO);
-		nrf_gpio_cfg_input(LIPROCTL4_PIN_NO, GPIO_PIN_CNF_PULL_Disabled);
+	    GPIO_PIN_CONFIG((LIPROCTL4_PIN_NO),
+	    		GPIO_PIN_CNF_DIR_Input,
+	    		GPIO_PIN_CNF_INPUT_Disconnect,
+	    		GPIO_PIN_CNF_PULL_Disabled,
+	    		GPIO_PIN_CNF_DRIVE_S0S1,
+	    		GPIO_PIN_CNF_SENSE_Disabled);
 	} else if (batNum == 2) {
-		/* CTL3 Open, CTL4 Low */
-		nrf_gpio_cfg_input(LIPROCTL3_PIN_NO, GPIO_PIN_CNF_PULL_Disabled);
+		/* CTL3 floating (with input buffer disabled), CTL4 Low */
+	    GPIO_PIN_CONFIG((LIPROCTL3_PIN_NO),
+	    		GPIO_PIN_CNF_DIR_Input,
+	    		GPIO_PIN_CNF_INPUT_Disconnect,
+	    		GPIO_PIN_CNF_PULL_Disabled,
+	    		GPIO_PIN_CNF_DRIVE_S0S1,
+	    		GPIO_PIN_CNF_SENSE_Disabled);
 		nrf_gpio_cfg_output(LIPROCTL4_PIN_NO);
 		nrf_gpio_pin_clear(LIPROCTL4_PIN_NO);
 	} else if (batNum == 3) {
-		/* CTL3 Open, CTL4 High */
-		nrf_gpio_cfg_input(LIPROCTL3_PIN_NO, GPIO_PIN_CNF_PULL_Disabled);
+		/* CTL3 floating (with input buffer disabled), CTL4 High */
+	    GPIO_PIN_CONFIG((LIPROCTL3_PIN_NO),
+	    		GPIO_PIN_CNF_DIR_Input,
+	    		GPIO_PIN_CNF_INPUT_Disconnect,
+	    		GPIO_PIN_CNF_PULL_Disabled,
+	    		GPIO_PIN_CNF_DRIVE_S0S1,
+	    		GPIO_PIN_CNF_SENSE_Disabled);
 		nrf_gpio_cfg_output(LIPROCTL4_PIN_NO);
 		nrf_gpio_pin_set(LIPROCTL4_PIN_NO);
 	} else if (batNum == 4) {
-		/* CTL3 High, CTL4 Open */
+		/* CTL3 High, CTL4 floating (with input buffer disabled) */
 		nrf_gpio_cfg_output(LIPROCTL3_PIN_NO);
 		nrf_gpio_pin_set(LIPROCTL3_PIN_NO);
-		nrf_gpio_cfg_input(LIPROCTL4_PIN_NO, GPIO_PIN_CNF_PULL_Disabled);
+	    GPIO_PIN_CONFIG((LIPROCTL4_PIN_NO),
+	    		GPIO_PIN_CNF_DIR_Input,
+	    		GPIO_PIN_CNF_INPUT_Disconnect,
+	    		GPIO_PIN_CNF_PULL_Disabled,
+	    		GPIO_PIN_CNF_DRIVE_S0S1,
+	    		GPIO_PIN_CNF_SENSE_Disabled);
 	}
 
 	nrf_delay_ms(1);
 
 	offsetPlusFifthActual_mV = adc_avg_mV(LIPROVBATOUT_ADC_CHNL, 32);
 
-	/* Return both control lines to their high impedance state */
-	nrf_gpio_cfg_input(LIPROCTL3_PIN_NO, GPIO_PIN_CNF_PULL_Disabled);
-	nrf_gpio_cfg_input(LIPROCTL4_PIN_NO, GPIO_PIN_CNF_PULL_Disabled);
+	/* Return both control lines to their high impedance states with the nRF's
+	 * input buffers disabled to reduce current consumption. */
+    GPIO_PIN_CONFIG((LIPROCTL3_PIN_NO),
+    		GPIO_PIN_CNF_DIR_Input,
+    		GPIO_PIN_CNF_INPUT_Disconnect,
+    		GPIO_PIN_CNF_PULL_Disabled,
+    		GPIO_PIN_CNF_DRIVE_S0S1,
+    		GPIO_PIN_CNF_SENSE_Disabled);
+    GPIO_PIN_CONFIG((LIPROCTL4_PIN_NO),
+    		GPIO_PIN_CNF_DIR_Input,
+    		GPIO_PIN_CNF_INPUT_Disconnect,
+    		GPIO_PIN_CNF_PULL_Disabled,
+    		GPIO_PIN_CNF_DRIVE_S0S1,
+    		GPIO_PIN_CNF_SENSE_Disabled);
 
 	/* Subtract the offset voltage and multiply by five to arrive at the actual
 	 * battery voltage. This comes from the Seiko datasheet. */
@@ -539,7 +774,7 @@ void power_updateChargeState() {
 
 		/* Check for errors and jump to the ERROR state if any are found. */
 		if (power_isCellOvervoltage() &&
-				chargingAttempted && (chargingTime_rtcTicks / RTC_TICKS_PER_MS > 1000)) {
+				chargingAttempted && (chargingTime_rtcTicks > APP_TIMER_TICKS(1000, APP_TIMER_PRESCALER))) {
 			/* If we have at least attempted to charge the batteries for 1sec,
 			 * (in order to reset the Lipo protection IC) and one or more still
 			 * has a voltage above the over-voltage threshold we enter the
@@ -547,7 +782,7 @@ void power_updateChargeState() {
 			chargeState = POWER_CHARGESTATE_ERROR;
 			chargeError = POWER_CHARGEERROR_OVERVOLTAGE;
 		} else if  (power_isCellUndervoltage() &&
-				chargingAttempted && (chargingTime_rtcTicks / RTC_TICKS_PER_MS > 1000)) {
+				chargingAttempted && (chargingTime_rtcTicks > APP_TIMER_TICKS(1000, APP_TIMER_PRESCALER))) {
 			/* If we have at least attempted to charge the batteries for 1sec,
 			 * (in order to reset the Lipo protection IC) and one or more still
 			 * has a voltage below the under-voltage threshold we enter the
@@ -561,7 +796,7 @@ void power_updateChargeState() {
 			chargeState = POWER_CHARGESTATE_ERROR;
 			chargeError = POWER_CHARGEERROR_UNDERTEMP;
 		} else if (chargeTimerRunning &&
-				(chargingTime_rtcTicks / RTC_TICKS_PER_MS >= CHARGE_TIME_MAXIMUM_MS)) {
+				(chargingTime_rtcTicks >= APP_TIMER_TICKS(CHARGE_TIME_MAXIMUM_MS, APP_TIMER_PRESCALER))) {
 			/* If the charger has not reached the STANDBY state within a
 			 * specified time limit, we assume something has gone wrong. */
 			chargeState = POWER_CHARGESTATE_ERROR;
@@ -682,7 +917,7 @@ void power_updateChargeState() {
 			 * we do not connect any of the battery shorting resistors.  This
 			 * allows the voltages to stabilize so that we can make a better
 			 * decision about which batteries to short. */
-			if (chargingTime_rtcTicks / RTC_TICKS_PER_MS < 1000) {
+			if (chargingTime_rtcTicks < APP_TIMER_TICKS(1000, APP_TIMER_PRESCALER)) {
 				power_setDischargeSwitches(0x00);
 				break;
 			}
@@ -874,7 +1109,7 @@ void power_printDebugInfo() {
 		strncpy(errStr, "Unknown          ", sizeof(errStr));
 	}
 
-	seconds = (unsigned int)(chargingTime_rtcTicks / (RTC_TICKS_PER_MS * 1000));
+	seconds = (unsigned int)((chargingTime_rtcTicks * USEC_PER_APP_TIMER_TICK) / 1000000);
 
 	hours = seconds / 3600;
 	seconds -= hours * 3600;

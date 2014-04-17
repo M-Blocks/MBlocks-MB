@@ -58,6 +58,8 @@
 #define APP_TIMER_USER_SIZE          8                          /**< Size of app_timer.timer_user_t (only for use inside APP_TIMER_BUF_SIZE()). */
 #define APP_TIMER_INT_LEVELS         3                          /**< Number of interrupt levels from where timer operations may be initiated (only for use inside APP_TIMER_BUF_SIZE()). */
 
+#define TIMER_NULL                  ((app_timer_id_t)(0 - 1))                   /**< Invalid timer id. */
+
 /**@brief Compute number of bytes required to hold the application timer data structures.
  *
  * @param[in]  MAX_TIMERS      Maximum number of timers that can be created at any given time.

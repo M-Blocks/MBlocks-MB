@@ -10,6 +10,7 @@
 #include <stddef.h>
 
 #include "nrf_error.h"
+#include "nrf_sdm.h"
 
 #include "ble.h"
 #include "ble_hci.h"
@@ -75,7 +76,8 @@ void bleApp_stackInit() {
                            ble_evt_dispatch,
                            true);
     */
-	BLE_STACK_HANDLER_INIT(NRF_CLOCK_LFCLKSRC_RC_250_PPM_1000MS_CALIBRATION,
+
+	BLE_STACK_HANDLER_INIT(NRF_CLOCK_LFCLKSRC_RC_250_PPM_4000MS_CALIBRATION,
 			BLE_L2CAP_MTU_DEF,
 			bleApp_evtDispatch,
 			true);

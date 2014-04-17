@@ -18,6 +18,7 @@
 
 #include "util.h"
 #include "gitversion.h"
+#include "main.h"
 #include "pwm.h"
 #include "adc.h"
 #include "power.h"
@@ -27,6 +28,9 @@
 #include "freqcntr.h"
 #include "cmdline.h"
 #include "mechbrake.h"
+#include "motionEvent.h"
+#include "mpu6050.h"
+#include "imu.h"
 #include "bleApp.h"
 #include "ble_sps.h"
 #include "led.h"
@@ -43,6 +47,8 @@ static void cmdICharge(const char *args);
 static void cmdBatShort(const char *args);
 static void cmdCharge(const char *args);
 static void cmdVBATSW(const char *args);
+static void cmdSleep(const char *args);
+static void cmdSleepTime(const char *args);
 /* Motor control commands */
 static void cmdBLDCAccel(const char *args);
 static void cmdBLDCSpeed(const char *args);
@@ -61,13 +67,21 @@ static void cmdSMA(const char *args);
 static void cmdLED(const char *args);
 /* Daughterboard commands */
 static void cmdDBReset(const char *args);
+static void cmdDBSleep(const char *args);
 static void cmdDBTemp(const char *args);
+/* IMU commands */
+static void cmdIMUWrite(const char *args);
+static void cmdIMURead(const char *args);
+static void cmdIMUMotion(const char *args);
 /* BLE Serial Port Service Testing Commands */
 static void cmdBLETx(const char *args);
 static void cmdBLERx(const char *args);
 static void cmdBLEDiscon(const char *args);
 static void cmdBLEAdv(const char *args);
-
+/* Motion commands */
+static void cmdChangePlane(const char *args);
+static void cmdInertialActuation(const char *args);
+/* */
 static void cmdJump(const char *args);
 static void cmdJumpR(const char *args);
 static void cmdSeq(const char *args);
@@ -87,6 +101,8 @@ static const char cmdIChargeStr[] = "icharge";
 static const char cmdBatShortStr[] = "batshort";
 static const char cmdChargeStr[] = "charge";
 static const char cmdVBATSWStr[] = "vbatsw";
+static const char cmdSleepStr[] = "sleep";
+static const char cmdSleepTimeStr[] = "sleeptime";
 /* Motor control commands */
 static const char cmdBLDCAccelStr[] = "bldcaccel";
 static const char cmdBLDCSpeedStr[] = "bldcspeed";
@@ -105,14 +121,22 @@ static const char cmdBrakeDirRevStr[] = "brakedirrev";
 static const char cmdLEDStr[] = "led";
 /* Daughterboard commands */
 static const char cmdDBResetStr[] = "dbreset";
+static const char cmdDBSleepStr[] = "dbsleep";
 static const char cmdDBTempStr[] = "dbtemp";
+/* IMU commands */
+static const char cmdIMUWriteStr[] = "imuwrite";
+static const char cmdIMUReadStr[] = "imuread";
+static const char cmdIMUMotionStr[] = "imumotion";
 /* BLE Serial Port Service Testing Commands */
 static const char cmdBLETxStr[] = "bletx";
 static const char cmdBLERxStr[] = "blerx";
 static const char cmdBLEDisconStr[] = "blediscon";
 static const char cmdBLEAdvStr[] = "bleadv";
 static const char cmdEmptyStr[] = "";
-
+/* Motion commands */
+static const char cmdChangePlaneStr[] = "cp";
+static const char cmdInertialActuationStr[] = "ia";
+/* */
 static const char cmdJumpStr[] = "jump";
 static const char cmdJumpRStr[] = "jumpr";
 static const char cmdSeqStr[] = "seq";
@@ -133,6 +157,8 @@ static cmdFcnPair_t cmdTable[] = {
 	{cmdBatShortStr, cmdBatShort},
 	{cmdChargeStr, cmdCharge},
 	{cmdVBATSWStr, cmdVBATSW},
+	{cmdSleepStr, cmdSleep},
+	{cmdSleepTimeStr, cmdSleepTime},
 	/* Motor control commands */
 	{cmdBLDCAccelStr, cmdBLDCAccel},
 	{cmdBLDCSpeedStr, cmdBLDCSpeed},
@@ -151,12 +177,21 @@ static cmdFcnPair_t cmdTable[] = {
 	{cmdLEDStr, cmdLED},
 	/* Daughterboard commands */
 	{cmdDBResetStr, cmdDBReset},
+	{cmdDBSleepStr, cmdDBSleep},
 	{cmdDBTempStr, cmdDBTemp},
+	/* IMU commands */
+	{cmdIMUWriteStr, cmdIMUWrite},
+	{cmdIMUReadStr, cmdIMURead},
+	{cmdIMUMotionStr, cmdIMUMotion},
 	/* BLE Serial Port Service Testing Commands */
 	{cmdBLETxStr, cmdBLETx},
 	{cmdBLERxStr, cmdBLERx},
 	{cmdBLEDisconStr, cmdBLEDiscon},
 	{cmdBLEAdvStr, cmdBLEAdv},
+	/* Motion commands */
+	{cmdChangePlaneStr, cmdChangePlane},
+	{cmdInertialActuationStr, cmdInertialActuation},
+	/* */
 	{cmdJumpStr, cmdJump},
 	{cmdJumpRStr, cmdJumpR},
 	{cmdSeqStr, cmdSeq},
@@ -166,6 +201,12 @@ static cmdFcnPair_t cmdTable[] = {
 	// Always end the command table with an emptry string and null pointer
 	{cmdEmptyStr, NULL}
 };
+
+
+/* Callbacks for printing status info after command completion */
+static void cmdMotionPrimitiveHandler(void *p_event_data, uint16_t event_size);
+static void cmdMotionEventHandler(void *p_event_data, uint16_t event_size);
+
 
 void commands_init() {
 	cmdline_loadCmds(cmdTable);
@@ -307,10 +348,10 @@ void cmdVBATSW(const char *args) {
 
 	if (sscanf(args, "%u", &enable) == 1) {
 		if (enable == 1) {
-			power_setVBATSWState(true);
+			power_setVBATSWState(VBATSW_SUPERUSER, true);
 			app_uart_put_string("VBATSW turned on\r\n");
 		} else if (enable == 0) {
-			power_setVBATSWState(false);
+			power_setVBATSWState(VBATSW_SUPERUSER, false);
 			app_uart_put_string("VBATSW turned off\r\n");
 		}
 	} else {
@@ -322,10 +363,42 @@ void cmdVBATSW(const char *args) {
 	}
 }
 
+void cmdSleep(const char *args) {
+	/* Stop charging because the code in main_powerManage prevents the cube
+	 * from entering sleep mode if it is actively charging or discharging. */
+	power_setChargeState(POWER_CHARGESTATE_OFF);
+	main_setSleepRequested(true);
+}
+
+void cmdSleepTime(const char *args) {
+	char str[64];
+	int nargs;
+	unsigned int minutes;
+	uint32_t seconds;
+
+	if ((nargs = sscanf(args, "%u", &minutes)) == -1) {
+		seconds = main_getSleepTime();
+		if (seconds == 0) {
+			app_uart_put_string("Sleep timer is disabled\r\n");
+		} else {
+			snprintf(str, sizeof(str), "Sleep timer is set to %u minutes\r\n", (unsigned int)(seconds / 60));
+			app_uart_put_string(str);
+		}
+	} else if (nargs == 1) {
+		if (main_setSleepTime(minutes * 60)) {
+			if (minutes != 0) {
+				snprintf(str, sizeof(str), "Sleep timer set to %u minutes\r\n", minutes);
+				app_uart_put_string(str);
+			} else {
+				app_uart_put_string("Sleep timer disabled\r\n");
+			}
+		}
+	}
+}
+
 /**************************/
 /* Motor control commands */
 /**************************/
-
 void cmdBLDCAccel(const char *args) {
 	char str[50];
 	unsigned int accel_mA, time_ms;
@@ -340,11 +413,11 @@ void cmdBLDCAccel(const char *args) {
 	}
 
 	if (str[0] == 'f') {
-		bldc_setAccel(accel_mA, time_ms, false);
-		app_uart_put_string("Accelerating BLDC motor forward\r\n");
+		bldc_setAccel(accel_mA, time_ms, false, cmdMotionPrimitiveHandler);
+		app_uart_put_string("Accelerating BLDC motor forward...\r\n");
 	} else if (str[0] == 'r') {
-		bldc_setAccel(accel_mA, time_ms, true);
-		app_uart_put_string("Accelerating BLDC motor in reverse\r\n");
+		bldc_setAccel(accel_mA, time_ms, true, cmdMotionPrimitiveHandler);
+		app_uart_put_string("Accelerating BLDC motor in reverse...\r\n");
 	}
 }
 
@@ -361,17 +434,17 @@ void cmdBLDCSpeed(const char *args) {
 	 * be 'f' for forward, 'r' for reverse.  If the speed is 0, the first
 	 * argument must be 'c' for coast or 'b' for brake. */
 	if ((speed_rpm > 0) && (str[0] == 'f')) {
-		bldc_setSpeed(speed_rpm, false, false);
-		app_uart_put_string("Starting BLDC motor spinning forward\r\n");
+		bldc_setSpeed(speed_rpm, false, false, cmdMotionPrimitiveHandler);
+		app_uart_put_string("Starting BLDC motor spinning forward...\r\n");
 	} else if ((speed_rpm > 0) && (str[0] == 'r')) {
-		bldc_setSpeed(speed_rpm, true, false);
-		app_uart_put_string("Starting BLDC motor spinning in reverse\r\n");
+		bldc_setSpeed(speed_rpm, true, false,cmdMotionPrimitiveHandler);
+		app_uart_put_string("Starting BLDC motor spinning in reverse...\r\n");
 	} else if ((speed_rpm == 0) && (str[0] == 'c')) {
-		bldc_setSpeed(0, false, false);
-		app_uart_put_string("Stopping BLDC motor without electric brake\r\n");
+		bldc_setSpeed(0, false, false, cmdMotionPrimitiveHandler);
+		app_uart_put_string("Stopping BLDC motor without electric brake...\r\n");
 	} else if ((speed_rpm == 0) && (str[0] == 'b')) {
-		bldc_setSpeed(0, false, true);
-		app_uart_put_string("Stopping BLDC motor with electric brake\r\n");
+		bldc_setSpeed(0, false, true, cmdMotionPrimitiveHandler);
+		app_uart_put_string("Stopping BLDC motor with electric brake...\r\n");
 	}
 }
 
@@ -465,7 +538,6 @@ void cmdBLDCSetKI(const char *args) {
 /****************/
 /* SMA Commands */
 /****************/
-
 void cmdSMA(const char *args) {
 	int nArgs;
 	char str[50];
@@ -527,12 +599,12 @@ void cmdSMA(const char *args) {
 			app_uart_put_string(str);
 		}
 	} else if ((nArgs == 2) && (strncmp(str, "retract", 7) == 0)) {
-		if (sma_retract(uintTemp, NULL)) {
+		if (sma_retract(uintTemp, cmdMotionPrimitiveHandler)) {
 			snprintf(str, sizeof(str), "SMA retracting with %ums hold time...\r\n", uintTemp);
 			app_uart_put_string(str);
 		}
 	} else if ((nArgs == 1) && (strncmp(str, "extend", 6) == 0)) {
-		if (sma_extend(NULL)) {
+		if (sma_extend(cmdMotionPrimitiveHandler)) {
 			app_uart_put_string("SMA extending...\r\n");
 		}
 	}
@@ -563,12 +635,13 @@ void cmdSimpleBrake(const char *args) {
 
 	/* Stop the motor (without electric brake) before actuating the mechanical
 	 * brake. */
-	bldc_setSpeed(0, false, false);
+	bldc_setSpeed(0, false, false, NULL);
 
-	if (mechbrake_actuate(1, &step)) {
-		app_uart_put_string("Mechanical brake actuated\r\n");
+	if (mechbrake_actuate(1, &step, cmdMotionPrimitiveHandler)) {
+		app_uart_put_string("Activating mechanical brake...\r\n");
+	} else {
+		db_sleep(true);
 	}
-
 }
 
 
@@ -629,10 +702,12 @@ void cmdBrake(const char *args) {
 
 	/* Stop the motor (without electric brake) before actuating the mechanical
 	 * brake. */
-	bldc_setSpeed(0, false, false);
+	bldc_setSpeed(0, false, false, NULL);
 
-	if (mechbrake_actuate(stepCount, steps)) {
-		app_uart_put_string("Mechanical brake actuated\r\n");
+	if (mechbrake_actuate(stepCount, steps, cmdMotionPrimitiveHandler)) {
+		app_uart_put_string("Activating mechanical brake...\r\n");
+	} else {
+		db_sleep(true);
 	}
 }
 
@@ -681,6 +756,26 @@ void cmdDBReset(const char *args) {
 	app_uart_put_string("Daughterboard reset\r\n");
 }
 
+void cmdDBSleep(const char *args) {
+	unsigned int enableSleep;
+
+	if (sscanf(args, "%u", &enableSleep) != 1) {
+		return;
+	} else if (enableSleep == 1) {
+		if (db_sleep(true)) {
+			app_uart_put_string("Daughterboard put to sleep\r\n");
+		} else {
+			app_uart_put_string("Failed to put daughterboard to sleep\r\n");
+		}
+	} else if (enableSleep == 0) {
+		if (db_sleep(false)) {
+			app_uart_put_string("Daughterboard removed from sleep\r\n");
+		} else {
+			app_uart_put_string("Failed to remove daughterboard from sleep\r\n");
+		}
+	}
+}
+
 void cmdDBTemp(const char *args) {
 	int16_t temperature_tenthDegC;
 	int16_t ip, fp;
@@ -698,6 +793,57 @@ void cmdDBTemp(const char *args) {
 	} else {
 		app_uart_put_string("Daughterboard temperature: <error>\r\n");
 	}
+
+	db_sleep(true);
+}
+
+/****************/
+/* IMU commands */
+/****************/
+
+void cmdIMUWrite(const char *args) {
+	unsigned int addr, data;
+	char str[64];
+
+	if ((sscanf(args, "%x%s%x", &addr, str, &data) != 3) ||
+			(strlen(str) != 1) || (str[0] != ':') ||
+			(addr > 0xFF) || (data > 0xFF)) {
+		return;
+	}
+
+	if (mpu6050_writeReg((uint8_t)addr, (uint8_t)data)) {
+		snprintf(str, sizeof(str), "Wrote 0x%02X to IMU register at 0x%02X\r\n", (uint8_t)data, (uint8_t)addr);
+		app_uart_put_string(str);
+	} else {
+		app_uart_put_string("Write to IMU register failed\r\n");
+	}
+}
+
+void cmdIMURead(const char *args) {
+	unsigned int addr;
+	uint8_t data;
+	char str[64];
+
+	if ((sscanf(args, "%x", &addr) != 1) || (addr > 0xFF)) {
+		return;
+	}
+
+	if (mpu6050_readReg((uint8_t)addr, &data, 1)) {
+		snprintf(str, sizeof(str), "Read 0x%02X from IMU register at 0x%02X\r\n", data, (uint8_t)addr);
+		app_uart_put_string(str);
+	} else {
+		app_uart_put_string("Read from IMU register failed\r\n");
+	}
+}
+
+void cmdIMUMotion(const char *args) {
+	if (imu_checkForMotion()) {
+		app_uart_put_string("Motion detected\r\n");
+	} else {
+		app_uart_put_string("Motion not detected\r\n");
+	}
+
+	imu_resetMotionFlag();
 }
 
 /****************/
@@ -779,6 +925,57 @@ void cmdBLEAdv(const char *args) {
 
 	}
 }
+
+/*******************/
+/* Motion commands */
+/*******************/
+void cmdChangePlane(const char *args) {
+	char str[3];
+	unsigned int accelCurrent_mA, accelTime_ms;
+	bool reverse;
+
+	if (sscanf(args, "%1s %u %u", str, &accelCurrent_mA, &accelTime_ms) != 3) {
+		return;
+	}
+
+	if (str[0] == 'f') {
+		reverse = false;
+	} else if (str[0] == 'r') {
+		reverse = true;
+	} else {
+		return;
+	}
+
+	if (motionEvent_startPlaneChange(accelCurrent_mA, accelTime_ms, reverse,
+			cmdMotionEventHandler)) {
+		app_uart_put_string("Starting plane change...\r\n");
+	}
+}
+
+void cmdInertialActuation(const char *args) {
+	char str[3];
+	unsigned int bldcSpeed_rpm, brakeCurrent_mA, brakeTime_ms;
+	bool reverse;
+
+	if (sscanf(args, "%1s %u %u %u", str, &bldcSpeed_rpm, &brakeCurrent_mA, &brakeTime_ms) != 4) {
+		return;
+	}
+
+	if (str[0] == 'f') {
+		reverse = false;
+	} else if (str[0] == 'r') {
+		reverse = true;
+	} else {
+		return;
+	}
+
+	if (motionEvent_startInertialActuation(bldcSpeed_rpm,
+			brakeCurrent_mA, brakeTime_ms, reverse, cmdMotionEventHandler)) {
+		app_uart_put_string("Starting inertial actuation...\r\n");
+	}
+}
+
+/* */
 
 void cmdJump(const char *args){
 	int nArgs;
@@ -933,5 +1130,76 @@ void cmdWobble(const char *args){
 		delay_ms(300);
 		cmdJumpR(str);
 		delay_ms(300);
+	}
+}
+
+/*************/
+/* Callbacks */
+/*************/
+
+void cmdMotionPrimitiveHandler(void *p_event_data, uint16_t event_size) {
+	motionPrimitive_t motionPrimitive;
+
+	motionPrimitive = *(motionPrimitive_t *)p_event_data;
+
+	switch(motionPrimitive) {
+	case MOTION_PRIMITIVE_MECHBRAKE_SUCCESS:
+		app_uart_put_string("Successfully actuated mechanical brake\r\n");
+		db_sleep(true);
+		break;
+	case MOTION_PRIMITIVE_MECHBRAKE_FAILURE:
+		app_uart_put_string("Failed to actuate mechanical brake\r\n");
+		db_sleep(true);
+		break;
+	case MOTION_PRIMITIVE_MECHBRAKE_TIMEOUT:
+		app_uart_put_string("Timeout while actuating mechanical brake\r\n");
+		db_sleep(true);
+		break;
+	case MOTION_PRIMITIVE_SMA_RETRACTED:
+		app_uart_put_string("SMA retracted\r\n");
+		break;
+	case MOTION_PRIMITIVE_SMA_EXTENDING:
+		app_uart_put_string("SMA extending\r\n");
+		break;
+	case MOTION_PRIMITIVE_SMA_EXTENDED:
+		app_uart_put_string("SMA extended\r\n");
+		break;
+	case MOTION_PRIMITIVE_BLDC_STABLE:
+		app_uart_put_string("BLDC motor speed stabilized\r\n");
+		break;
+	case MOTION_PRIMITIVE_BLDC_TIMEOUT:
+		app_uart_put_string("BLDC motor timeout\r\n");
+		break;
+	case MOTION_PRIMITIVE_BLDC_ACCEL_COMPLETE:
+		app_uart_put_string("BLDC motor acceleration complete\r\n");
+		break;
+	case MOTION_PRIMITIVE_BLDC_STOPPED:
+		app_uart_put_string("BLDC motor stopped\r\n");
+		break;
+	default:
+		app_uart_put_string("Motion primitive unrecognized\r\n");
+	}
+}
+
+void cmdMotionEventHandler(void *p_event_data, uint16_t event_size) {
+	motionEvent_t motionEvent;
+
+	motionEvent = *(motionEvent_t *)p_event_data;
+
+	switch (motionEvent) {
+	case MOTION_EVENT_PLANE_CHANGE_SUCCESS:
+		app_uart_put_string("Successfully changed planes\r\n");
+		break;
+	case MOTION_EVENT_PLANE_CHANGE_FAILURE:
+		app_uart_put_string("Failed to change planes\r\n");
+		break;
+	case MOTION_EVENT_INERTIAL_ACTUATION_COMPLETE:
+		app_uart_put_string("Inertial actuation complete\r\n");
+		break;
+	case MOTION_EVENT_INERTIAL_ACTUATION_FAILURE:
+		app_uart_put_string("Inertial actuation failure\r\n");
+		break;
+	default:
+		app_uart_put_string("Motion event not recognized\r\n");
 	}
 }

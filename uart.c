@@ -11,7 +11,9 @@
 #include "nordic_common.h"
 #include "nrf.h"
 #include "nrf51_bitfields.h"
+#include "nrf_gpio.h"
 
+#include "app_util.h"
 #include "app_uart.h"
 
 #include "pins.h"
@@ -55,6 +57,24 @@ void uart_deinit() {
 
 	app_uart_close(app_uart_uid);
 	app_uart_uid = 0;
+
+	/* Make the TXD pin an output which drives high */
+    nrf_gpio_pin_set(UART_TX_PIN_NO);
+    GPIO_PIN_CONFIG((UART_TX_PIN_NO),
+    		GPIO_PIN_CNF_DIR_Output,
+    		GPIO_PIN_CNF_INPUT_Disconnect,
+    		GPIO_PIN_CNF_PULL_Disabled,
+    		GPIO_PIN_CNF_DRIVE_S0S1,
+    		GPIO_PIN_CNF_SENSE_Disabled);
+
+    /* Make the RXD pin an input will a pull-up */
+    nrf_gpio_pin_set(UART_RX_PIN_NO);
+    GPIO_PIN_CONFIG((UART_RX_PIN_NO),
+    		GPIO_PIN_CNF_DIR_Input,
+    		GPIO_PIN_CNF_INPUT_Connect,
+    		GPIO_PIN_CNF_PULL_Pullup,
+    		GPIO_PIN_CNF_DRIVE_S0S1,
+    		GPIO_PIN_CNF_SENSE_Disabled);
 
 	initialized = false;
 }

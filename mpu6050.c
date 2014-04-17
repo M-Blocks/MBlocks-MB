@@ -12,35 +12,18 @@
 #include "mpu6050.h"
 
 static uint8_t mpu6050Address;
-static bool initialized = false;
 
-bool mpu6050_init(uint8_t address) {
-	bool success = true;
-	uint8_t data;
-
+void mpu6050_setAddress(uint8_t address) {
 	mpu6050Address = address;
-
-	success &= mpu6050_readReg(MPU6050_WHO_AM_I_ADDR, &data, 1);
-	if (!success || (data != 0x68)) {
-		return false;
-	}
-
-	/* Reset the gyro, accelerometer, and temperature signal paths */
-	success &= mpu6050_writeReg(MPU6050_SIGNAL_PATH_RESET_ADDR, 0x04 | 0x02 | 0x01);
-	/* Perform device reset */
-	success &= mpu6050_writeReg(MPU6050_PWR_MGMT_1_ADDR, 0x80);
-
-	if (success) {
-		initialized = true;
-	} else {
-		initialized = false;
-	}
-
-	return success;
 }
 
 bool mpu6050_writeReg(uint8_t addr, uint8_t data) {
 	uint8_t packet[2];
+
+	/* The caller must initialize the TWI interface */
+	if (!twi_master_get_init()) {
+		return false;
+	}
 
 	packet[0] = addr;
 	packet[1] = data;
@@ -49,6 +32,12 @@ bool mpu6050_writeReg(uint8_t addr, uint8_t data) {
 
 bool mpu6050_readReg(uint8_t addr, uint8_t *data, uint8_t nBytes) {
 	bool success = true;
+
+	/* The caller must initialize the TWI interface */
+	if (!twi_master_get_init()) {
+		return false;
+	}
+
 	success &= twi_master_transfer((mpu6050Address<<1), &addr, 1, TWI_DONT_ISSUE_STOP);
 	success &= twi_master_transfer((mpu6050Address<<1) | TWI_READ_BIT, data, nBytes, TWI_ISSUE_STOP);
 	return success;

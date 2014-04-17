@@ -16,7 +16,10 @@ typedef struct {
 	uint16_t time_ms;
 } coilCurrentStep_t;
 
-bool mechbrake_actuate(uint8_t stepCount, const coilCurrentStep_t *steps);
+
+bool mechbrake_init(void);
+void mechbrake_deinit(void);
+bool mechbrake_actuate(uint8_t stepCount, const coilCurrentStep_t *steps, app_sched_event_handler_t brakeCompleteEventHandler);
 void mechbrake_setReverseDirections(bool reverse);
 bool mechbrake_getReverseDirections(void);
 

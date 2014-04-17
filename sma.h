@@ -11,6 +11,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "app_scheduler.h"
+
 typedef enum {
 	SMA_STATE_EXTENDED,
 	SMA_STATE_RETRACTING,
@@ -18,7 +20,6 @@ typedef enum {
 	SMA_STATE_EXTENDING
 } smaState_t;
 
-bool sma_init(void);
 
 bool sma_setRetractCurrent_mA(uint16_t current_mA);
 uint16_t sma_getRetractCurrent_mA(void);

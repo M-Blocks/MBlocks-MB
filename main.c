@@ -28,6 +28,8 @@
 #include "nordic_common.h"
 #include "nrf.h"
 #include "nrf_gpio.h"
+#include "nrf_delay.h"
+#include "nrf_soc.h"
 #include "boards/nrf6310.h"
 #include "app_error.h"
 #include "app_uart.h"
@@ -50,16 +52,18 @@
 #include "pins.h"
 #include "util.h"
 #include "gitversion.h"
+#include "uart.h"
 #include "db.h"
 #include "adc.h"
 #include "pwm.h"
 #include "freqcntr.h"
 #include "spi.h"
+#include "twi_master_config.h"
 #include "twi_master.h"
 #include "bldc.h"
 #include "a4960.h"
 #include "sma.h"
-#include "mpu6050.h"
+#include "imu.h"
 #include "power.h"
 #include "led.h"
 #include "commands.h"
@@ -87,12 +91,24 @@
 #define SCHED_MAX_EVENT_DATA_SIZE       sizeof(app_timer_event_t)                   /**< Maximum size of scheduler events. Note that scheduler BLE stack events do not contain any data, as the events are being pulled from the stack in the event handler. */
 #define SCHED_QUEUE_SIZE                12                                          /**< Maximum number of events in the scheduler queue. */
 
+static bool sleepRequested = false;
+static uint32_t sleepTime_sec = 600;
+static bool sleeping = false;
+static uint32_t lastCharTime_rtcTicks = 0;
+static app_timer_id_t motionCheckTimerID = TIMER_NULL;
+static bool motionDetected = false;
+static uint32_t lastMotionTime_rtcTicks = 0;
 
-#if (0)
-static app_timer_id_t bldc_tacho_freq_update_timer_id;
-#endif
 
+static void main_timersInit(void);
+static void main_timersStart(void);
+static void main_schedulerInit(void);
+static void main_gpioteInit(void);
+static void main_gpioInit(void);
+static void main_configUnusedPins(void);
 
+static void main_powerManage(void);
+static void main_motionCheckTimerHandler(void *context);
 
 /**@brief Error handler function, which is called when an error has occurred. 
  *
@@ -154,121 +170,56 @@ static void service_error_handler(uint32_t nrf_error)
 } */
 
 
-static void on_uart_evt(app_uart_evt_t *p_app_uart_event) {
-	;
-}
-
-static void uart_init(void) {
-	app_uart_comm_params_t comm_params;
-	uint32_t err_code;
-
-	comm_params.rx_pin_no = UART_RX_PIN_NO;
-	comm_params.tx_pin_no = UART_TX_PIN_NO;
-	comm_params.rts_pin_no = (uint8_t)UART_PIN_DISCONNECTED;
-	comm_params.cts_pin_no = (uint8_t)UART_PIN_DISCONNECTED;
-	comm_params.flow_control = APP_UART_FLOW_CONTROL_DISABLED;
-	comm_params.use_parity = false;
-	comm_params.baud_rate = UART_BAUDRATE_BAUDRATE_Baud115200;
-
-	APP_UART_FIFO_INIT(&comm_params, 64, 512, on_uart_evt, 3, err_code);
-	//APP_UART_FIFO_INIT(&comm_params, 128, 128, on_uart_evt, 3, err_code);
-	APP_ERROR_CHECK(err_code);
-}
-
-
-#if (0)
-static void bldc_tacho_freq_update_timer_hander(void *p_context) {
-	UNUSED_PARAMETER(p_context);
-	freqcntr_updateFreq();
-}
-#endif
-
 /**@brief Timer initialization.
  *
  * @details Initializes the timer module.
  */
-static void timers_init(void)
-{
-	uint32_t err_code;
+void main_timersInit() {
+    uint32_t err_code;
 
-    // Initialize timer module, making it use the scheduler
+	// Initialize timer module, making it use the scheduler
     APP_TIMER_INIT(APP_TIMER_PRESCALER, APP_TIMER_MAX_TIMERS, APP_TIMER_OP_QUEUE_SIZE, true);
 
-    /* Create a timer which will be used to flash the LEDs */
-    err_code = app_timer_create(&led_timer_id, APP_TIMER_MODE_REPEATED, led_timer_handler);
-    APP_ERROR_CHECK(err_code);
-
-    err_code = app_timer_create(&power_timer_id, APP_TIMER_MODE_REPEATED, power_timerHandler);
-    APP_ERROR_CHECK(err_code);
-
-#if (0)
-    err_code = app_timer_create(&bldc_tacho_freq_update_timer_id, APP_TIMER_MODE_REPEATED, bldc_tacho_freq_update_timer_hander);
-    APP_ERROR_CHECK(err_code);
-#endif
+    if (motionCheckTimerID == TIMER_NULL) {
+    	err_code = app_timer_create(&motionCheckTimerID, APP_TIMER_MODE_REPEATED, main_motionCheckTimerHandler);
+    	APP_ERROR_CHECK(err_code);
+    }
 }
 
 /**@brief Start timers.
 */
-static void timers_start(void) {
-	uint32_t err_code;
-
-    /* YOUR_JOB: Start your timers. below is an example of how to start a timer.
+void main_timersStart() {
+    uint32_t err_code;
+	/* YOUR_JOB: Start your timers. below is an example of how to start a timer.
     
     err_code = app_timer_start(m_app_timer_id, TIMER_INTERVAL, NULL);
     APP_ERROR_CHECK(err_code); */
 
-	/* Start the timer which controls the LEDs */
-	err_code = app_timer_start(led_timer_id, APP_TIMER_TICKS(100, APP_TIMER_PRESCALER), NULL);
-	APP_ERROR_CHECK(err_code);
+    if (motionCheckTimerID != TIMER_NULL) {
+    	err_code = app_timer_start(motionCheckTimerID, APP_TIMER_TICKS(1000, APP_TIMER_PRESCALER), NULL);
+    	APP_ERROR_CHECK(err_code);
+    }
 
-	/* Start timer which manages battery charging.  It will fire every 200 ms. */
-	err_code = app_timer_start(power_timer_id, APP_TIMER_TICKS(200, APP_TIMER_PRESCALER), NULL);
-
-#if(0)
-	err_code = app_timer_start(bldc_tacho_freq_update_timer_id, APP_TIMER_TICKS(10, APP_TIMER_PRESCALER), NULL);
-	APP_ERROR_CHECK(err_code);
-#endif
+	/* We have located most timer creation and start function in subroutines
+	 * related to the timer's purpose.  Typically, timers are created and
+	 * started in *_init() functions and stopped in *_deinit() funcations.
+	 * This makes it much easier to stop all relevant timers when entering
+	 * idle or off mode. */
 }
 
 /**@brief Event Scheduler initialization. */
-static void scheduler_init(void)
-{
+void main_schedulerInit() {
     APP_SCHED_INIT(SCHED_MAX_EVENT_DATA_SIZE, SCHED_QUEUE_SIZE);
 }
 
-
-/* YOUR_JOB: Uncomment this function if you need to handle button events.
-static void button_event_handler(uint8_t pin_no)
-{
-    switch (pin_no)
-    {
-        case MY_BUTTON_PIN:
-            // Code to handle MY_BUTTON keypresses
-            break;
-        
-        // Handle any other buttons
-            
-        default:
-            APP_ERROR_HANDLER(pin_no);
-    }
-}
-*/
-
 /**@brief Initialize GPIOTE handler module. */
-static void gpiote_init(void) {
+void main_gpioteInit() {
     APP_GPIOTE_INIT(APP_GPIOTE_MAX_USERS);
 }
 
-/**@brief Power manager. */
-static void power_manage(void) {
-#if (0)
-    uint32_t err_code = sd_app_event_wait();
-    APP_ERROR_CHECK(err_code);
-#endif // 0
-}
+void main_gpioInit() {
+	main_configUnusedPins();
 
-
-static void gpio_init(void) {
     nrf_gpio_pin_clear(BAT1DISCHRG_PIN_NO);
     GPIO_PIN_CONFIG((BAT1DISCHRG_PIN_NO),
     		GPIO_PIN_CNF_DIR_Output,
@@ -301,7 +252,9 @@ static void gpio_init(void) {
     		GPIO_PIN_CNF_DRIVE_S0S1,
     		GPIO_PIN_CNF_SENSE_Disabled);
 
-    nrf_gpio_pin_clear(LIPROCTL3_PIN_NO);
+    /* The S-8243B datasheet states that CTL3 and CTL4 pins should not both be
+     * low.  So, we default to setting them high. */
+    nrf_gpio_pin_set(LIPROCTL3_PIN_NO);
     GPIO_PIN_CONFIG((LIPROCTL3_PIN_NO),
     		GPIO_PIN_CNF_DIR_Output,
     		GPIO_PIN_CNF_INPUT_Disconnect,
@@ -309,7 +262,7 @@ static void gpio_init(void) {
     		GPIO_PIN_CNF_DRIVE_S0S1,
     		GPIO_PIN_CNF_SENSE_Disabled);
 
-    nrf_gpio_pin_clear(LIPROCTL4_PIN_NO);
+    nrf_gpio_pin_set(LIPROCTL4_PIN_NO);
     GPIO_PIN_CONFIG((LIPROCTL4_PIN_NO),
     		GPIO_PIN_CNF_DIR_Output,
     		GPIO_PIN_CNF_INPUT_Disconnect,
@@ -325,14 +278,44 @@ static void gpio_init(void) {
     		GPIO_PIN_CNF_DRIVE_S0S1,
     		GPIO_PIN_CNF_SENSE_Disabled);
 
-    nrf_gpio_pin_clear(PRECHRGEN_PIN_NO);
-    GPIO_PIN_CONFIG((PRECHRGEN_PIN_NO),
+	/* Make the SCK, MOSI, and CS pins outputs with well defined states */
+	nrf_gpio_pin_clear(SPI_SCK_PIN_NO);
+    GPIO_PIN_CONFIG((SPI_SCK_PIN_NO),
     		GPIO_PIN_CNF_DIR_Output,
     		GPIO_PIN_CNF_INPUT_Disconnect,
     		GPIO_PIN_CNF_PULL_Disabled,
     		GPIO_PIN_CNF_DRIVE_S0S1,
     		GPIO_PIN_CNF_SENSE_Disabled);
 
+	nrf_gpio_pin_clear(SPI_MOSI_PIN_NO);
+    GPIO_PIN_CONFIG((SPI_MOSI_PIN_NO),
+    		GPIO_PIN_CNF_DIR_Output,
+    		GPIO_PIN_CNF_INPUT_Disconnect,
+    		GPIO_PIN_CNF_PULL_Disabled,
+    		GPIO_PIN_CNF_DRIVE_S0S1,
+    		GPIO_PIN_CNF_SENSE_Disabled);
+
+	nrf_gpio_pin_set(SPI_BLDCCS_PIN_NO);
+    GPIO_PIN_CONFIG((SPI_BLDCCS_PIN_NO),
+    		GPIO_PIN_CNF_DIR_Output,
+    		GPIO_PIN_CNF_INPUT_Disconnect,
+    		GPIO_PIN_CNF_PULL_Disabled,
+    		GPIO_PIN_CNF_DRIVE_S0S1,
+    		GPIO_PIN_CNF_SENSE_Disabled);
+
+	/* Make sure the MISO pin has a pull-down so that it does not float and
+	 * consume extra current. */
+    GPIO_PIN_CONFIG((SPI_MISO_PIN_NO),
+    		GPIO_PIN_CNF_DIR_Input,
+    		GPIO_PIN_CNF_INPUT_Disconnect,
+    		GPIO_PIN_CNF_PULL_Pulldown,
+    		GPIO_PIN_CNF_DRIVE_S0S1,
+    		GPIO_PIN_CNF_SENSE_Disabled);
+
+    /* The BLDCRESETN pin serves as the active-low reset for the A4960 but it
+     * also enables the switched battery rail when high. This switched battery
+     * rail supplies the A4960 and the SMA controller. Additionally, BLDCRESETN
+     * provides power to the thermistor next to the frame. */
     nrf_gpio_pin_clear(BLDCRESETN_PIN_NO);
     GPIO_PIN_CONFIG((BLDCRESETN_PIN_NO),
     		GPIO_PIN_CNF_DIR_Output,
@@ -343,9 +326,11 @@ static void gpio_init(void) {
 
     /* Despite plans to use PWM output to control the BLDC motor's speed, we
      * have found that adjusting the current limit (via the A4960's REF pin)
-     * accomplishes the same task.  If the PWM is unused, it must be tied high
-     * so that the A4960 does not brake the motor. */
-    nrf_gpio_pin_set(BLDCSPEED_PIN_NO);
+     * accomplishes the same task.  If the PWM is unused, the BLDCSPEED pin
+     * must be tied high so that the A4960 does not brake the motor.  That
+     * said, the A4960 consume about 50uA additional current when the pin is
+     * high, so we keep it low for now. */
+    nrf_gpio_pin_clear(BLDCSPEED_PIN_NO);
     GPIO_PIN_CONFIG((BLDCSPEED_PIN_NO),
     		GPIO_PIN_CNF_DIR_Output,
     		GPIO_PIN_CNF_INPUT_Disconnect,
@@ -353,17 +338,160 @@ static void gpio_init(void) {
     		GPIO_PIN_CNF_DRIVE_S0S1,
     		GPIO_PIN_CNF_SENSE_Disabled);
 
-
-    /* Make the BLDCTACHO pin an input.  We will detect and count all rising edges */
+    /* Make the BLDCTACHO pin an input.  We will detect and count all rising
+     * edges.*/
     GPIO_PIN_CONFIG((BLDCTACHO_PIN_NO),
+    		GPIO_PIN_CNF_DIR_Input,
+    		GPIO_PIN_CNF_INPUT_Connect,
+    		GPIO_PIN_CNF_PULL_Pulldown,
+    		GPIO_PIN_CNF_DRIVE_S0S1,
+    		GPIO_PIN_CNF_SENSE_Disabled);
+
+	/* Make the VINSENSE, FRAMETEMP, LIPROVBATOUT, and ICHARGE pins inputs with
+	 * their input buffers disabled so that they do not consume current when
+	 * the pins are at a voltage somewhere between 0 and VCC. */
+	GPIO_PIN_CONFIG((VINSENSE_PIN_NO),
+			GPIO_PIN_CNF_DIR_Input,
+			GPIO_PIN_CNF_INPUT_Disconnect,
+			GPIO_PIN_CNF_PULL_Disabled,
+			GPIO_PIN_CNF_DRIVE_S0S1,
+			GPIO_PIN_CNF_SENSE_Disabled);
+
+	GPIO_PIN_CONFIG((FRAMETEMP_PIN_NO),
+			GPIO_PIN_CNF_DIR_Input,
+			GPIO_PIN_CNF_INPUT_Disconnect,
+			GPIO_PIN_CNF_PULL_Disabled,
+			GPIO_PIN_CNF_DRIVE_S0S1,
+			GPIO_PIN_CNF_SENSE_Disabled);
+
+	GPIO_PIN_CONFIG((LIPROVBATOUT_PIN_NO),
+			GPIO_PIN_CNF_DIR_Input,
+			GPIO_PIN_CNF_INPUT_Disconnect,
+			GPIO_PIN_CNF_PULL_Disabled,
+			GPIO_PIN_CNF_DRIVE_S0S1,
+			GPIO_PIN_CNF_SENSE_Disabled);
+
+	GPIO_PIN_CONFIG((ICHARGE_PIN_NO),
+			GPIO_PIN_CNF_DIR_Input,
+			GPIO_PIN_CNF_INPUT_Disconnect,
+			GPIO_PIN_CNF_PULL_Disabled,
+			GPIO_PIN_CNF_DRIVE_S0S1,
+			GPIO_PIN_CNF_SENSE_Disabled);
+
+	/* Make the TXD pin an output which drives high */
+    nrf_gpio_pin_set(UART_TX_PIN_NO);
+    GPIO_PIN_CONFIG((UART_TX_PIN_NO),
+    		GPIO_PIN_CNF_DIR_Output,
+    		GPIO_PIN_CNF_INPUT_Disconnect,
+    		GPIO_PIN_CNF_PULL_Disabled,
+    		GPIO_PIN_CNF_DRIVE_S0S1,
+    		GPIO_PIN_CNF_SENSE_Disabled);
+
+    /* Make the RXD pin an input will a pull-up */
+    nrf_gpio_pin_set(UART_RX_PIN_NO);
+    GPIO_PIN_CONFIG((UART_RX_PIN_NO),
+    		GPIO_PIN_CNF_DIR_Input,
+    		GPIO_PIN_CNF_INPUT_Connect,
+    		GPIO_PIN_CNF_PULL_Pullup,
+    		GPIO_PIN_CNF_DRIVE_S0S1,
+    		GPIO_PIN_CNF_SENSE_Disabled);
+
+	/* Set the PWM pins to 0 until they are turned on. */
+	nrf_gpio_pin_clear(PRECHRGEN_PIN_NO);
+    GPIO_PIN_CONFIG((PRECHRGEN_PIN_NO),
+    		GPIO_PIN_CNF_DIR_Output,
+    		GPIO_PIN_CNF_INPUT_Disconnect,
+    		GPIO_PIN_CNF_PULL_Disabled,
+    		GPIO_PIN_CNF_DRIVE_S0S1,
+    		GPIO_PIN_CNF_SENSE_Disabled);
+
+    nrf_gpio_pin_clear(BLDCIREF_PIN_NO);
+    GPIO_PIN_CONFIG((BLDCIREF_PIN_NO),
+    		GPIO_PIN_CNF_DIR_Output,
+    		GPIO_PIN_CNF_INPUT_Disconnect,
+    		GPIO_PIN_CNF_PULL_Disabled,
+    		GPIO_PIN_CNF_DRIVE_S0S1,
+    		GPIO_PIN_CNF_SENSE_Disabled);
+
+    /* The SMAIREF is controller by software-based PWM, but we still need to
+     * set its initial state to 0. */
+	nrf_gpio_pin_clear(SMAIREF_PIN_NO);
+    GPIO_PIN_CONFIG((SMAIREF_PIN_NO),
+    		GPIO_PIN_CNF_DIR_Output,
+    		GPIO_PIN_CNF_INPUT_Disconnect,
+    		GPIO_PIN_CNF_PULL_Disabled,
+    		GPIO_PIN_CNF_DRIVE_S0S1,
+    		GPIO_PIN_CNF_SENSE_Disabled);
+
+	/* Ensure that the SCL and SDA pins are inputs.  We assume that they do not
+	 * need to be pulled-up as there should be external pull-up resistors on
+	 * the I2C bus. */
+    GPIO_PIN_CONFIG((TWI_MASTER_CONFIG_CLOCK_PIN_NUMBER),
     		GPIO_PIN_CNF_DIR_Input,
     		GPIO_PIN_CNF_INPUT_Connect,
     		GPIO_PIN_CNF_PULL_Disabled,
     		GPIO_PIN_CNF_DRIVE_S0S1,
     		GPIO_PIN_CNF_SENSE_Disabled);
 
+    GPIO_PIN_CONFIG((TWI_MASTER_CONFIG_DATA_PIN_NUMBER),
+    		GPIO_PIN_CNF_DIR_Input,
+    		GPIO_PIN_CNF_INPUT_Connect,
+    		GPIO_PIN_CNF_PULL_Disabled,
+    		GPIO_PIN_CNF_DRIVE_S0S1,
+    		GPIO_PIN_CNF_SENSE_Disabled);
+
+    /* Configure the LED pins as outputs */
+    nrf_gpio_pin_clear(LED_RED_PIN_NO);
+    GPIO_PIN_CONFIG((LED_RED_PIN_NO),
+    		GPIO_PIN_CNF_DIR_Output,
+    		GPIO_PIN_CNF_INPUT_Disconnect,
+    		GPIO_PIN_CNF_PULL_Disabled,
+    		GPIO_PIN_CNF_DRIVE_S0S1,
+    		GPIO_PIN_CNF_SENSE_Disabled);
+
+    nrf_gpio_pin_clear(LED_GREEN_PIN_NO);
+    GPIO_PIN_CONFIG((LED_GREEN_PIN_NO),
+    		GPIO_PIN_CNF_DIR_Output,
+    		GPIO_PIN_CNF_INPUT_Disconnect,
+    		GPIO_PIN_CNF_PULL_Disabled,
+    		GPIO_PIN_CNF_DRIVE_S0S1,
+    		GPIO_PIN_CNF_SENSE_Disabled);
+
+    nrf_gpio_pin_clear(LED_BLUE_PIN_NO);
+    GPIO_PIN_CONFIG((LED_BLUE_PIN_NO),
+    		GPIO_PIN_CNF_DIR_Output,
+    		GPIO_PIN_CNF_INPUT_Disconnect,
+    		GPIO_PIN_CNF_PULL_Disabled,
+    		GPIO_PIN_CNF_DRIVE_S0S1,
+    		GPIO_PIN_CNF_SENSE_Disabled);
+}
+
+void main_configUnusedPins() {
+	/* P0.26 is truly unconnected */
+	nrf_gpio_pin_clear(26);
+    GPIO_PIN_CONFIG((26),
+    		GPIO_PIN_CNF_DIR_Output,
+    		GPIO_PIN_CNF_INPUT_Disconnect,
+    		GPIO_PIN_CNF_PULL_Disabled,
+    		GPIO_PIN_CNF_DRIVE_S0S1,
+    		GPIO_PIN_CNF_SENSE_Disabled);
+
+	/* The SMAEN pin (P0.27) was initially used to turn the SMA driver
+	 * circuitry on, but with the LED2000-based expansion board, it is
+	 * now left unconnected. */
     nrf_gpio_pin_clear(SMAEN_PIN_NO);
     GPIO_PIN_CONFIG((SMAEN_PIN_NO),
+    		GPIO_PIN_CNF_DIR_Output,
+    		GPIO_PIN_CNF_INPUT_Disconnect,
+    		GPIO_PIN_CNF_PULL_Disabled,
+    		GPIO_PIN_CNF_DRIVE_S0S1,
+    		GPIO_PIN_CNF_SENSE_Disabled);
+
+    /* The SMAVOLTS pin (P0.03) was initially used to sense the voltage across
+     * the SMA, but with the LED2000-based expansion board, we do not bother
+     * to do this, and the pin is unconnected. */
+    nrf_gpio_pin_clear(SMAVOLTS_PIN_NO);
+    GPIO_PIN_CONFIG((SMAVOLTS_PIN_NO),
     		GPIO_PIN_CNF_DIR_Output,
     		GPIO_PIN_CNF_INPUT_Disconnect,
     		GPIO_PIN_CNF_PULL_Disabled,
@@ -379,32 +507,31 @@ int main(void) {
 	char str[64];
 	uint8_t strSize;
 	uint16_t bootCurrent_mA;
+	bool dbAwakeAfterBoot;
+	bool ledsOnAfterBoot;
+	uint32_t currentTime_rtcTicks;
 
-	/* Start 16 MHz crystal oscillator */
-	NRF_CLOCK ->EVENTS_HFCLKSTARTED = 0;
-	NRF_CLOCK ->TASKS_HFCLKSTART = 1;
+	/* The timer subsystem must be initialized before we can create timers. */
+    main_timersInit();
 
-	/* Wait for the external oscillator to start up */
-	while (NRF_CLOCK ->EVENTS_HFCLKSTARTED == 0);
+    main_gpioteInit();
 
-    // Initialize
+    nrf_delay_ms(10);
+    bleApp_stackInit();
+
+    main_gpioInit();
     led_init();
-
-    timers_init();
-    gpiote_init();
-    //buttons_init();
-
-    gpio_init();
     uart_init();
     twi_master_init();
-    sma_init();
     pwm_init();
-    freqcntr_init();
+
     spi_init();
+    power_init();
     commands_init();
 
-    bleApp_stackInit();
-    scheduler_init();
+    //
+
+    main_schedulerInit();
     bleApp_gapParamsInit();
     bleApp_servicesInit();
     bleApp_connParamsInit();
@@ -412,10 +539,14 @@ int main(void) {
     bleApp_advertisingInit();
 
     // Start execution
-    timers_start();
+    main_timersStart();
 
-    /* Reset the daughterboard by pulling the SCL line low for at least 2ms */
+    led_setAllOn();
+    ledsOnAfterBoot = true;
+
+    /* Reset the daughterboard by pulling the SCL line low */
     db_reset();
+    dbAwakeAfterBoot = true;
 
     app_uart_put_string("\r\n");
     app_uart_put_string("\r\n");
@@ -424,7 +555,7 @@ int main(void) {
     app_uart_put_string("\r\n");
 
     strSize = sizeof(str);
-    if (db_getVersion(str, &strSize)) {
+    if (db_getVersion(str, strSize)) {
     	app_uart_put_string("DB: OK (");
     	app_uart_put_string(str);
     	app_uart_put_string(")\r\n");
@@ -438,7 +569,7 @@ int main(void) {
     	app_uart_put_string("A4960: Fail\r\n");
     }
 
-    if (mpu6050_init(MPU6050_I2C_ADDR)) {
+    if (imu_init(MPU6050_I2C_ADDR)) {
     	app_uart_put_string("MPU-6050: OK\r\n");
     } else {
     	app_uart_put_string("MPU-6050: Fail\r\n");
@@ -454,9 +585,7 @@ int main(void) {
 
     app_uart_put_string("\r\n");
 
-    if (bleApp_isAdvertisingEnabled()) {
-    	bleApp_advertisingStart();
-    }
+    imu_enableMotionDetection(true);
 
     // Enter main loop
     for (;;) {
@@ -464,17 +593,183 @@ int main(void) {
 
         while (app_uart_get(&c) == NRF_SUCCESS) {
         	cmdline_newChar(c);
+        	app_timer_cnt_get(&lastCharTime_rtcTicks);
         }
 
 #if (ENABLE_BLE_COMMANDS == 1)
         while (ble_sps_get_char(&m_sps, &c)) {
         	cmdline_newChar(c);
+        	app_timer_cnt_get(&lastCharTime_rtcTicks);
         }
 #endif
 
-        power_manage();
+        /* One second after reboot, we turn off the LEDs and start advertising */
+        if (ledsOnAfterBoot && (app_timer_cnt_get(&currentTime_rtcTicks) == NRF_SUCCESS) &&
+        		(currentTime_rtcTicks * USEC_PER_APP_TIMER_TICK >= 1000000)) {
+        	led_setAllOff();
+        	ledsOnAfterBoot = false;
+
+            if (bleApp_isAdvertisingEnabled()) {
+            	bleApp_advertisingStart();
+            }
+        }
+
+        /* Three seconds after reboot, we put the daughterboard to sleep. */
+        if (dbAwakeAfterBoot && (app_timer_cnt_get(&currentTime_rtcTicks) == NRF_SUCCESS) &&
+        		(currentTime_rtcTicks * USEC_PER_APP_TIMER_TICK >= 3000000)) {
+        	db_sleep(true);
+        	dbAwakeAfterBoot = false;
+        }
+
+        main_powerManage();
     }
 }
+
+/**@brief Power manager. */
+void main_powerManage() {
+	uint32_t err_code;
+	uint32_t currentTime_rtcTicks;
+	uint32_t elapsedTime_rtcTicks;
+
+	uint32_t elapsedMotionTime_sec;
+	uint32_t elapsedCharTime_sec;
+	bool chargerActive;
+
+	app_timer_cnt_get(&currentTime_rtcTicks);
+
+	elapsedTime_rtcTicks = 0x00FFFFFF & (currentTime_rtcTicks - lastCharTime_rtcTicks);
+	elapsedCharTime_sec = (elapsedTime_rtcTicks * USEC_PER_APP_TIMER_TICK) / 1000000;
+
+	elapsedTime_rtcTicks = 0x00FFFFFF & (currentTime_rtcTicks - lastMotionTime_rtcTicks);
+	elapsedMotionTime_sec = (elapsedTime_rtcTicks * USEC_PER_APP_TIMER_TICK) / 1000000;
+
+	if ((power_getChargeState() == POWER_CHARGESTATE_OFF) ||
+			(power_getChargeState() == POWER_CHARGESTATE_STANDBY) ||
+			(power_getChargeState() == POWER_CHARGESTATE_ERROR)) {
+		chargerActive = false;
+	} else {
+		chargerActive = true;
+	}
+
+	if (sleepRequested ||
+			((elapsedCharTime_sec > sleepTime_sec) &&
+					(elapsedMotionTime_sec > sleepTime_sec) &&
+					(sleepTime_sec != 0) &&
+					!chargerActive)) {
+		motionDetected = false;
+		sleepRequested = false;
+
+		if (!sleeping) {
+			app_uart_put_string("Going to sleep\r\n");
+			nrf_delay_ms(10);
+
+			/* In case the charger was in standby or an error state, we force
+			 * it off before going to sleep. */
+			power_setChargeState(POWER_CHARGESTATE_OFF);
+
+			/* Turn off power to the SMA controller and BLDC driver */
+			power_setVBATSWState(VBATSW_SUPERUSER, false);
+			/* Ensure that the daughterboard is in sleep mode */
+			db_sleep(true);
+
+			/* Terminate the BLE connection, if one exists */
+			if (m_sps.conn_handle != BLE_CONN_HANDLE_INVALID) {
+				err_code = sd_ble_gap_disconnect(m_sps.conn_handle, BLE_HCI_CONN_INTERVAL_UNACCEPTABLE);
+				APP_ERROR_CHECK(err_code);
+			}
+
+			/* Stop advertising */
+			bleApp_setAdvertisingEnabled(false);
+
+		    led_deinit();
+		    uart_deinit();
+		    twi_master_deinit();
+		    pwm_deinit();
+		    spi_deinit();
+		    power_deinit();
+		    bldc_deinit();
+		}
+
+		sleeping = true;
+	} else if (sleeping && motionDetected) {
+		/* If the processor was sleeping, we must re-initialize the peripherals
+		 * that we de-initialized before entering sleep mode. */
+
+		/* Turn on all LEDs on the mainboard and the daughterboard for 1 second
+		 * as an indication that the M-Blocks has exited sleep. */
+		db_setLEDs(true, true, true);
+
+		nrf_gpio_pin_set(LED_RED_PIN_NO);
+		nrf_gpio_pin_set(LED_GREEN_PIN_NO);
+		nrf_gpio_pin_set(LED_BLUE_PIN_NO);
+		nrf_delay_ms(1000);
+
+		/* Turn off all of the LEDs.  The led_init() function will handle this
+		 * on the mainboard. */
+		db_setLEDs(false, false, false);
+		db_sleep(true);
+		led_init();
+
+		uart_init();
+		pwm_init();
+		spi_init();
+		power_init();
+		bldc_init();
+
+		sleeping = false;
+
+		bleApp_setAdvertisingEnabled(true);
+
+		/* Restart charging */
+		power_setChargeState(POWER_CHARGESTATE_STANDBY);
+
+		app_uart_put_string("Awoken from sleep\r\n");
+	}
+
+	err_code = sd_app_event_wait();
+	APP_ERROR_CHECK(err_code);
+}
+
+void main_motionCheckTimerHandler(void *context) {
+	static uint32_t lastLEDFlashTime_rtcTicks = 0;
+	uint32_t currentTime_rtcTicks;
+	uint32_t elapsedTime_sec;
+
+	app_timer_cnt_get(&currentTime_rtcTicks);
+	elapsedTime_sec = ((0x00FFFFFF & (currentTime_rtcTicks - lastLEDFlashTime_rtcTicks)) * USEC_PER_APP_TIMER_TICK) / 1000000;
+
+	if (sleeping && (elapsedTime_sec >= 30)) {
+		nrf_gpio_pin_set(LED_RED_PIN_NO);
+		lastLEDFlashTime_rtcTicks = currentTime_rtcTicks;
+		nrf_delay_ms(25);
+	}
+
+	if (imu_checkForMotion()) {
+		app_timer_cnt_get(&lastMotionTime_rtcTicks);
+		motionDetected = true;
+	}
+
+	nrf_gpio_pin_clear(LED_RED_PIN_NO);
+}
+
+void main_setSleepRequested(bool requested) {
+	sleepRequested = requested;
+}
+
+bool main_setSleepTime(uint32_t time_sec) {
+	if (time_sec > 3600) {
+		return false;
+	}
+
+	sleepTime_sec = time_sec;
+	return true;
+}
+
+uint32_t main_getSleepTime() {
+	return sleepTime_sec;
+}
+
+
 
 
 /** 

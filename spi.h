@@ -11,7 +11,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-void spi_init();
+void spi_init(void);
+void spi_deinit(void);
 bool spi_txRx(uint16_t transfer_size, const uint8_t *tx_data, uint8_t *rx_data);
 
 #endif /* SPI_H_ */

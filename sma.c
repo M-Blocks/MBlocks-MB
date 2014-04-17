@@ -18,7 +18,7 @@
 #include "pins.h"
 #include "util.h"
 #include "power.h"
-#include "adc.h"
+#include "motionEvent.h"
 #include "sma.h"
 
 #define SMA_DEBUG	0
@@ -40,41 +40,74 @@ static smaState_t smaState;
 
 static uint32_t retractStartTime_rtcTicks = 0;
 
-static uint32_t retractCurrent_mA;
-static uint32_t holdCurrent_mA;
+static uint32_t retractCurrent_mA = RETRACT_CURRENT_DEFAULT_MA;
+static uint32_t holdCurrent_mA = HOLD_CURRENT_DEFAULT_MA;
 
 static uint32_t retractPWMOnTime_ms;
 static uint32_t retractPWMOffTime_ms;
 static uint32_t holdPWMOnTime_ms;
 static uint32_t holdPWMOffTime_ms;
 
-static uint32_t retractTime_ms;
+static uint32_t retractTime_ms = RETRACT_TIME_DEFAULT_MS;
 static uint32_t holdTime_ms;
 
 static app_sched_event_handler_t eventHandler;
 
 
-static app_timer_id_t sma_timerID;
+static bool sma_init(void);
+static void sma_deinit(void);
+
+static app_timer_id_t sma_timerID = TIMER_NULL;
 static void sma_timerHandler(void *p_context);
 
 bool sma_init() {
 	uint32_t err_code;
 
-	nrf_gpio_pin_clear(SMAIREF_PIN_NO);
-	nrf_gpio_pin_dir_set(SMAIREF_PIN_NO, NRF_GPIO_PIN_DIR_OUTPUT);
+	if (initialized) {
+		return true;
+	}
 
-    err_code = app_timer_create(&sma_timerID, APP_TIMER_MODE_SINGLE_SHOT, sma_timerHandler);
-    APP_ERROR_CHECK(err_code);
+	nrf_gpio_pin_clear(SMAIREF_PIN_NO);
+    GPIO_PIN_CONFIG((SMAIREF_PIN_NO),
+    		GPIO_PIN_CNF_DIR_Output,
+    		GPIO_PIN_CNF_INPUT_Disconnect,
+    		GPIO_PIN_CNF_PULL_Disabled,
+    		GPIO_PIN_CNF_DRIVE_S0S1,
+    		GPIO_PIN_CNF_SENSE_Disabled);
+
+	if (sma_timerID == TIMER_NULL) {
+		/* If the timer has not yet been created, create it now. At the moment,
+		 * the SDK does not provide a way to destroy a timer, so we set the
+		 * initial value of sma_timerID to TIMER_NULL in order to mark it
+		 * invalid. */
+		err_code = app_timer_create(&sma_timerID, APP_TIMER_MODE_SINGLE_SHOT, sma_timerHandler);
+		APP_ERROR_CHECK(err_code);
+	}
 
     smaState = SMA_STATE_EXTENDED;
-
-    retractCurrent_mA = RETRACT_CURRENT_DEFAULT_MA;
-    holdCurrent_mA = HOLD_CURRENT_DEFAULT_MA;
-    retractTime_ms = RETRACT_TIME_DEFAULT_MS;
 
     initialized = true;
 
 	return true;
+}
+
+void sma_deinit() {
+	if (!initialized) {
+		return;
+	}
+
+	/* If the SMA timer exists, attempt to stop it.  If it is already stopped,
+	 * there is no harm done. */
+	if (sma_timerID != TIMER_NULL) {
+		app_timer_stop(sma_timerID);
+	}
+
+	/* Disable the SMA controller */
+	nrf_gpio_pin_clear(SMAIREF_PIN_NO);
+
+	smaState = SMA_STATE_EXTENDED;
+
+	initialized = false;
 }
 
 bool sma_setRetractCurrent_mA(uint16_t current_mA) {
@@ -131,8 +164,12 @@ bool sma_retract(uint16_t hold_ms, app_sched_event_handler_t smaEventHandler){
 		return false;
 	}
 
+	/* We take care of automatically initializing the SMA controller when a
+	 * caller attempts to use it. */
+	sma_init();
+
 	/* Supply power to the SMA circuitry */
-	power_setVBATSWState(true);
+	power_setVBATSWState(VBATSW_USER_SMA, true);
 
 	/* Save the hold time and the event handler pointer. */
 	holdTime_ms = hold_ms;
@@ -174,7 +211,7 @@ bool sma_extend(app_sched_event_handler_t smaEventHandler) {
 			app_sched_event_put((void *)&smaState, sizeof(smaState), eventHandler);
 		}
 		return true;
-	} else if (smaState == SMA_STATE_EXTENDED) {
+	} else if (smaState == SMA_STATE_EXTENDING) {
 		/* If the SMA is already extending, we do not need to reset the
 		 * recovery timer or do anything else before returning true because
 		 * presumably everything is already setup correctly. */
@@ -191,6 +228,7 @@ bool sma_extend(app_sched_event_handler_t smaEventHandler) {
 	 * effect. */
 	err_code = app_timer_stop(sma_timerID);
 	APP_ERROR_CHECK(err_code);
+
 
 	/* Re-start the timer after configuring it to expire after the SMA's
 	 * recovery time. */
@@ -212,13 +250,14 @@ void sma_timerHandler(void *p_context) {
 	uint32_t rtcTicks;
 	uint32_t elapsedTime_ms;
 	uint32_t pwmOnTime_ms, pwmOffTime_ms;
+	motionPrimitive_t motionPrimitive;
 
 	/* Calculate the time in milliseconds (by dividing RTC ticks by 32.378)
 	 * since we began retracting the SMA. We mask the high-order byte of the
 	 * subtraction result because app_timer_cnt_get only returns a 24-bit
 	 * result. */
 	app_timer_cnt_get(&rtcTicks);
-	elapsedTime_ms = (0x00FFFFFF & (rtcTicks - retractStartTime_rtcTicks)) / 33;
+	elapsedTime_ms = ((0x00FFFFFF & (rtcTicks - retractStartTime_rtcTicks)) * USEC_PER_APP_TIMER_TICK) / 1000;
 
 
 	if ((smaState == SMA_STATE_RETRACTING) || (smaState == SMA_STATE_HOLDING)) {
@@ -229,9 +268,9 @@ void sma_timerHandler(void *p_context) {
 			if (smaState == SMA_STATE_HOLDING) {
 				smaState = SMA_STATE_EXTENDING;
 				if (eventHandler != NULL) {
-					app_sched_event_put((void *)&smaState, sizeof(smaState), eventHandler);
+					motionPrimitive = MOTION_PRIMITIVE_SMA_EXTENDING;
+					app_sched_event_put(&motionPrimitive, sizeof(motionPrimitive), eventHandler);
 				}
-				app_uart_put_string("SMA extending...\r\n");
 			}
 
 			/* Restart the timer so that it will expire after the recovery
@@ -250,9 +289,9 @@ void sma_timerHandler(void *p_context) {
 			if (smaState == SMA_STATE_RETRACTING) {
 				smaState = SMA_STATE_HOLDING;
 				if (eventHandler != NULL) {
-					app_sched_event_put((void *)&smaState, sizeof(smaState), eventHandler);
+					motionPrimitive = MOTION_PRIMITIVE_SMA_RETRACTED;
+					app_sched_event_put(&motionPrimitive, sizeof(motionPrimitive), eventHandler);
 				}
-				app_uart_put_string("SMA holding...\r\n");
 			}
 
 			/* Switch to using the holding duty cycle to PWM the SMA */
@@ -310,12 +349,20 @@ void sma_timerHandler(void *p_context) {
 		/* Just to be safe, we also stop the timer. */
 		app_timer_stop(sma_timerID);
 
-		app_uart_put_string("SMA extended\r\n");
+		/* Withdraw our request to keep the VBATSW supply powered.  If nothing
+		 * else is using the VBASTSW supply, this will turn it off.  */
+		power_setVBATSWState(VBATSW_USER_SMA, false);
+
+		/* Now that the SMA has completely extended, we disable the SMA
+		 * controller.  It will automatically be re-initializing the next
+		 * time the sma_retract() function is called.  */
+		sma_deinit();
 
 		/* If the caller has setup a callback to be executed once the SMA is
 		 * fully extended, we execute it here. */
 		if (eventHandler != NULL) {
-			app_sched_event_put((void *)smaState, sizeof(smaState), eventHandler);
+			motionPrimitive = MOTION_PRIMITIVE_SMA_EXTENDED;
+			app_sched_event_put(&motionPrimitive, sizeof(motionPrimitive), eventHandler);
 		}
 	}
 

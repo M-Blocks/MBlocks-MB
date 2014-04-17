@@ -11,8 +11,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "app_timer.h"
-
 typedef enum {
 	POWER_CHARGESTATE_OFF,
 	POWER_CHARGESTATE_MANUAL,
@@ -32,12 +30,22 @@ typedef enum {
 	POWER_CHARGEERROR_TIMEOUT
 } power_chargeError_t;
 
-extern app_timer_id_t power_timer_id;
+typedef enum {
+	VBATSW_SUPERUSER = 0,
+	VBATSW_USER_SMA,
+	VBATSW_USER_BLDC
+} vbatswUser_t;
+
+bool power_init(void);
+void power_deinit(void);
 
 bool power_registerImproperTerminationFlag(bool *flag);
 bool power_unregisterImproperTerminationFlag(bool *flag);
 
-void power_setVBATSWState(bool enabled);
+bool power_registerVBATSWTurnedOffFlag(bool *flag);
+bool power_unregisterVBATSWTurnedOffFlag(bool *flag);
+
+void power_setVBATSWState(vbatswUser_t userID, bool enabled);
 bool power_getVBATSWState(void);
 
 bool power_setDischargeSwitches(uint8_t switches);
@@ -76,7 +84,5 @@ void power_printBatteryVoltages(void);
 void power_printChargeCurrent(void);
 
 void power_updateChargeState(void);
-
-void power_timerHandler(void *p_context);
 
 #endif /* POWER_H_ */

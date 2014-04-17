@@ -73,6 +73,17 @@
 bool twi_master_init(void);
 
 /**
+ * @brief Function to de-initialize the TWI bus before idle of off modes.
+ */
+void twi_master_deinit(void);
+
+
+/**
+ * @brief Function to check whether the TWI bus is initialized.
+ */
+bool twi_master_get_init(void);
+
+/**
  * @brief Function for transferring data over TWI bus.
  *
  * If TWI master detects even one NACK from the slave or timeout occurs, STOP condition is issued

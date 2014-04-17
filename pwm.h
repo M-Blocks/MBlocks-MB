@@ -15,6 +15,7 @@
 #define BLDCIREF_PWM_CHNL	1
 
 void pwm_init(void);
+void pwm_deinit(void);
 bool pwm_setOnPeriod(unsigned int channel, uint32_t onPeriod);
 uint32_t pwm_getOnPeriod(unsigned int channel);
 uint32_t pwm_getPeriod(void);

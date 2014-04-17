@@ -16,6 +16,7 @@
 
 #include "ble_sps.h"
 
+#include "global.h"
 #include "util.h"
 
 extern ble_sps_t m_sps;
@@ -43,7 +44,6 @@ bool delay_ms(uint32_t ms) {
     uint32_t nowTicks;
     uint32_t elapsedTicks;
     uint32_t scheduleTicks;
-    uint32_t intermediaryTicks;
 
     if (app_timer_cnt_get(&startTicks) != NRF_SUCCESS) {
         return false;
@@ -61,16 +61,20 @@ bool delay_ms(uint32_t ms) {
          * tick counts to find the elapsed number of ticks, we must mask out the
          * 8 most significant bits. */
         elapsedTicks = 0x00FFFFFF & (nowTicks - startTicks);
+
+#if (0)
+        uint32_t intermediaryTicks;
         intermediaryTicks = elapsedTicks - scheduleTicks;
 
-        if (intermediaryTicks > 500){
+        if (intermediaryTicks > APP_TIMER_TICKS(15, APP_TIMER_PRESCALER)) {
         	app_sched_execute();
             if (app_timer_cnt_get(&scheduleTicks) != NRF_SUCCESS) {
             	return false;
             }
         }
+#endif
 
-        if (elapsedTicks * 1000 >= 32768 * ms) {
+        if (elapsedTicks * USEC_PER_APP_TIMER_TICK >= 1000 * ms) {
             return true;
         }
     } while (1);

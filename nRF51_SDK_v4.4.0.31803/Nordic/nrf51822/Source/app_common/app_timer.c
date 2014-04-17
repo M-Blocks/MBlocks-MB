@@ -123,7 +123,7 @@ STATIC_ASSERT(sizeof(timer_user_t) % 4 == 0);
  */
 typedef uint32_t timer_user_id_t;
 
-#define TIMER_NULL                  ((app_timer_id_t)(0 - 1))                   /**< Invalid timer id. */
+
 #define CONTEXT_QUEUE_SIZE_MAX      (2)                                         /**< Timer internal elapsed ticks queue size. */
 
 static uint8_t                       m_node_array_size;                         /**< Size of timer node array. */
@@ -175,6 +175,9 @@ static void rtc1_stop(void)
 
     NRF_RTC1->TASKS_STOP = 1;
     nrf_delay_us(MAX_RTC_TASKS_DELAY);
+
+    NVIC_ClearPendingIRQ(RTC1_IRQn);
+    NVIC_ClearPendingIRQ(SWI0_IRQn);
 }
 
 

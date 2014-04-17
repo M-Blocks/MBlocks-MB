@@ -21,9 +21,10 @@
 #include "a4960.h"
 #include "freqcntr.h"
 #include "power.h"
+#include "motionEvent.h"
 #include "bldc.h"
 
-#define BLDC_DEBUG			1
+#define BLDC_DEBUG			0
 
 #define RSENSE_MILLIOHMS	10
 #define ISENSE_GAIN			10
@@ -49,8 +50,8 @@
 
 static int32_t kp_numerator = 3;
 static int32_t kp_denominator = 1;
-static int32_t ki_numerator = 5;
-static int32_t ki_denominator = 1000;
+static int32_t ki_numerator = 16;
+static int32_t ki_denominator = 100000;
 
 static bool directionsReversed = false;
 
@@ -59,10 +60,14 @@ static bool configured = false;
 static bool stable = false;
 static bool needToReconfigure = false;
 
+static uint32_t startTime_rtcTicks;
+
 static bool bldcRunning = false;
 static uint16_t setSpeed_rpm;
 static bool accelModeActive = false;
-static app_timer_id_t bldc_speedControlTimerID;
+static app_timer_id_t bldc_speedControlTimerID = TIMER_NULL;
+
+static app_sched_event_handler_t eventHandler;
 
 static bool bldc_config(void);
 static bool bldc_start(bool reverse);
@@ -73,22 +78,55 @@ static bool bldc_translateDirection(bool reverse);
 static bool bldc_setIRefRatio(uint8_t refRatio);
 static void bldc_speedControlTimerHandler(void *p_context);
 static void bldc_speedControlLoop(bool reinit);
-static void bldc_updateStable(int32_t newestError);
+static uint32_t bldc_getSpeedTime_ms(uint32_t rpm);
+static bool bldc_updateStable(int32_t newestError);
 
 bool bldc_init() {
 	uint32_t err_code;
 
-    err_code = app_timer_create(&bldc_speedControlTimerID, APP_TIMER_MODE_REPEATED, bldc_speedControlTimerHandler);
-    APP_ERROR_CHECK(err_code);
+	if (bldc_speedControlTimerID == TIMER_NULL) {
+		err_code = app_timer_create(&bldc_speedControlTimerID, APP_TIMER_MODE_REPEATED, bldc_speedControlTimerHandler);
+		APP_ERROR_CHECK(err_code);
+	}
+
+	/* The BLDCSPEED is a PWM input to the A4960 which can be used to modulate
+	 * speed, but we use the IREF input instead.  To keep the A4960 from
+	 * stopping the motor, the BLDCSPEED pin must be tied high. */
+    nrf_gpio_pin_set(BLDCSPEED_PIN_NO);
+    GPIO_PIN_CONFIG((BLDCSPEED_PIN_NO),
+    		GPIO_PIN_CNF_DIR_Output,
+    		GPIO_PIN_CNF_INPUT_Disconnect,
+    		GPIO_PIN_CNF_PULL_Disabled,
+    		GPIO_PIN_CNF_DRIVE_S0S1,
+    		GPIO_PIN_CNF_SENSE_Disabled);
 
     /* If the charging voltage is removed while the MBlock is charging, it
      * causes a dip in the 3.3V supply.  This can reset the BLDC controller, so
      * after this happens, we need to reconfigure the controller. */
     power_registerImproperTerminationFlag(&needToReconfigure);
+    power_registerVBATSWTurnedOffFlag(&needToReconfigure);
 
     initialized = true;
 
     return true;
+}
+
+void bldc_deinit() {
+	if (!initialized) {
+		return;
+	}
+
+    /* The A4960 consumes about 50uA additional current when the BLDCSPEED pin
+     * is high, so we drive it low after de-initializing the BLDC controller. */
+    nrf_gpio_pin_clear(BLDCSPEED_PIN_NO);
+    GPIO_PIN_CONFIG((BLDCSPEED_PIN_NO),
+    		GPIO_PIN_CNF_DIR_Output,
+    		GPIO_PIN_CNF_INPUT_Disconnect,
+    		GPIO_PIN_CNF_PULL_Disabled,
+    		GPIO_PIN_CNF_DRIVE_S0S1,
+    		GPIO_PIN_CNF_SENSE_Disabled);
+
+    initialized = false;
 }
 
 bool bldc_config() {
@@ -289,6 +327,14 @@ bool bldc_stop(bool brake) {
 		return false;
 	}
 
+	/* Stop the frequency counter as we do not need to keep it running if the
+	 * motor is off.  */
+	freqcntr_deinit();
+
+	/* Withdraw our request to keep the VBATSW supply powered.  If nothing
+	 * else is using the VBASTSW supply, this will turn it off.  */
+	power_setVBATSWState(VBATSW_USER_BLDC, false);
+
 	setSpeed_rpm = 0;
 	bldcRunning = false;
 	stable = false;
@@ -325,8 +371,9 @@ bool bldc_setMaxCurrent_mA(uint16_t iLimit_mA) {
 	return true;
 }
 
-bool bldc_setSpeed(uint16_t speed_rpm, bool reverse, bool brake) {
+bool bldc_setSpeed(uint16_t speed_rpm, bool reverse, bool brake, app_sched_event_handler_t bldcEventHandler) {
 	uint32_t err_code;
+	motionPrimitive_t motionPrimitive;
 
 	if (!initialized) {
 		return false;
@@ -336,12 +383,21 @@ bool bldc_setSpeed(uint16_t speed_rpm, bool reverse, bool brake) {
 	 * decelerate it as rapidly as possible. */
 	if (speed_rpm == 0) {
 		bldc_stop(brake);
+
+		if (bldcEventHandler != NULL) {
+			motionPrimitive = MOTION_PRIMITIVE_BLDC_STOPPED;
+			err_code = app_sched_event_put(&motionPrimitive, sizeof(motionPrimitive), bldcEventHandler);
+			APP_ERROR_CHECK(err_code);
+		}
+
 		return true;
 	}
 
+	eventHandler = bldcEventHandler;
+
 	/* Turn on the BLDC controller IC and configure (or reconfigure) it if
 	 * necessary. */
-	power_setVBATSWState(true);
+	power_setVBATSWState(VBATSW_USER_BLDC, true);
 	if (!configured || needToReconfigure) {
 		bldc_config();
 	}
@@ -363,14 +419,20 @@ bool bldc_setSpeed(uint16_t speed_rpm, bool reverse, bool brake) {
 	 * to overshoot the correct current level.*/
 	if (setSpeed_rpm < 6000) {
 		bldc_setKP(3, 1);
-		bldc_setKI(1, 1000);
+		bldc_setKI(3, 100000);
 	} else {
 		bldc_setKP(3, 1);
-		bldc_setKI(5, 1000);
+		bldc_setKI(16, 100000);
 	}
+
+	/* Start the frequency counter which we will use to measure the motor's
+	 * RPM. */
+	freqcntr_init();
 
 	/* Start the motor running */
 	bldc_start(reverse);
+
+	app_timer_cnt_get(&startTime_rtcTicks);
 
 	/* Start the timer that will drive the control loop.  If the timer is
 	 * already running, this will be ignored and no harm will result. */
@@ -388,7 +450,7 @@ bool bldc_setSpeed(uint16_t speed_rpm, bool reverse, bool brake) {
 	return true;
 }
 
-bool bldc_setAccel(uint16_t accel_mA, uint16_t time_ms, bool reverse) {
+bool bldc_setAccel(uint16_t accel_mA, uint16_t time_ms, bool reverse, app_sched_event_handler_t bldcEventHandler) {
 	uint32_t err_code;
 
 	if (!initialized) {
@@ -403,9 +465,11 @@ bool bldc_setAccel(uint16_t accel_mA, uint16_t time_ms, bool reverse) {
 		accel_mA = ACCEL_CURRENT_MAX_MA;
 	}
 
+	eventHandler = bldcEventHandler;
+
 	/* Turn on the BLDC controller IC and configure (or reconfigure) it if
 	 * necessary. */
-	power_setVBATSWState(true);
+	power_setVBATSWState(VBATSW_USER_BLDC, true);
 	if (!configured || needToReconfigure) {
 		bldc_config();
 	}
@@ -537,7 +601,11 @@ void bldc_speedControlLoop(bool reinit) {
 	int32_t actual_rpm, error_rpm;
 	uint16_t controlCurrent;
 	uint32_t rtcTicks, elapsedTicks;
+	uint32_t elapsedTime_us;
 	int32_t pError;
+	motionPrimitive_t motionPrimitive;
+	uint32_t err_code;
+	uint32_t elapsedTime_msec;
 
 #if (BLDC_DEBUG)
 	char str[125];
@@ -548,6 +616,8 @@ void bldc_speedControlLoop(bool reinit) {
 	static unsigned int posSaturationCount = 0;
 	static unsigned int negSaturationCount = 0;
 	static uint8_t iRefRatio = 15;
+	static bool stabilized = false;
+	static bool timeoutPrimitiveSent = false;
 
 	/* If there is something wrong, either the BLDC system has not been
 	 * initialized, the BLDC IC does not have battery power, the IC has not
@@ -567,6 +637,13 @@ void bldc_speedControlLoop(bool reinit) {
 		app_timer_stop(bldc_speedControlTimerID);
 		bldc_stop(false);
 		accelModeActive = false;
+
+		if (eventHandler != NULL) {
+			motionPrimitive = MOTION_PRIMITIVE_BLDC_ACCEL_COMPLETE;
+			err_code = app_sched_event_put(&motionPrimitive, sizeof(motionPrimitive), eventHandler);
+			APP_ERROR_CHECK(err_code);
+		}
+
 		return;
 	}
 
@@ -577,17 +654,21 @@ void bldc_speedControlLoop(bool reinit) {
 	 * tick counts to find the elapsed number of ticks, we must mask out the
 	 * 8 most significant bits. */
 	elapsedTicks = 0x00FFFFFF & (rtcTicks - lastCallRTCTicks);
+	elapsedTime_us = elapsedTicks * USEC_PER_APP_TIMER_TICK;
 
 	/* If the caller wants to reinitialize the controller we reset the
 	 * integrator and assume that the control loop has not been previously
 	 * executed so that the elapsed time is 0. */
 	if (reinit) {
 		intError = 0;
-		elapsedTicks = 0;
+		elapsedTime_us = 0;
 		posSaturationCount = negSaturationCount = 0;
 
 		iRefRatio = 0;
 		bldc_setIRefRatio(0);
+
+		stabilized = false;
+		timeoutPrimitiveSent = false;
 	}
 
 	/* The first thing we do is recalculate the frequency of the BLDC
@@ -605,7 +686,7 @@ void bldc_speedControlLoop(bool reinit) {
 	pError = (kp_numerator * error_rpm) / kp_denominator;
 
 	/* Calculate the integrated error */
-	intError += (ki_numerator * error_rpm * (int32_t)elapsedTicks) / ki_denominator;
+	intError += (ki_numerator * error_rpm * (int32_t)elapsedTime_us) / ki_denominator;
 
 	/* We limit the point at which the integrator saturates to the maximum
 	 * allowable control input (3000mA).  */
@@ -660,14 +741,54 @@ void bldc_speedControlLoop(bool reinit) {
 	lastCallRTCTicks = rtcTicks;
 
 #if (BLDC_DEBUG)
-	snprintf(str, sizeof(str), "Ticks: %lu, Speed: %lu, Error: %ld, pError: %ld, intError: %ld, iRef: %u\r\n", elapsedTicks, actual_rpm, error_rpm, pError, intError, iRefRatio);
+	snprintf(str, sizeof(str), "Time [us]: %lu, Speed: %lu, Error: %ld, pError: %ld, intError: %ld, iRef: %u\r\n", elapsedTime_us, actual_rpm, error_rpm, pError, intError, iRefRatio);
 	app_uart_put_string(str);
 #endif
 
+	/* Check whether the motor's speed has stabilized.   */
 	bldc_updateStable(error_rpm);
+
+	/* If the motor's speed _just_ stabilized, we set the stabilized flag.  We
+	 * will not clear this flag until we reinitialize the speed controller. */
+	if (bldc_isStable() && !stabilized) {
+		stabilized = true;
+		/* If the motor's speed just stabilized and there is a callback which
+		 * needs to be executed, we add the callback to the scheduler's
+		 * queue now. */
+		if (eventHandler != NULL) {
+			motionPrimitive = MOTION_PRIMITIVE_BLDC_STABLE;
+			err_code = app_sched_event_put(&motionPrimitive, sizeof(motionPrimitive), eventHandler);
+			APP_ERROR_CHECK(err_code);
+		}
+	}
+
+	/* Compute the amount of time that has elapsed since we turned the motor
+	 * on.*/
+	elapsedTime_msec = ((0x00FFFFFF & (rtcTicks - startTime_rtcTicks)) * USEC_PER_APP_TIMER_TICK) / 1000;
+	/* If the elapsed time exceeds the maximum amount of time which is should
+	 * take to reach the desired speed, and if there is a valid callback
+	 * function, we add the callback to the scheduler and with an argument
+	 * indicating that the motor did not reach its desired speed within a
+	 * reasonable amount of time. */
+	if (!stabilized && (elapsedTime_msec > bldc_getSpeedTime_ms(setSpeed_rpm)) && (eventHandler != NULL) && !timeoutPrimitiveSent) {
+		motionPrimitive = MOTION_PRIMITIVE_BLDC_TIMEOUT;
+		err_code = app_sched_event_put(&motionPrimitive, sizeof(motionPrimitive), eventHandler);
+		APP_ERROR_CHECK(err_code);
+		timeoutPrimitiveSent = true;
+	}
 }
 
-void bldc_updateStable(int32_t newestError) {
+uint32_t bldc_getSpeedTime_ms(uint32_t rpm) {
+	uint32_t time_ms;
+
+	/* This computes the maximum number of milliseconds it should take the BLDC
+	 * motor to reach the desired RPM.  This equation was experimentally
+	 * determined. */
+	time_ms = (rpm / 3) + 2000;
+	return time_ms;
+}
+
+bool bldc_updateStable(int32_t newestError) {
 	int32_t meanError, meanErrorSquare;
 	int32_t varianceError;
 
@@ -711,7 +832,7 @@ void bldc_updateStable(int32_t newestError) {
 
 	if (validSamples < STABLILITY_SAMPLE_SIZE) {
 		stable = false;
-		return;
+		return false;
 	}
 
 	meanError = sumError / STABLILITY_SAMPLE_SIZE;
@@ -754,6 +875,7 @@ void bldc_updateStable(int32_t newestError) {
 #endif
 	}
 
+	return stable;
 }
 
 bool bldc_isStable() {

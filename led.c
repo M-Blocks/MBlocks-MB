@@ -6,18 +6,26 @@
  */
 
 #include "nrf_gpio.h"
+#include "nrf_assert.h"
 
+#include "app_timer.h"
+
+#include "global.h"
 #include "pins.h"
 #include "led.h"
 
 #define COUNT_PERIOD	20
 
-app_timer_id_t led_timer_id;
+app_timer_id_t ledTimerID = TIMER_NULL;
 
 static uint8_t led_pin_number[LED_COUNT] = {LED_RED_PIN_NO, LED_GREEN_PIN_NO, LED_BLUE_PIN_NO};
 static led_state_t led_state[LED_COUNT];
+static bool initialized = false;
+
+static void led_timerHandler(void *p_context);
 
 void led_init() {
+	uint32_t err_code;
 	uint32_t led;
 
 	for (led=0; led<LED_COUNT; led++) {
@@ -25,6 +33,39 @@ void led_init() {
 		nrf_gpio_pin_clear(led_pin_number[led]);
 		led_state[led] = LED_STATE_OFF;
 	}
+
+
+    /* Create a timer which will be used to flash the LEDs */
+	if (ledTimerID == TIMER_NULL) {
+		err_code = app_timer_create(&ledTimerID, APP_TIMER_MODE_REPEATED, led_timerHandler);
+		APP_ERROR_CHECK(err_code);
+	}
+
+	/* Start the timer which controls the LEDs */
+	err_code = app_timer_start(ledTimerID, APP_TIMER_TICKS(100, APP_TIMER_PRESCALER), NULL);
+	APP_ERROR_CHECK(err_code);
+
+	initialized = true;
+}
+
+void led_deinit(void) {
+	uint32_t err_code;
+	uint32_t led;
+
+	if (!initialized) {
+		return;
+	}
+
+	if (ledTimerID != TIMER_NULL) {
+		err_code = app_timer_stop(ledTimerID);
+		ASSERT(err_code == NRF_SUCCESS);
+	}
+
+	for (led=0; led<LED_COUNT; led++) {
+		nrf_gpio_pin_clear(led_pin_number[led]);
+	}
+
+	initialized = false;
 }
 
 void led_setAllOff() {
@@ -83,7 +124,7 @@ uint32_t led_getDutyCycle_percent(uint8_t led) {
 	return 0;
 }
 
-void led_timer_handler(void *p_context) {
+void led_timerHandler(void *p_context) {
 	static uint32_t count = 0;
 	uint32_t adjCount;
 	uint32_t led;
