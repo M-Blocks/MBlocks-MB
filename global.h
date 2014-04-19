@@ -28,7 +28,7 @@
 
 #define APP_TIMER_PRESCALER             9                                           /**< Value of the RTC1 PRESCALER register. */
 #define APP_TIMER_MAX_TIMERS            8                                          /**< Maximum number of simultaneously created timers. */
-#define APP_TIMER_OP_QUEUE_SIZE         2/*5*/                                      /**< Size of timer operation queues. */
+#define APP_TIMER_OP_QUEUE_SIZE         1/*5*/                                      /**< Size of timer operation queues. */
 
 #define USEC_PER_APP_TIMER_TICK			((uint32_t)ROUNDED_DIV((APP_TIMER_PRESCALER + 1) * (uint64_t)1000000, (uint64_t)APP_TIMER_CLOCK_FREQ))
 

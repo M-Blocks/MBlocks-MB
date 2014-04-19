@@ -33,7 +33,8 @@ typedef enum {
 typedef enum {
 	VBATSW_SUPERUSER = 0,
 	VBATSW_USER_SMA,
-	VBATSW_USER_BLDC
+	VBATSW_USER_BLDC,
+	VBATSW_MAX_USERS
 } vbatswUser_t;
 
 bool power_init(void);

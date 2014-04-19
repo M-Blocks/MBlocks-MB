@@ -53,8 +53,6 @@
 #define LED1_CURRENT_UA						2600
 #define LED2_CURRENT_UA						1200
 
-#define VBATSW_MAX_USERS					2
-
 static power_chargeState_t chargeState = POWER_CHARGESTATE_STANDBY;
 static power_chargeError_t chargeError = POWER_CHARGEERROR_NOERROR;
 static bool chargeTimerRunning = false;
@@ -258,7 +256,7 @@ void power_setVBATSWTurnedOffFlags() {
 }
 
 void power_setVBATSWState(vbatswUser_t userID, bool enabled) {
-	static bool activeUsers[VBATSW_MAX_USERS+1];
+	static bool activeUsers[VBATSW_MAX_USERS];
 	static bool firstCall = true;
 	unsigned int i;
 
@@ -266,7 +264,7 @@ void power_setVBATSWState(vbatswUser_t userID, bool enabled) {
 	 * to indicate that there are no active users. */
 	if (firstCall) {
 		firstCall = false;
-		for (i = 0; i<=VBATSW_MAX_USERS; i++) {
+		for (i = 0; i<VBATSW_MAX_USERS; i++) {
 			activeUsers[i] = false;
 		}
 	}
@@ -282,7 +280,7 @@ void power_setVBATSWState(vbatswUser_t userID, bool enabled) {
 		} else {
 			/* If the superuser is wants to turn the VBATSW supply off, we
 			 * override all other active users. */
-			for (i=0; i<=VBATSW_MAX_USERS; i++) {
+			for (i=0; i<VBATSW_MAX_USERS; i++) {
 				activeUsers[i] = false;
 			}
 			/* Then we turn off the VBATSW supply */
@@ -293,26 +291,26 @@ void power_setVBATSWState(vbatswUser_t userID, bool enabled) {
 		return;
 	}
 
-	/* Return without doing anything if this funcation was passed an invalid
+	/* Return without doing anything if this function was passed an invalid
 	 * user ID. */
-	if (userID > VBATSW_MAX_USERS) {
+	if (userID >= VBATSW_MAX_USERS) {
 		return;
 	}
 
 	activeUsers[userID] = enabled;
 
-	for (i=0; i<=VBATSW_MAX_USERS; i++) {
+	for (i=0; i<VBATSW_MAX_USERS; i++) {
 		if (activeUsers[i]) {
 			nrf_gpio_pin_set(BLDCRESETN_PIN_NO);
 			VBATSWEnabled = true;
 			return;
 		}
-
-		/* If we do not find any active users, turn off the VBATSW supply. */
-		nrf_gpio_pin_clear(BLDCRESETN_PIN_NO);
-		VBATSWEnabled = false;
-		power_setVBATSWTurnedOffFlags();
 	}
+
+	/* If we do not find any active users, turn off the VBATSW supply. */
+	nrf_gpio_pin_clear(BLDCRESETN_PIN_NO);
+	VBATSWEnabled = false;
+	power_setVBATSWTurnedOffFlags();
 }
 
 bool power_getVBATSWState() {
