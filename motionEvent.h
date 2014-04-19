@@ -12,6 +12,7 @@
 #include <stdbool.h>
 
 typedef enum {
+	MOTION_PRIMITIVE_TIMER_EXPIRED,
 	MOTION_PRIMITIVE_MECHBRAKE_SUCCESS,
 	MOTION_PRIMITIVE_MECHBRAKE_FAILURE,
 	MOTION_PRIMITIVE_MECHBRAKE_TIMEOUT,
@@ -31,6 +32,7 @@ typedef enum {
 	MOTION_EVENT_INERTIAL_ACTUATION_FAILURE
 } motionEvent_t;
 
+bool motionEvent_init(void);
 bool motionEvent_startPlaneChange(uint16_t accelCurrent_mA, uint16_t accelTime_ms, bool reverse, app_sched_event_handler_t motionEventHandler);
 bool motionEvent_startInertialActuation(uint16_t bldcSpeed_rpm, uint16_t brakeCurrent_mA, uint16_t brakeTime_ms, bool reverse, app_sched_event_handler_t motionEventHandler);
 

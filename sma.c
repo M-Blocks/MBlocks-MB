@@ -202,13 +202,15 @@ bool sma_retract(uint16_t hold_ms, app_sched_event_handler_t smaEventHandler){
 
 bool sma_extend(app_sched_event_handler_t smaEventHandler) {
 	uint32_t err_code;
+	motionPrimitive_t motionPrimitive;
 
 	/* Save the event handler function pointer. */
 	eventHandler = smaEventHandler;
 
 	if (smaState == SMA_STATE_EXTENDED) {
 		if (eventHandler != NULL) {
-			app_sched_event_put((void *)&smaState, sizeof(smaState), eventHandler);
+			motionPrimitive = MOTION_PRIMITIVE_SMA_EXTENDED;
+			app_sched_event_put(&motionPrimitive, sizeof(motionPrimitive), eventHandler);
 		}
 		return true;
 	} else if (smaState == SMA_STATE_EXTENDING) {
