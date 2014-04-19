@@ -325,7 +325,7 @@ void cmdCharge(const char *args) {
 			app_uart_put_string("Charge state set to Automatic\r\n");
 		} else if (strncmp(str, "force", 5) == 0) {
 			power_setChargeState(POWER_CHARGESTATE_PRECHARGE);
-			app_uart_put_string("Charge state set to PRECHARGE\r\n");
+			app_uart_put_string("Charge state set to Precharge\r\n");
 		} else if (strncmp(str, "discharge", 9) == 0) {
 			power_setChargeState(POWER_CHARGESTATE_DISCHARGE);
 			app_uart_put_string("Charge state set to Discharge\r\n");

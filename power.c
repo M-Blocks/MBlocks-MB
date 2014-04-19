@@ -442,7 +442,7 @@ void power_setChargeState(power_chargeState_t newState) {
 	}
 
 	chargeState = newState;
-	power_updateChargeState();
+	power_updateChargeState(true);
 }
 
 power_chargeState_t power_getChargeState() {
@@ -689,10 +689,10 @@ bool power_isOvertemp() {
 }
 
 void power_timerHandler(void *p_contex) {
-		power_updateChargeState();
+		power_updateChargeState(false);
 }
 
-void power_updateChargeState() {
+void power_updateChargeState(bool forceUpdate) {
 	uint16_t vin_mV;
 	bool vinAbsent = false;
 	uint8_t shorts = 0x00;
@@ -741,7 +741,7 @@ void power_updateChargeState() {
 		vinAbsent = true;
 		power_disableCharger();
 		power_setImproperTerminationFlags();
-	} else if (elapsedTime_rtcTicks >= APP_TIMER_TICKS(10000, APP_TIMER_PRESCALER)) {
+	} else if (forceUpdate || (elapsedTime_rtcTicks >= APP_TIMER_TICKS(10000, APP_TIMER_PRESCALER))) {
 		/* If 10 seconds have elapsed since we last updated the charge state
 		 * machine, we will proceed to update the charge state again.  First,
 		 * we record the current time so that we'll know when to next update

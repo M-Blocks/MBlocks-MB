@@ -83,6 +83,6 @@ void power_printVIn(void);
 void power_printBatteryVoltages(void);
 void power_printChargeCurrent(void);
 
-void power_updateChargeState(void);
+void power_updateChargeState(bool forceUpdate);
 
 #endif /* POWER_H_ */
