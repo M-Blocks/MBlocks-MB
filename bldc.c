@@ -24,7 +24,7 @@
 #include "motionEvent.h"
 #include "bldc.h"
 
-#define BLDC_DEBUG			0
+#define BLDC_DEBUG			1
 
 #define RSENSE_MILLIOHMS	10
 #define ISENSE_GAIN			10
@@ -65,13 +65,14 @@ static uint32_t startTime_rtcTicks;
 static bool bldcRunning = false;
 static uint16_t setSpeed_rpm;
 static bool accelModeActive = false;
+static bool brakeModeActive = false;
 static app_timer_id_t bldc_speedControlTimerID = TIMER_NULL;
 
 static app_sched_event_handler_t eventHandler;
 
 static bool bldc_config(void);
 static bool bldc_start(bool reverse);
-static bool bldc_stop(bool brake);
+static bool bldc_stop(uint16_t brakeTime_ms);
 
 static bool bldc_translateDirection(bool reverse);
 
@@ -286,7 +287,8 @@ bool bldc_start(bool reverse) {
 	return true;
 }
 
-bool bldc_stop(bool brake) {
+bool bldc_stop(uint16_t brakeTime_ms) {
+	uint32_t err_code;
 	uint16_t runReg;
 
 	/* If the controller has not been initialized or its battery supply is off,
@@ -301,10 +303,7 @@ bool bldc_stop(bool brake) {
 		return false;
 	}
 
-	/* Stop the speed control timer to remove the control loop overhead */
-	app_timer_stop(bldc_speedControlTimerID);
-
-	if (brake) {
+	if (brakeTime_ms > 0) {
 		/* Set the brake bit if requested by the caller.  For the brake to be
 	     * effective, we have to leave the run bit set.  We assume that the run
 	     * bit is already set, but it it is not the motor is already stopped,
@@ -315,28 +314,50 @@ bool bldc_stop(bool brake) {
 		 * a stop, the run bit has already been cleared, so we must set it
 		 * again here. */
 		runReg |= (0x01 << A4960_RUN_POSN);
-	} else {
-		/* If we are allowing the motor to coast to a stop, we clear the run
-		 * bit.  The state of the brake bit does not matter once the run bit is
-		 * cleared. */
-		runReg &= ~(0x01 << A4960_RUN_POSN);
-	}
 
-	/* Write the modified run register back to the A4960 */
-	if (!a4960_writeReg(A4960_RUN_REG_ADDR, runReg, NULL)) {
-		return false;
+		/* Write the modified run register back to the A4960 */
+		if (!a4960_writeReg(A4960_RUN_REG_ADDR, runReg, NULL)) {
+			return false;
+		}
+
+		/* Stop and restart the speed control timer so that it expires at the
+		 * moment when we need to release the electronic brake. */
+		err_code = app_timer_stop(bldc_speedControlTimerID);
+		APP_ERROR_CHECK(err_code);
+
+		/* Indicate to the speed control timer handler that when the timer next
+		 * expires that the motor should be stopped. */
+		brakeModeActive = true;
+
+		err_code = app_timer_start(bldc_speedControlTimerID,
+				APP_TIMER_TICKS(brakeTime_ms, APP_TIMER_PRESCALER), NULL);
+		APP_ERROR_CHECK(err_code);
+	} else {
+		/* If we are allowing the motor to coast to a stop without using the
+		 * electronic break, we clear the run bit.  The state of the brake bit
+		 * does not matter once the run bit is cleared. */
+		runReg &= ~(0x01 << A4960_RUN_POSN);
+
+		/* Write the modified run register back to the A4960 */
+		if (!a4960_writeReg(A4960_RUN_REG_ADDR, runReg, NULL)) {
+			return false;
+		}
+
+		/* Stop the speed control timer to remove the control loop overhead */
+		app_timer_stop(bldc_speedControlTimerID);
+
+		/* Withdraw our request to keep the VBATSW supply powered.  If nothing
+		 * else is using the VBASTSW supply, this will turn it off.  */
+		power_setVBATSWState(VBATSW_USER_BLDC, false);
+
+		bldcRunning = false;
 	}
 
 	/* Stop the frequency counter as we do not need to keep it running if the
 	 * motor is off.  */
 	freqcntr_deinit();
 
-	/* Withdraw our request to keep the VBATSW supply powered.  If nothing
-	 * else is using the VBASTSW supply, this will turn it off.  */
-	power_setVBATSWState(VBATSW_USER_BLDC, false);
-
 	setSpeed_rpm = 0;
-	bldcRunning = false;
 	stable = false;
 
 	return true;
@@ -371,7 +392,7 @@ bool bldc_setMaxCurrent_mA(uint16_t iLimit_mA) {
 	return true;
 }
 
-bool bldc_setSpeed(uint16_t speed_rpm, bool reverse, bool brake, app_sched_event_handler_t bldcEventHandler) {
+bool bldc_setSpeed(uint16_t speed_rpm, bool reverse, uint16_t brakeTime_ms, app_sched_event_handler_t bldcEventHandler) {
 	uint32_t err_code;
 	motionPrimitive_t motionPrimitive;
 
@@ -382,10 +403,10 @@ bool bldc_setSpeed(uint16_t speed_rpm, bool reverse, bool brake, app_sched_event
 	/* If the caller passed a speed of 0, we brake the motor in order to
 	 * decelerate it as rapidly as possible. */
 	if (speed_rpm == 0) {
-		bldc_stop(brake);
+		bldc_stop(brakeTime_ms);
 
-		if (bldcEventHandler != NULL) {
-			motionPrimitive = MOTION_PRIMITIVE_BLDC_STOPPED;
+		if ((brakeTime_ms == 0) && (bldcEventHandler != NULL)) {
+			motionPrimitive = MOTION_PRIMITIVE_BLDC_COASTING;
 			err_code = app_sched_event_put(&motionPrimitive, sizeof(motionPrimitive), bldcEventHandler);
 			APP_ERROR_CHECK(err_code);
 		}
@@ -627,19 +648,33 @@ void bldc_speedControlLoop(bool reinit) {
 	 * triggers the control loop and then we make sure that the motor is
 	 * stopped before returning. */
 	if (!initialized || !power_getVBATSWState() ||
-			!configured || needToReconfigure || !bldcRunning ) {
+			!configured || needToReconfigure || !bldcRunning) {
 		app_timer_stop(bldc_speedControlTimerID);
-		bldc_stop(false);
+		bldc_stop(0);
 		return;
 	}
 
-	if (accelModeActive) {
+	if (brakeModeActive) {
 		app_timer_stop(bldc_speedControlTimerID);
-		bldc_stop(false);
+		/* Allow the motor to coast to a stop, if it is not already stopped as
+		 * a consequence of actuation the electronic break for enough time. */
+		bldc_stop(0);
+		brakeModeActive = false;
+
+		if (eventHandler != NULL) {
+			motionPrimitive = MOTION_PRIMITIVE_BLDC_COASTING;
+			err_code = app_sched_event_put(&motionPrimitive, sizeof(motionPrimitive), eventHandler);
+			APP_ERROR_CHECK(err_code);
+		}
+
+		return;
+	} else if (accelModeActive) {
+		app_timer_stop(bldc_speedControlTimerID);
+		bldc_stop(0);
 		accelModeActive = false;
 
 		if (eventHandler != NULL) {
-			motionPrimitive = MOTION_PRIMITIVE_BLDC_ACCEL_COMPLETE;
+			motionPrimitive = MOTION_PRIMITIVE_BLDC_COASTING;
 			err_code = app_sched_event_put(&motionPrimitive, sizeof(motionPrimitive), eventHandler);
 			APP_ERROR_CHECK(err_code);
 		}

@@ -63,7 +63,7 @@ void planeChangePrimitiveHandler(void *p_event_data, uint16_t event_size) {
 		sma_extend(planeChangePrimitiveHandler);
 		break;
 	case MOTION_PRIMITIVE_SMA_EXTENDED:
-		bldc_setSpeed(0, false, true, planeChangePrimitiveHandler);
+		bldc_setSpeed(0, false, BLDC_EBRAKE_COMPLETE_STOP_TIME_MS, planeChangePrimitiveHandler);
 		break;
 	case MOTION_PRIMITIVE_BLDC_STOPPED:
 		if (eventHandler != NULL) {
@@ -87,7 +87,7 @@ bool motionEvent_startInertialActuation(uint16_t bldcSpeed_rpm,
 
 	eventHandler = motionEventHandler;
 
-	bldc_setSpeed(inertialActuationSpeed_rpm, inertialActuationReverse, false,
+	bldc_setSpeed(inertialActuationSpeed_rpm, inertialActuationReverse, 0,
 			inertialActuationPrimitiveHandler);
 
 	return true;
@@ -109,11 +109,11 @@ void inertialActuationPrimitiveHandler(void *p_event_data, uint16_t event_size) 
 			coilCurrentStep.current_mA = inertialActuationBrakeCurrent_mA;
 		}
 		coilCurrentStep.time_ms = inertialActuationBrakeTime_ms;
-		bldc_setSpeed(0, false, false, NULL);
+		bldc_setSpeed(0, false, 0, NULL);
 		mechbrake_actuate(1, &coilCurrentStep, inertialActuationPrimitiveHandler);
 		break;
 	case MOTION_PRIMITIVE_BLDC_TIMEOUT:
-		bldc_setSpeed(0, false, false, NULL);
+		bldc_setSpeed(0, false, 0, NULL);
 		if (eventHandler != NULL) {
 			motionEvent = MOTION_EVENT_INERTIAL_ACTUATION_FAILURE;
 			err_code = app_sched_event_put(&motionEvent, sizeof(motionEvent), eventHandler);
