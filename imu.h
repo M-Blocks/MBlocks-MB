@@ -15,5 +15,6 @@ bool imu_enableMotionDetection(bool enable);
 bool imu_checkForMotion(void);
 void imu_resetMotionFlag(void);
 
+bool imu_initDMP(void);
 
 #endif /* IMU_H_ */

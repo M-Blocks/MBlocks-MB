@@ -517,21 +517,29 @@ int main(void) {
     main_gpioteInit();
 
     nrf_delay_ms(10);
+#if (0)
     bleApp_stackInit();
+#endif
 
     main_gpioInit();
+#if (0)
     led_init();
+#endif
     uart_init();
     twi_master_init();
     pwm_init();
 
     spi_init();
+#if (0)
     power_init();
     commands_init();
+#endif
 
     //
 
+
     main_schedulerInit();
+#if (0)
     bleApp_gapParamsInit();
     bleApp_servicesInit();
     bleApp_connParamsInit();
@@ -568,12 +576,17 @@ int main(void) {
     } else {
     	app_uart_put_string("A4960: Fail\r\n");
     }
+#endif
 
     if (imu_init(MPU6050_I2C_ADDR)) {
     	app_uart_put_string("MPU-6050: OK\r\n");
     } else {
     	app_uart_put_string("MPU-6050: Fail\r\n");
     }
+
+    twi_master_init();
+    imu_initDMP();
+    imu_testDMPLoop();
 
     bootCurrent_mA = power_getChargeCurrent_mA();
     if (bootCurrent_mA < 20) {

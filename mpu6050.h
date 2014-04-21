@@ -122,11 +122,46 @@
 #define MPU6050_FIFO_R_W_REG_ADDR				0X74
 #define MPU6050_WHO_AM_I_REG_ADDR				0X75
 
+/* AUX_VDDIO register (0x00) bit definitions */
+#define MPU6050_OTP_BANK_VLD_POSN				0
+#define MPU6050_OTP_BANK_VLD_MASK				(0x01 << MPU6050_OTP_BANK_VLD_POSN)
+#define MPU6050_XG_OFFS_TC_POSN					1
+#define MPU6050_XG_OFFS_TC_MASK					(0x3F << MPU6050_XG_OFFS_TC_POSN)
+#define MPU6050_AUX_VDDIO_POSN					7
+#define MPU6050_AXU_VDDIO_MASK					(0x01 << MPU6050_AUX_VDDIO_POSN)
+
+/* YG_OFFS_TC register (0x01) bit definitions */
+#define MPU6050_YG_OFFS_TC_POSN					1
+#define MPU6050_YG_OFFS_TC_MASK					(0x3F << MPU6050_YG_OFFS_TC_POSN)
+
+/* ZG_OFFS_TC register (0x02) bit definitions */
+#define MPU6050_ZG_OFFS_TC_POSN					1
+#define MPU6050_ZG_OFFS_TC_MASK					(0x3F << MPU6050_ZG_OFFS_TC_POSN)
+
 /* CONFIG register (0x1A) bit definitions */
 #define MPU6050_DLPF_CFG_POSN					0
 #define MPU6050_DLPF_CFG_MASK					(0x07 << MPU6050_DLPF_CFG_POSN)
 #define MPU6050_EXT_SYNC_SET_POSN				3
 #define MPU6050_EXT_SYNC_SET_MASK				(0x07 << MPU6050_EXT_SYNC_SET_POSN)
+
+/* DLPF_CFG field (bits 2:0 of the CONFIG register) definitions */
+#define MPU6050_DLPF_CFG_260HZ_256HZ			0
+#define MPU6050_DLPF_CFG_184HZ_188HZ			1
+#define MPU6050_DLPF_CFG_94HZ_98HZ				2
+#define MPU6050_DLPF_CFG_44HZ_42HZ				3
+#define MPU6050_DLPF_CFG_21HZ_20HZ				4
+#define MPU6050_DLPF_CFG_10HZ_10HZ				5
+#define MPU6050_DLPF_CFG_5HZ_5ZHZ				6
+
+/* EXT_SYNC_SET field (bits 5:3 of the CONFIG register) definitions */
+#define MPU6050_EXT_SYNC_SET_DISABLED			0
+#define MPU6050_EXT_SYNC_SET_TEMP_OUT_L			1
+#define MPU6050_EXT_SYNC_SET_GYRO_XOUT_L		2
+#define MPU6050_EXT_SYNC_SET_GYRO_YOUT_L		3
+#define MPU6050_EXT_SYNC_SET_GYRO_ZOUT_L		4
+#define MPU6050_EXT_SYNC_SET_ACCEL_XOUT_L		5
+#define MPU6050_EXT_SYNC_SET_ACCEL_YOUT_L		6
+#define MPU6050_EXT_SYNC_SET_ACCEL_ZOUT_L		7
 
 /* GYRO_CONFIG register (0x1B) bit definitions */
 #define MPU6050_FS_SEL_POSN						3
@@ -137,6 +172,12 @@
 #define MPU6050_YG_ST_MASK						(0x01 << MPU6050_YG_ST_POSN)
 #define MPU6050_XG_ST_POSN						7
 #define MPU6050_XG_ST_MASK						(0x01 << MPU6050_XG_ST_POSN)
+
+/* FS_SEL field (bits 1:0 of the GYRO_CONFIG register) definitions */
+#define MPU6050_FS_SEL_250DEGPERSEC				0
+#define MPU6050_FS_SEL_500DEGPERSEC				1
+#define MPU6050_FS_SEL_1000DEGPERSEC			2
+#define MPU6050_FS_SEL_2000DEGPERSEC			3
 
 /* ACCEL_CONFIG register (0x1C) bit definitions */
 #define MPU6050_ACCEL_HPF_POSN					0
@@ -149,6 +190,20 @@
 #define MPU6050_YA_ST_MASK						(0x01 << MPU6050_YA_ST_POSN)
 #define MPU6050_XA_ST_POSN						7
 #define MPU6050_XA_ST_MASK						(0x01 << MPU6050_XA_ST_POSN)
+
+/* AFS_SEL field (bits 4:3 of the ACCEL_CONFIG register) definitions */
+#define MPU6050_AFS_SEL_2G						0
+#define MPU6050_AFS_SEL_4G						1
+#define MPU6050_AFS_SEL_8G						2
+#define MPU6050_AFS_SEL_16G						3
+
+/* ACCEL_HPF field (bits 2:0 of the ACCEL_CONFIG register) definitions */
+#define MPU6050_ACCEL_HPF_RESET					0
+#define MPU6050_ACCEL_HPF_5HZ					1
+#define MPU6050_ACCEL_HPF_2_5HZ					2
+#define MPU6050_ACCEL_HPF_1_25HZ				3
+#define MPU6050_ACCEL_HPF_0_63HZ				4
+#define MPU6050_ACCEL_HPF_HOLD					7
 
 /* INT_PIN_CFG register (0x37) bit definitions */
 #define MPU6050_CLKOUT_EN_POSN					0
@@ -254,7 +309,7 @@
 
 /* PWM_MGMT_1 register (0x6B) bit definitions */
 #define MPU6050_CLK_SEL_POSN					0
-#define MPU6050_CLK_SEL_MASK					(0x07 << MPU6050_DEVICE_RESET_POSN)
+#define MPU6050_CLK_SEL_MASK					(0x07 << MPU6050_CLK_SEL_POSN)
 #define MPU6050_TEMP_DIS_POSN					3
 #define MPU6050_TEMP_DIS_MASK					(0x01 << MPU6050_TEMP_DIS_POSN)
 #define MPU6050_CYCLE_POSN						5
@@ -263,6 +318,15 @@
 #define MPU6050_SLEEP_MASK						(0x01 << MPU6050_SLEEP_POSN)
 #define MPU6050_DEVICE_RESET_POSN				7
 #define MPU6050_DEVICE_RESET_MASK				(0x01 << MPU6050_DEVICE_RESET_POSN)
+
+/* CLK_SEL field (bits 2:0 of the PWM_MGMT_1 register) definitions */
+#define MPU6050_CLK_SEL_INTERNAL_8MHZ			0
+#define MPU6050_CLK_SEL_PLL_XGYRO				1
+#define MPU6050_CLK_SEL_PLL_YGYRO				2
+#define MPU6050_CLK_SEL_PLL_ZGYRO				3
+#define MPU6050_CLK_SEL_PLL_EXTERNAL_32KHZ		4
+#define MPU6050_CLK_SEL_PLL_EXTERNAL_19MHZ		5
+#define MPU6050_CLK_SEL_STOPPED					7
 
 /* PWM_MGMT_2 register (0x6C) bit definitions */
 #define MPU6050_STBY_ZG_POSN					0
@@ -292,8 +356,18 @@
 #define MPU6050_WHO_AM_I_POSN					1
 #define MPU6050_WHO_AM_I_MASK					(0x3F << MPU6050_WHO_AM_I_POSN)
 
+/* DMP Memory constants */
+#define MPU6050_DMP_MEMORY_BANKS				8
+#define MPU6050_DMP_MEMORY_BANK_SIZE			256
+#define MPU6050_DMP_MEMORY_CHUNK_SIZE			16
+
 void mpu6050_setAddress(uint8_t address);
 bool mpu6050_writeReg(uint8_t addr, uint8_t data);
-bool mpu6050_readReg(uint8_t addr, uint8_t *data, uint8_t nBytes);
+bool mpu6050_readReg(uint8_t addr, uint8_t *data);
+bool mpu6050_writeBytes(const uint8_t *addrData, uint8_t nBytes);
+bool mpu6050_readBytes(uint8_t addr, uint8_t *data, uint8_t nBytes);
+
+bool mpu6050_setBits(uint8_t addr, uint8_t bitsToSet);
+bool mpu6050_clearBits(uint8_t addr, uint8_t bitsToClear);
 
 #endif /* MPU6050_H_ */

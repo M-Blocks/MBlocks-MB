@@ -836,7 +836,7 @@ void cmdIMURead(const char *args) {
 		return;
 	}
 
-	if (mpu6050_readReg((uint8_t) addr, &data, 1)) {
+	if (mpu6050_readReg((uint8_t)addr, &data)) {
 		snprintf(str, sizeof(str),
 				"Read 0x%02X from IMU register at 0x%02X\r\n", data,
 				(uint8_t) addr);

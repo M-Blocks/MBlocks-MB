@@ -47,7 +47,8 @@ ASSEMBLER_SOURCE_FILES += gcc_startup_$(DEVICESERIES).s
 LDFLAGS += -L"$(GNU_INSTALL_ROOT)/arm-none-eabi/lib/armv6-m"
 LDFLAGS += -L"$(GNU_INSTALL_ROOT)/lib/gcc/arm-none-eabi/$(GNU_VERSION)/armv6-m"
 LDFLAGS += -Xlinker -Map=$(LISTING_DIRECTORY)/$(OUTPUT_FILENAME).map
-LDFLAGS += --specs=nano.specs
+#LDFLAGS += --specs=nano.specs
+LDFLAGS += --specs=nano.specs -lc -u _printf_float
 LDFLAGS += -mcpu=$(CPU) -mthumb -mabi=aapcs -L $(TEMPLATE_PATH) -T$(LINKER_SCRIPT)
 
 LIBFLAGS += -lm

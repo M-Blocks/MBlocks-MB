@@ -25,7 +25,7 @@
 									<listOptionValue builtIn="false" value="NRF51=1"/>
 									<listOptionValue builtIn="false" value="BOARD_NRF6310=1"/>
 									<listOptionValue builtIn="false" value="BLE_DEBUG"/>
-									<listOptionValue builtIn="false" value="ENABLE_BLE_COMMANDS=1"/>
+									<listOptionValue builtIn="false" value="ENABLE_BLE_COMMANDS=0"/>
 								</option>
 								<option id="org.eclipse.cdt.build.core.settings.holder.incpaths.1661044748" name="Include Paths" superClass="org.eclipse.cdt.build.core.settings.holder.incpaths" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB}&quot;"/>
