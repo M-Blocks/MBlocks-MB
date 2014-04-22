@@ -202,7 +202,7 @@ void main_timersStart() {
 
 	/* We have located most timer creation and start function in subroutines
 	 * related to the timer's purpose.  Typically, timers are created and
-	 * started in *_init() functions and stopped in *_deinit() funcations.
+	 * started in *_init() functions and stopped in *_deinit() functions.
 	 * This makes it much easier to stop all relevant timers when entering
 	 * idle or off mode. */
 }
@@ -507,6 +507,7 @@ int main(void) {
 	char str[64];
 	uint8_t strSize;
 	uint16_t bootCurrent_mA;
+	bool mpu6050Initialized, dmpInitialized;
 	bool dbAwakeAfterBoot;
 	bool ledsOnAfterBoot;
 	uint32_t currentTime_rtcTicks;
@@ -517,29 +518,41 @@ int main(void) {
     main_gpioteInit();
 
     nrf_delay_ms(10);
-#if (0)
+#if (1)
     bleApp_stackInit();
 #endif
 
     main_gpioInit();
-#if (0)
+
+    nrf_gpio_pin_set(LED_RED_PIN_NO);
+    nrf_gpio_pin_set(LED_GREEN_PIN_NO);
+    nrf_gpio_pin_set(LED_BLUE_PIN_NO);
+
+    uart_init();
+
+    /* We need to initialize the IMU's DMP before other sub-systems because
+     * it takes long enough that multiple timers can expire during its
+     * initialization, and if too many timers expire, and too many events are
+     * added to the scheduler's queue, the queue will overflow and the nRF will
+     * reset. */
+    twi_master_init();
+    //mpu6050Initialized = imu_init(MPU6050_I2C_ADDR);
+    //dmpInitialized = imu_initDMP();
+
+#if (1)
     led_init();
 #endif
-    uart_init();
-    twi_master_init();
     pwm_init();
-
     spi_init();
-#if (0)
+#if (1)
     power_init();
     commands_init();
 #endif
 
     //
 
-
     main_schedulerInit();
-#if (0)
+#if (1)
     bleApp_gapParamsInit();
     bleApp_servicesInit();
     bleApp_connParamsInit();
@@ -578,15 +591,18 @@ int main(void) {
     }
 #endif
 
-    if (imu_init(MPU6050_I2C_ADDR)) {
+    mpu6050Initialized = imu_init(MPU6050_I2C_ADDR);
+	if (mpu6050Initialized) {
     	app_uart_put_string("MPU-6050: OK\r\n");
     } else {
     	app_uart_put_string("MPU-6050: Fail\r\n");
     }
 
-    twi_master_init();
-    imu_initDMP();
-    imu_testDMPLoop();
+    if (dmpInitialized) {
+    	app_uart_put_string("DMP: OK\r\n");
+    } else {
+    	app_uart_put_string("DMP: Fail\r\n");
+    }
 
     bootCurrent_mA = power_getChargeCurrent_mA();
     if (bootCurrent_mA < 20) {
@@ -745,6 +761,7 @@ void main_powerManage() {
 
 void main_motionCheckTimerHandler(void *context) {
 	static uint32_t lastLEDFlashTime_rtcTicks = 0;
+	bool motionDetected;
 	uint32_t currentTime_rtcTicks;
 	uint32_t elapsedTime_sec;
 
@@ -757,7 +774,7 @@ void main_motionCheckTimerHandler(void *context) {
 		nrf_delay_ms(25);
 	}
 
-	if (imu_checkForMotion()) {
+	if (imu_checkForMotion(&motionDetected) && motionDetected) {
 		app_timer_cnt_get(&lastMotionTime_rtcTicks);
 		motionDetected = true;
 	}

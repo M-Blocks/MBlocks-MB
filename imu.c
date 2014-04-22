@@ -22,53 +22,21 @@
 #include "mpu6050.h"
 #include "imu.h"
 
-#define DEBUG_IMU 0
+#define DEBUG_IMU 					0
+#define ORIGINAL_DMP_CODE			0
 
-#define IMU_FIFO_PACKET_SIZE 42
+#define IMU_FIFO_PACKET_SIZE		42
 
-#if (0)
+#define MPU6050_DMP_CODE_SIZE		1929 // dmpMemory[]
+#define MPU6050_DMP_CONFIG_SIZE		192 // dmpConfig[]
+#define MPU6050_DMP_UPDATES_SIZE	47 // dmpUpdates[]
+
 typedef struct {
-	union {
-		struct data16 {
-			uint16_t quatw;
-			uint8_t reserved0[2];
-			uint16_t quatx;
-			uint8_t reserved0[2];
-			uint16_t quaty;
-			uint8_t reserved0[2];
-			uint16_t quatz;
-			uint8_t reserved0[2];
-			uint16_t gyrox;
-			uint8_t reserved0[2];
-			uint16_t gyroy;
-			uint8_t reserved0[2];
-			uint16_t gyroz;
-			uint16_t accelx;
-			uint16_t accely;
-			uint16_t accelz;
-			uint8_t reserved0[2];
-		};
-		struct data32 {
-			uint32_t quatw;
-			uint32_t quatx;
-			uint32_t quaty;
-			uint32_t quatz;
-			uint32_t gyrox;
-			uint32_t gyroy;
-			uint32_t gyroz;
-			uint32_t accelx;
-			uint32_t accely;
-			uint32_t accelz;
-			uint8_t reserved0[2];
-		};
-		uint8_t raw[];
-	};
-} dmpFIFOPacket_t;
-#endif
-
-#define MPU6050_DMP_CODE_SIZE 1929 // dmpMemory[]
-#define MPU6050_DMP_CONFIG_SIZE 192 // dmpConfig[]
-#define MPU6050_DMP_UPDATES_SIZE 47 // dmpUpdates[]
+	uint8_t bank;
+	uint8_t address;
+	uint8_t size;
+	uint8_t data[];
+} dmpUpdate_t;
 
 static const unsigned char dmpMemory[MPU6050_DMP_CODE_SIZE] = {
     // bank 0, 256 bytes
@@ -252,13 +220,6 @@ static const unsigned char dmpConfig[MPU6050_DMP_CONFIG_SIZE] = {
 };
 
 
-typedef struct {
-	uint8_t bank;
-	uint8_t address;
-	uint8_t size;
-	uint8_t data[];
-} dmpUpdate_t;
-
 static const dmpUpdate_t dmpUpdate0 = {0x01, 0xB2, 0x02, {0xFF, 0xFF}};
 static const dmpUpdate_t dmpUpdate1 = {0x01, 0x90, 0x04, {0x09, 0x23, 0xA1, 0x35}};
 static const dmpUpdate_t dmpUpdate2 = {0x01, 0x6A, 0x02, {0x06, 0x00}};
@@ -277,33 +238,45 @@ static const dmpUpdate_t *dmpUpdates[7] = {
 		&dmpUpdate6
 };
 
-static bool initialized = false;
+const vectorFloat_t cornerVectors[3] = {
+		{0.0f, 0.0f, 1.0f},
+		{0.707107f, 0.707107f, 0.0f},
+		{0.707107f, -0.707107f, 0.0f},
+};
 
+static bool imuInitialized = false;
+static bool dmpInitialized = false;
+
+static bool imu_writeDMPConfigurationSet(const uint8_t *data, uint16_t dataSize);
 
 bool imu_init(uint8_t address) {
 	bool success = true;
-	uint8_t data;
+	uint8_t whoAmI;
 
 	mpu6050_setAddress(address);
 
 	twi_master_init();
 
-	success &= mpu6050_readReg(MPU6050_WHO_AM_I_REG_ADDR, &data);
-	if (!success || (data != address)) {
+	success &= mpu6050_getWhoAmI(&whoAmI);
+	if (!success || (whoAmI != (address >> 1))) {
 		return false;
 	}
 
 	/* Reset the gyro, accelerometer, and temperature signal paths */
-	success &= mpu6050_writeReg(MPU6050_SIGNAL_PATH_RESET_REG_ADDR,
-			(1<<MPU6050_GYRO_RESET_POSN) | (1<<MPU6050_ACCEL_RESET_POSN) | (1<<MPU6050_TEMP_RESET_POSN));
+	success &= mpu6050_resetSignalPaths();
 	/* Perform device reset */
-	success &= mpu6050_writeReg(MPU6050_PWR_MGMT_1_REG_ADDR,
-			(1<<MPU6050_DEVICE_RESET_POSN));
+	success &= mpu6050_reset();
+
+	/* The device reset requires that we re-initialize the DMP */
+	dmpInitialized = false;
+
+	/* Disable all interrupts */
+	success &= mpu6050_writeReg(MPU6050_INT_ENABLE_REG_ADDR, 0x00);
 
 	if (success) {
-		initialized = true;
+		imuInitialized = true;
 	} else {
-		initialized = false;
+		imuInitialized = false;
 	}
 
 	twi_master_deinit();
@@ -311,11 +284,323 @@ bool imu_init(uint8_t address) {
 	return success;
 }
 
+bool imu_initDMP() {
+
+	uint8_t hwRevision;
+	bool otpValid;
+	int8_t xgOffsetTC, ygOffsetTC, zgOffsetTC;
+	uint16_t fifoCount;
+	uint8_t fifoBuffer[128];
+	uint8_t intStatus;
+	bool success = true;
+
+	if (!imuInitialized) {
+		return false;
+	}
+
+	twi_master_init();
+
+#if (DEBUG_IMU == 1)
+	char str[64];
+	app_uart_put_string("Initializing IMU DMP\r\n");
+#endif
+
+	/* Reset the IMU */
+	mpu6050_reset();
+	nrf_delay_ms(30);
+
+	/* Bring the IMU out of sleep mode, which it enters automatically after
+	 * reset. */
+	success &= mpu6050_setSleepEnabled(false);
+
+	/* Read the hardware version from user bank 16, byte 6 */
+	success &= mpu6050_setMemoryBank(0x10, true, true);
+	success &= mpu6050_setMemoryStartAddress(0x06);
+	success &= mpu6050_readMemoryByte(&hwRevision);
+	success &= mpu6050_setMemoryBank(0x00, false, false);
+#if (DEBUG_IMU == 1)
+	snprintf(str, sizeof(str), "IMU hardware revision as per user[16][6] = %02X\r\n", hwRevision);
+	app_uart_put_string(str);
+#endif
+
+	/* Check whether the OTB bank is valid */
+	success &= mpu6050_getOTPBankValid(&otpValid);
+#if (DEBUG_IMU == 1)
+	if (otpValid) {
+		app_uart_put_string("IMU OTP bank is valid\r\n");
+	} else {
+		app_uart_put_string("IMU OPT bank is invalid\r\n");
+	}
+#endif
+
+	/* Read the gyroscope offsets for all three axes */
+	success &= mpu6050_getXGyroOffsetTC(&xgOffsetTC);
+	success &= mpu6050_getYGyroOffsetTC(&ygOffsetTC);
+	success &= mpu6050_getZGyroOffsetTC(&zgOffsetTC);
+#if (DEBUG_IMU == 1)
+	snprintf(str, sizeof(str), "IMU X gyro offset: %d\r\n", xgOffsetTC);
+	app_uart_put_string(str);
+	snprintf(str, sizeof(str), "IMU Y gyro offset: %d\r\n", ygOffsetTC);
+	app_uart_put_string(str);
+	snprintf(str, sizeof(str), "IMU Z gyro offset: %d\r\n", zgOffsetTC);
+	app_uart_put_string(str);
+#endif
+
+	/* Setup weird I2C slave stuff.  The exact purpose of this is unknown. */
+
+	/* Set slave 0 address to 0x7F */
+	success &= mpu6050_writeReg(MPU6050_I2C_SLV0_ADDR_REG_ADDR, 0x7F);
+	/* Disable I2C master mode */
+	success &= mpu6050_clearBits(MPU6050_USER_CTRL_REG_ADDR, (1<<MPU6050_I2C_MST_EN_POSN));
+	/* Set slave 0 address to own address */
+	success &= mpu6050_writeReg(MPU6050_I2C_SLV0_ADDR_REG_ADDR, MPU6050_I2C_ADDR);
+	/* Reset I2C master */
+	success &= mpu6050_resetI2CMaster();
+#if (ORIGINAL_DMP_CODE == 1)
+	nrf_delay_ms(20);
+#endif
+
+	/* */
+	if (mpu6050_writeMemoryBlock(dmpMemory, MPU6050_DMP_CODE_SIZE, 0, 0, true)) {
+#if (DEBUG_IMU == 1)
+		app_uart_put_string("IMU DMP code written and verified\r\n");
+#endif
+		if (imu_writeDMPConfigurationSet(dmpConfig, MPU6050_DMP_CONFIG_SIZE)) {
+#if (DEBUG_IMU == 1)
+			app_uart_put_string("IMU DMP configuration written and verified\r\n");
+#endif
+
+#if (ORIGINAL_DMP_CODE == 1)
+			/* Set clock source to Z-axis gyroscope */
+			success &= mpu6050_setClockSource(MPU6050_CLK_SEL_PLL_ZGYRO);
+#else
+			/* Set the clock source to the internal relaxation oscillator.  We
+			 * do this because after configuring the DMP, we do not want to
+			 * need to keep the gyroscopes on. */
+			success &= mpu6050_setClockSource(MPU6050_CLK_SEL_INTERNAL_8MHZ);
+#endif
+
+#if (ORIGINAL_DMP_CODE == 1)
+			/* Enable the DMP and FIFO overflow interrupts */
+			success &= mpu6050_setBits(MPU6050_INT_ENABLE_REG_ADDR,
+					(1<<MPU6050_DMP_INT_EN_POSN) | (1<<MPU6050_FIFO_OFLOW_EN_POSN));
+#else
+			/* Enable the FIFO overflow interrupt */
+			success &= mpu6050_setBits(MPU6050_INT_ENABLE_REG_ADDR, (1<<MPU6050_FIFO_OFLOW_EN_POSN));
+#endif
+
+			/* Set the sample rate to 200Hz (1kHZ / (4+1) = 200Hz)*/
+			success &= mpu6050_writeReg(MPU6050_SMPLRT_DIV_REG_ADDR, 4);
+
+#if (ORIGINAL_DMP_CODE == 1)
+			/* Set the external frame sync to appear in the LSB of the temperature data*/
+			success &= mpu6050_setExternalFrameSync(MPU6050_EXT_SYNC_SET_TEMP_OUT_L);
+#endif
+
+			/* Set the digital low pass filter's bandwidth (44Hz for the
+			 * accelerometers, 42Hz for the gyroscopes) */
+			success &= mpu6050_setDLPFMode(MPU6050_DLPF_CFG_44HZ_42HZ);
+
+			/* Set the gyroscopes' full-scale range to +/- 2000 deg/sec */
+			success &= mpu6050_setFullScaleGyroRange(MPU6050_FS_SEL_2000DEGPERSEC);
+
+			/* Set the DMP configuration bytes--the rationale behind this is
+			 * unknown. */
+			success &= mpu6050_writeReg(MPU6050_DMP_CFG_1_REG_ADDR, 0x03);
+			success &= mpu6050_writeReg(MPU6050_DMP_CFG_2_REG_ADDR, 0x00);
+
+			/* Clear the OTP bank valid flag */
+			success &= mpu6050_setOTPBankValid(false);
+
+			/* Re-set the gyro offsets from the values read from the same
+			 * registers earlier. */
+			success &= mpu6050_setXGyroOffsetTC(xgOffsetTC);
+			success &= mpu6050_setYGyroOffsetTC(ygOffsetTC);
+			success &= mpu6050_setZGyroOffsetTC(zgOffsetTC);
+
+			success &= mpu6050_writeMemoryBlock(dmpUpdates[0]->data, dmpUpdates[0]->size, dmpUpdates[0]->bank, dmpUpdates[0]->address, true);
+			success &= mpu6050_writeMemoryBlock(dmpUpdates[1]->data, dmpUpdates[1]->size, dmpUpdates[1]->bank, dmpUpdates[1]->address, true);
+
+			success &= mpu6050_resetFIFO();
+
+			success &= mpu6050_getFIFOCount(&fifoCount);
+#if (DEBUG_IMU == 1)
+			snprintf(str, sizeof(str), "IMU FIFO count after FIFO reset: %u\r\n", fifoCount);
+			app_uart_put_string(str);
+#endif
+
+			success &= mpu6050_getFIFOBytes(fifoBuffer, fifoCount);
+
+#if (ORIGINAL_DMP_CODE == 1)
+			success &= mpu6050_writeReg(MPU6050_MOT_THR_REG_ADDR, 2);
+			success &= mpu6050_writeReg(MPU6050_ZRMOT_THR_REG_ADDR, 156);
+			success &= mpu6050_writeReg(MPU6050_MOT_DUR_REG_ADDR, 80);
+			success &= mpu6050_writeReg(MPU6050_ZRMOT_DUR_REG_ADDR, 0);
+#endif
+
+			success &= mpu6050_resetFIFO();
+
+			success &= mpu6050_setFIFOEnabled(true);
+
+			success &= mpu6050_setDMPEnabled(true);
+
+			success &= mpu6050_resetDMP();
+
+			success &= mpu6050_writeMemoryBlock(dmpUpdates[2]->data, dmpUpdates[2]->size, dmpUpdates[2]->bank, dmpUpdates[2]->address, true);
+			success &= mpu6050_writeMemoryBlock(dmpUpdates[3]->data, dmpUpdates[3]->size, dmpUpdates[3]->bank, dmpUpdates[3]->address, true);
+			success &= mpu6050_writeMemoryBlock(dmpUpdates[4]->data, dmpUpdates[4]->size, dmpUpdates[4]->bank, dmpUpdates[4]->address, true);
+
+#if (DEBUG_IMU == 1)
+			app_uart_put_string("IMU waiting for FIFO count > 2\r\n");
+#endif
+			do {
+				success &= mpu6050_getFIFOCount(&fifoCount);
+			} while (fifoCount < 3);
+			success &= mpu6050_getFIFOBytes(fifoBuffer, fifoCount);
+
+#if (DEBUG_IMU == 1)
+			snprintf(str, sizeof(str), "IMU FIFO count after loading updates 3-5: %u\r\n", fifoCount);
+			app_uart_put_string(str);
+#endif
+
+			success &= mpu6050_readReg(MPU6050_INT_STATUS_REG_ADDR, &intStatus);
+#if (DEBUG_IMU == 1)
+			snprintf(str, sizeof(str), "IMU interrupt status: 0x%02x\r\n", intStatus);
+			app_uart_put_string(str);
+#endif
+
+			uint8_t dummyData[2];
+			success &= mpu6050_readMemoryBlock(dummyData, dmpUpdates[5]->size, dmpUpdates[5]->bank, dmpUpdates[5]->address);
+
+#if (DEBUG_IMU == 1)
+			app_uart_put_string("IMU waiting for FIFO count > 2\r\n");
+#endif
+			do {
+				success &= mpu6050_getFIFOCount(&fifoCount);
+			} while (fifoCount < 3);
+			success &= mpu6050_getFIFOBytes(fifoBuffer, fifoCount);
+
+#if (DEBUG_IMU == 1)
+			snprintf(str, sizeof(str), "IMU FIFO count after reading(?) update 6: %u\r\n", fifoCount);
+			app_uart_put_string(str);
+#endif
+
+			success &= mpu6050_readReg(MPU6050_INT_STATUS_REG_ADDR, &intStatus);
+#if (DEBUG_IMU == 1)
+			snprintf(str, sizeof(str), "IMU interrupt status: 0x%02x\r\n", intStatus);
+			app_uart_put_string(str);
+#endif
+
+			success &= mpu6050_writeMemoryBlock(dmpUpdates[6]->data, dmpUpdates[6]->size, dmpUpdates[6]->bank, dmpUpdates[6]->address, true);
+
+			/* Disable DMP for now, it can be re-enabled later */
+			success &= mpu6050_setDMPEnabled(false);
+
+			success &= mpu6050_resetFIFO();
+			success &= mpu6050_readReg(MPU6050_INT_STATUS_REG_ADDR, &intStatus);
+
+		} else {
+			success = false;
+#if (DEBUG_IMU == 1)
+			app_uart_put_string("IMP DMP configuration verification failed\r\n");
+#endif
+		}
+
+	} else {
+		success = false;
+#if (DEBUG_IMU == 1)
+		app_uart_put_string("IMP DMP code verification failed\r\n");
+#endif
+	}
+
+#if (DEBUG_IMU == 1)
+	if (success) {
+		app_uart_put_string("IMU DMP initialization complete\r\n");
+	} else {
+		app_uart_put_string("IMU DMP initialization failed\r\n");
+	}
+#endif
+
+	if (success) {
+		dmpInitialized = true;
+	} else {
+		dmpInitialized = false;
+	}
+
+	twi_master_deinit();
+
+	return success;
+}
+
+#if (0)
 bool imu_enableMotionDetection(bool enable) {
 	uint8_t data;
 	bool success = true;
 
-	if (!initialized) {
+	if (!imuInitialized) {
+		return false;
+	}
+
+	twi_master_init();
+
+	/* Clear the sleep and cycle bits in order to keep the IMU awake while we
+	 * configure motion detection. */
+	mpu6050_setSleepEnabled(false);
+	mpu6050_setCycleEnabled(false);
+
+	/* Bring all three accelerometers out of standby */
+	success &= mpu6050_clearBits(MPU6050_PWR_MGMT_2_REG_ADDR,
+			(1<<MPU6050_STBY_XA_POSN) | (1<<MPU6050_STBY_YA_POSN) |	(1<<MPU6050_STBY_ZA_POSN));
+
+	/* Set the accelerometer full-scale value to +/- 2g */
+	//success &= mpu6050_setFullScaleAccelRange(MPU6050_AFS_SEL_2G);
+
+	/* Reset the accelerometers' digital high pass filter */
+	success &= mpu6050_setAccelHPFMode(MPU6050_ACCEL_HPF_RESET);
+
+	/* Set the digital low-pass filter to 260 Hz for the accelerometers */
+	success &= mpu6050_setDLPFMode(MPU6050_DLPF_CFG_260HZ_256HZ);
+
+	/* Enable the motion detection interrupt */
+	success &= mpu6050_setBits(MPU6050_INT_ENABLE_REG_ADDR, (1<<MPU6050_MOT_EN_POSN));
+
+	/* Set the motion detection duration threshold to 1 sample */
+	success &= mpu6050_writeReg(MPU6050_MOT_DUR_REG_ADDR, 0x01);
+
+	/* Set the motion threshold in terms of LSBs, where 1 LSB is 32mg. */
+	success &= mpu6050_writeReg(MPU6050_MOT_THR_REG_ADDR, 20);
+
+	/* Accumulate some accelerometer samples so that we have a reference value
+	 * against which to compare when sensing motion. */
+	delay_ms(5);
+
+	/* Set the accelerometers' digital high pass filter to hold its current
+	 * sample.  All future output samples will be the difference between the
+	 * input sample and the held sample. Leaving the accelerometer full scale
+	 * value unchanged. */
+	success &= mpu6050_setAccelHPFMode(MPU6050_ACCEL_HPF_HOLD);
+
+	/* Configure the wake-up frequency to 1.25Hz */
+	success &= mpu6050_setWakeupFrequency(MPU6050_LP_WAKE_CTRL_5HZ);
+
+	/* Set the CYCLE bit so that the IMU goes to sleep and routinely wakes up
+	 * to sample the accelerometers and determine whether motion has occurred.
+	 */
+	success &= mpu6050_setCycleEnabled(true);
+
+	/* Clear any pending interrupt flag */
+	success &= mpu6050_readReg(MPU6050_INT_STATUS_REG_ADDR, &data);
+
+	twi_master_deinit();
+
+	return success;
+}
+#else
+bool imu_enableMotionDetection(bool enable) {
+	uint8_t data;
+	bool success = true;
+
+	if (!imuInitialized) {
 		return false;
 	}
 
@@ -381,663 +666,178 @@ bool imu_enableMotionDetection(bool enable) {
 
 	return success;
 }
+#endif
 
-bool imu_checkForMotion() {
-	uint8_t data;
-	bool motion = false;
+bool imu_enableDMP() {
+	bool success = true;
 
-	if (!initialized) {
+	if (!(imuInitialized && dmpInitialized)) {
 		return false;
 	}
 
 	twi_master_init();
 
-	mpu6050_readReg(MPU6050_INT_STATUS_REG_ADDR, &data);
+	/* Disable cycle mode in which the IMU sleeps for large periods of time and
+	 * periodically wakes up to take a quick reading.  While the DMP is enabled,
+	 * the accelerometer needs to always be on. */
+	success &= mpu6050_setCycleEnabled(false);
+
+	/* Using one of the gyroscopes as the clock source instead of the internal
+	 * 8MHz relaxation oscillator leads to increased accuracy at the expense of
+	 * power. */
+	success &= mpu6050_setClockSource(MPU6050_CLK_SEL_PLL_ZGYRO);
+
+	/* Bring all accelerometers and gyros out of standby mode */
+	success &= mpu6050_clearBits(MPU6050_PWR_MGMT_2_REG_ADDR,
+			(1<<MPU6050_STBY_XA_POSN) | (1<<MPU6050_STBY_YA_POSN) | (1<<MPU6050_STBY_ZA_POSN) |
+			(1<<MPU6050_STBY_XG_POSN) | (1<<MPU6050_STBY_YG_POSN) | (1<<MPU6050_STBY_ZG_POSN));
+
+	/* Enable the FIFO overflow interrupt */
+	success &= mpu6050_setBits(MPU6050_INT_ENABLE_REG_ADDR, (1<<MPU6050_FIFO_OFLOW_EN_POSN));
+
+	/* Reset the FIFO which may be holding old DMP data */
+	success &= mpu6050_resetFIFO();
+
+	/* Start the DMP running */
+	success &= mpu6050_setDMPEnabled(true);
+
+	twi_master_deinit();
+
+	return success;
+}
+
+bool imu_enableSleepMode() {
+	uint8_t data;
+	bool success = true;
+
+	if (!imuInitialized) {
+		return false;
+	}
+
+	twi_master_init();
+
+	/* Stop the DMP running */
+	success &= mpu6050_setDMPEnabled(false);
+
+	/* Reset the FIFO to remove old DMP data */
+	success &= mpu6050_resetFIFO();
+
+	/* Disable all interrupts */
+	success &= mpu6050_writeReg(MPU6050_INT_ENABLE_REG_ADDR, 0x00);
+
+	/* Clear any pending interrupt flag by reading the flag register */
+	success &= mpu6050_readReg(MPU6050_INT_STATUS_REG_ADDR, &data);
+
+	/* Return to using the internal 8MHz relaxation oscillator so that we can
+	 * disable the gyroscopes (one of which may have been supplying the
+	 * clock). */
+	success &= mpu6050_setClockSource(MPU6050_CLK_SEL_INTERNAL_8MHZ);
+
+	/* Place all accelerometers and gyros into standby mode */
+	success &= mpu6050_setBits(MPU6050_PWR_MGMT_2_REG_ADDR,
+			(1<<MPU6050_STBY_XA_POSN) | (1<<MPU6050_STBY_YA_POSN) | (1<<MPU6050_STBY_ZA_POSN) |
+			(1<<MPU6050_STBY_XG_POSN) | (1<<MPU6050_STBY_YG_POSN) | (1<<MPU6050_STBY_ZG_POSN));
+
+	/* Disable cycle mode and place device into sleep */
+	success &= mpu6050_setCycleEnabled(false);
+	success &= mpu6050_setSleepEnabled(true);
+
+	twi_master_deinit();
+
+	return success;
+}
+
+bool imu_checkForMotion(bool *motionDetected) {
+	uint8_t data;
+	bool success;
+
+	if (!imuInitialized) {
+		return false;
+	}
+
+	twi_master_init();
+
+	success = mpu6050_readReg(MPU6050_INT_STATUS_REG_ADDR, &data);
 	if (data & MPU6050_MOT_INT_MASK) {
-		motion = true;
+		*motionDetected = true;
+	} else {
+		*motionDetected = false;
 	}
 
 	twi_master_deinit();
-	return motion;
+	return success;
 }
 
-void imu_resetMotionFlag() {
-	uint8_t data;
+bool imu_getLatestFIFOPacket(uint8_t *packet) {
+	bool success = true;
+	bool dmpEnabled, fifoEnabled;
+	uint16_t fifoCount;
+	uint8_t intStatus;
 
-	if (!initialized) {
-		return;
+
+	if (!(imuInitialized && dmpInitialized)) {
+		return false;
 	}
 
 	twi_master_init();
-	mpu6050_readReg(MPU6050_INT_STATUS_REG_ADDR, &data);
-	twi_master_deinit();
-}
 
-bool imu_reset() {
-	return mpu6050_setBits(MPU6050_PWR_MGMT_1_REG_ADDR, (1<<MPU6050_DEVICE_RESET_POSN));
-}
-
-bool imu_resetDMP() {
-	return mpu6050_setBits(MPU6050_USER_CTRL_REG_ADDR, (1<<MPU6050_DMP_RESET_POSN));
-}
-
-bool imu_resetFIFO() {
-	return mpu6050_setBits(MPU6050_USER_CTRL_REG_ADDR, (1<<MPU6050_FIFO_RESET_POSN));
-}
-
-bool imu_resetI2CMaster() {
-	return mpu6050_setBits(MPU6050_USER_CTRL_REG_ADDR, (1<<MPU6050_I2C_MST_RESET_POSN));
-}
-
-bool imu_getFIFOEnabled(bool *fifoEnabled) {
-	uint8_t reg;
-
-	if (!mpu6050_readReg(MPU6050_USER_CTRL_REG_ADDR, &reg)) {
+	/* Return indicating failure if the DMP is not running or the FIFO is not
+	 * enabled. */
+	success &= mpu6050_getDMPEnabled(&dmpEnabled);
+	success &= mpu6050_getFIFOEnabled(&fifoEnabled);
+	if (!success || !dmpEnabled || !fifoEnabled) {
 		return false;
 	}
 
-	if (reg & (1<<MPU6050_FIFO_EN_POSN)) {
-		*fifoEnabled = true;
-	} else {
-		*fifoEnabled = false;
-	}
+	/* Read the interrupt flags and the number of bytes in the FIFO so that we
+	 * can check for FIFO overflow. */
+	success &= mpu6050_readReg(MPU6050_INT_STATUS_REG_ADDR, &intStatus);
+	success &= mpu6050_getFIFOCount(&fifoCount);
 
-	return true;
-}
-
-bool imu_setFIFOEnabled(bool fifoEnabled) {
-	if (fifoEnabled) {
-		return mpu6050_setBits(MPU6050_USER_CTRL_REG_ADDR, (1<<MPU6050_FIFO_EN_POSN));
-	} else {
-		return mpu6050_clearBits(MPU6050_USER_CTRL_REG_ADDR, (1<<MPU6050_FIFO_EN_POSN));
-	}
-}
-
-bool imu_getDMPEnabled(bool *dmpEnabled) {
-	uint8_t reg;
-
-	if (!mpu6050_readReg(MPU6050_USER_CTRL_REG_ADDR, &reg)) {
+	/* If we fail to read the interrupt status register or the number of bytes
+	 * in the FIFO, we return failure without providing the caller with the
+	 * newest packet. */
+	if (!success) {
 		return false;
 	}
 
-	if (reg & (1<<MPU6050_DMP_EN_POSN)) {
-		*dmpEnabled = true;
-	} else {
-		*dmpEnabled = false;
+	/* If the FIFO has overflowed, reset it */
+	if ((intStatus & (1<<MPU6050_FIFO_OFLOW_INT_POSN)) || (fifoCount >= 1024)) {
+		mpu6050_resetFIFO();
+		fifoCount = 0;
 	}
 
-	return true;
-}
-
-bool imu_setDMPEnabled(bool dmpEnabled) {
-	if (dmpEnabled) {
-		return mpu6050_setBits(MPU6050_USER_CTRL_REG_ADDR, (1<<MPU6050_DMP_EN_POSN));
-	} else {
-		return mpu6050_clearBits(MPU6050_USER_CTRL_REG_ADDR, (1<<MPU6050_DMP_EN_POSN));
-	}
-}
-
-bool imu_setClockSource(uint8_t clockSource) {
-	uint8_t reg;
-	bool success = true;
-
-	clockSource <<= MPU6050_CLK_SEL_POSN;
-	clockSource &= MPU6050_CLK_SEL_MASK;
-
-	success &= mpu6050_readReg(MPU6050_PWR_MGMT_1_REG_ADDR, &reg);
-	reg &= ~(MPU6050_CLK_SEL_MASK);
-	reg |= clockSource;
-	success &= mpu6050_writeReg(MPU6050_PWR_MGMT_1_REG_ADDR, reg);
-
-	return success;
-}
-
-bool imu_setExternalFrameSync(uint8_t externalSync) {
-	uint8_t reg;
-	bool success = true;
-
-	externalSync <<= MPU6050_EXT_SYNC_SET_POSN;
-	externalSync &= MPU6050_EXT_SYNC_SET_MASK;
-
-	success &= mpu6050_readReg(MPU6050_CONFIG_REG_ADDR, &reg);
-	reg &= ~(MPU6050_EXT_SYNC_SET_MASK);
-	reg |= externalSync;
-	success &= mpu6050_writeReg(MPU6050_CONFIG_REG_ADDR, reg);
-
-	return success;
-}
-
-bool imu_setDLPFMode(uint8_t dlpfMode) {
-	uint8_t reg;
-	bool success = true;
-
-	dlpfMode <<= MPU6050_DLPF_CFG_POSN;
-	dlpfMode &= MPU6050_DLPF_CFG_MASK;
-
-	success &= mpu6050_readReg(MPU6050_CONFIG_REG_ADDR, &reg);
-	reg &= ~(MPU6050_DLPF_CFG_MASK);
-	reg |= dlpfMode;
-	success &= mpu6050_writeReg(MPU6050_CONFIG_REG_ADDR, reg);
-
-	return success;
-}
-
-bool imu_setFullScaleGyroRange(uint8_t fsGyroRange) {
-	uint8_t reg;
-	bool success = true;
-
-	fsGyroRange <<= MPU6050_FS_SEL_POSN;
-	fsGyroRange &= MPU6050_FS_SEL_MASK;
-
-	success &= mpu6050_readReg(MPU6050_GYRO_CONFIG_REG_ADDR, &reg);
-	reg &= ~(MPU6050_FS_SEL_MASK);
-	reg |= fsGyroRange;
-	success |= mpu6050_writeReg(MPU6050_GYRO_CONFIG_REG_ADDR, reg);
-
-	return success;
-}
-
-bool imu_getOTPBankValid(bool *otpBankValid) {
-	uint8_t reg;
-	bool success;
-
-	success = mpu6050_readReg(MPU6050_AUX_VDDIO_REG_ADDR, &reg);
-	if (reg & (1<<MPU6050_OTP_BANK_VLD_POSN)) {
-		*otpBankValid = true;
-	} else {
-		*otpBankValid = false;
+	/* Wait until the FIFO contains at least a single complete packet. */
+	while (fifoCount < IMU_FIFO_PACKET_SIZE) {
+		/* If we fail to read the number of bytes in the FIFO, return false
+		 * without providing the caller with the most recent FIFO packet. */
+		if (!mpu6050_getFIFOCount(&fifoCount)) {
+			return false;
+		}
 	}
 
-	return success;
-}
-
-bool imu_setOTPBankValid(bool otpBankValid) {
-	if (otpBankValid) {
-		return mpu6050_setBits(MPU6050_AUX_VDDIO_REG_ADDR, (1<<MPU6050_OTP_BANK_VLD_POSN));
-	} else {
-		return mpu6050_clearBits(MPU6050_AUX_VDDIO_REG_ADDR, (1<<MPU6050_OTP_BANK_VLD_POSN));
-	}
-}
-
-bool imu_getXGyroOffsetTC(int8_t *offset) {
-	uint8_t data;
-	bool success;
-
-	success = mpu6050_readReg(MPU6050_AUX_VDDIO_REG_ADDR, &data);
-	data &= MPU6050_XG_OFFS_TC_MASK;
-	*offset = data >> MPU6050_XG_OFFS_TC_POSN;
-
-	return success;
-}
-
-bool imu_setXGyroOffsetTC(int8_t offset) {
-	uint8_t data;
-
-	data = offset << MPU6050_XG_OFFS_TC_POSN;
-	data &= MPU6050_XG_OFFS_TC_MASK;
-
-	return mpu6050_writeReg(MPU6050_AUX_VDDIO_REG_ADDR, data);
-}
-
-bool imu_getYGyroOffsetTC(int8_t *offset) {
-	uint8_t data;
-	bool success;
-
-	success = mpu6050_readReg(MPU6050_YG_OFFS_TC_REG_ADDR, &data);
-	data &= MPU6050_YG_OFFS_TC_MASK;
-	*offset = data >> MPU6050_YG_OFFS_TC_POSN;
-
-	return success;
-}
-
-bool imu_setYGyroOffsetTC(int8_t offset) {
-	uint8_t data;
-
-	data = offset << MPU6050_YG_OFFS_TC_POSN;
-	data &= MPU6050_YG_OFFS_TC_MASK;
-
-	return mpu6050_writeReg(MPU6050_YG_OFFS_TC_REG_ADDR, data);
-}
-
-bool imu_getZGyroOffsetTC(int8_t *offset) {
-	uint8_t data;
-	bool success;
-
-	success = mpu6050_readReg(MPU6050_ZG_OFFS_TC_REG_ADDR, &data);
-	data &= MPU6050_ZG_OFFS_TC_MASK;
-	*offset = data >> MPU6050_ZG_OFFS_TC_POSN;
-
-	return success;
-}
-
-bool imu_setZGyroOffsetTC(int8_t offset) {
-	uint8_t data;
-
-	data = offset << MPU6050_ZG_OFFS_TC_POSN;
-	data &= MPU6050_ZG_OFFS_TC_MASK;
-
-	return mpu6050_writeReg(MPU6050_ZG_OFFS_TC_REG_ADDR, data);
-}
-
-bool imu_setSleepEnabled(bool sleepEnabled) {
-	if (sleepEnabled) {
-		return mpu6050_setBits(MPU6050_PWR_MGMT_1_REG_ADDR, (1<<MPU6050_SLEEP_POSN));
-	} else {
-		return mpu6050_clearBits(MPU6050_PWR_MGMT_1_REG_ADDR, (1<<MPU6050_SLEEP_POSN));
-	}
-}
-
-bool imu_getFIFOCount(uint16_t *fifoCount) {
-	bool success;
-	uint8_t data[2];
-
-	success = mpu6050_readBytes(MPU6050_FIFO_COUNTH_REG_ADDR, data, 2);
-	*fifoCount = (((uint16_t)data[0]) << 8 | (uint16_t)data[1]);
-
-	return success;
-}
-
-bool imu_getFIFOBytes(uint8_t *fifoBuffer, uint16_t fifoCount) {
-	if (fifoCount == 0) {
-		return true;
-	}
-
-	return mpu6050_readBytes(MPU6050_FIFO_R_W_REG_ADDR, fifoBuffer, fifoCount);
-}
-
-bool imu_setMemoryBank(uint8_t bank, bool prefetchEnabled, bool userBank) {
-    bank &= 0x1F;
-
-    if (userBank) {
-    	bank |= 0x20;
-    }
-
-    if (prefetchEnabled) {
-    	bank |= 0x40;
-    }
-
-    return mpu6050_writeReg(MPU6050_BANK_SEL_REG_ADDR, bank);
-}
-
-bool imu_setMemoryStartAddress(uint8_t address) {
-	return mpu6050_writeReg(MPU6050_MEM_START_ADDR_REG_ADDR, address);
-}
-
-bool imu_readMemoryByte(uint8_t *data) {
-	return mpu6050_readReg(MPU6050_MEM_R_W_REG_ADDR, data);
-}
-
-bool imu_writeMemoryByte(uint8_t data) {
-	return mpu6050_writeReg(MPU6050_MEM_R_W_REG_ADDR, data);
-}
-
-bool imu_readMemoryBlock(uint8_t *data, uint16_t dataSize, uint8_t bank, uint8_t address) {
-	bool success = true;
-	uint8_t chunkSize;
-	uint16_t i;
-
-	imu_setMemoryBank(bank, false, false);
-    imu_setMemoryStartAddress(address);
-
-    for (i = 0; i < dataSize;) {
-        // determine correct chunk size according to bank position and data size
-        chunkSize = MPU6050_DMP_MEMORY_CHUNK_SIZE;
-
-        // make sure we don't go past the data size
-        if (i + chunkSize > dataSize) {
-        	chunkSize = dataSize - i;
-        }
-
-        // make sure this chunk doesn't go past the bank boundary (256 bytes)
-        if (chunkSize > 256 - address) {
-        	chunkSize = 256 - address;
-        }
-
-        // read the chunk of data as specified
-        success &= mpu6050_readBytes(MPU6050_MEM_R_W_REG_ADDR, data + i, chunkSize);
-
-        // increase byte index by [chunkSize]
-        i += chunkSize;
-
-        // uint8_t automatically wraps to 0 at 256
-        address += chunkSize;
-
-        // if we aren't done, update bank (if necessary) and address
-        if (i < dataSize) {
-            if (address == 0) {
-            	bank++;
-            }
-            success &= imu_setMemoryBank(bank, false, false);
-            success &= imu_setMemoryStartAddress(address);
-        }
-    }
-
-    return success;
-}
-
-bool imu_writeMemoryBlock(const uint8_t *data, uint16_t dataSize, uint8_t bank, uint8_t address, bool verify) {
-	bool success = true;
-    uint8_t chunkSize;
-    uint16_t i;
-    uint8_t progBuffer[1+MPU6050_DMP_MEMORY_CHUNK_SIZE];
-    uint8_t verifyBuffer[MPU6050_DMP_MEMORY_CHUNK_SIZE];
-
-    success &= imu_setMemoryBank(bank, false, false);
-    success &= imu_setMemoryStartAddress(address);
-
-    for (i = 0; i < dataSize;) {
-        // determine correct chunk size according to bank position and data size
-        chunkSize = MPU6050_DMP_MEMORY_CHUNK_SIZE;
-
-        // make sure we don't go past the data size
-        if (i + chunkSize > dataSize) {
-        	chunkSize = dataSize - i;
-        }
-
-        // make sure this chunk doesn't go past the bank boundary (256 bytes)
-        if (chunkSize > 256 - address) {
-        	chunkSize = 256 - address;
-        }
-
-        progBuffer[0] = MPU6050_MEM_R_W_REG_ADDR;
-        memcpy(&progBuffer[1], data + i, chunkSize);
-        mpu6050_writeBytes(progBuffer, chunkSize + 1);
-
-        if (verify) {
-        	success &= imu_setMemoryBank(bank, false, false);
-        	success &= imu_setMemoryStartAddress(address);
-        	success &= mpu6050_readBytes(MPU6050_MEM_R_W_REG_ADDR, verifyBuffer, chunkSize);
-            if (memcmp(&progBuffer[1], verifyBuffer, chunkSize) != 0) {
-                success = false;
-            }
-        }
-
-        // increase byte index by [chunkSize]
-        i += chunkSize;
-
-        // uint8_t automatically wraps to 0 at 256
-        address += chunkSize;
-
-        // if we aren't done, update bank (if necessary) and address
-        if (i < dataSize) {
-            if (address == 0) {
-            	bank++;
-            }
-            success &= imu_setMemoryBank(bank, false, false);
-            success &= imu_setMemoryStartAddress(address);
-        }
-    }
-    return success;
-}
-
-bool imu_writeDMPConfigurationSet(const uint8_t *data, uint16_t dataSize) {
-    uint8_t *progBuffer, special;
-    uint16_t i;
-    uint8_t bank, offset, length;
-    bool success = true;
-
-    // config set data is a long string of blocks, each with the following structure:
-    // {bank} {offset} {length} {byte[0], byte[1], ..., byte[length-1] | special}
-    for (i = 0; i < dataSize;) {
-		bank = data[i++];
-		offset = data[i++];
-		length = data[i++];
-
-        // write data or perform special action
-        if (length > 0) {
-            // regular block of data to write
-            progBuffer = (uint8_t *)data + i;
-            success &= imu_writeMemoryBlock(progBuffer, length, bank, offset, true);
-            i += length;
-        } else {
-            // special instruction
-            // NOTE: this kind of behavior (what and when to do certain things)
-            // is totally undocumented. This code is in here based on observed
-            // behavior only, and exactly why (or even whether) it has to be here
-            // is anybody's guess for now.
-
-            special = data[i++];
-            if (special == 0x01) {
-                // enable DMP-related interrupts
-            	success &= mpu6050_writeReg(MPU6050_INT_ENABLE_REG_ADDR,
-            			(1<<MPU6050_ZMOT_EN_POSN) | (1<<MPU6050_FIFO_OFLOW_EN_POSN) | (1<<MPU6050_DMP_INT_EN_POSN));
-            } else {
-                success = false;
-            }
-        }
-    }
-
-    return success;
-}
-
-
-bool imu_initDMP() {
-	char str[64];
-	uint8_t hwRevision;
-	bool otpValid;
-	int8_t xgOffsetTC, ygOffsetTC, zgOffsetTC;
-	uint16_t fifoCount;
-	uint8_t fifoBuffer[128];
-	uint8_t intStatus;
-	bool success = true;
-
-#if (DEBUG_IMU == 1)
-	app_uart_put_string("Initializing IMU DMP\r\n");
-#endif
-
-	/* Reset the IMU */
-	imu_reset();
-	nrf_delay_ms(30);
-
-	/* Bring the IMU out of sleep mode, which it enters automatically after
-	 * reset. */
-	success &= imu_setSleepEnabled(false);
-
-	/* Read the hardware version from user bank 16, byte 6 */
-	success &= imu_setMemoryBank(0x10, true, true);
-	success &= imu_setMemoryStartAddress(0x06);
-	success &= imu_readMemoryByte(&hwRevision);
-	success &= imu_setMemoryBank(0x00, false, false);
-#if (DEBUG_IMU == 1)
-	snprintf(str, sizeof(str), "IMU hardware revision as per user[16][6] = %02X\r\n", hwRevision);
-	app_uart_put_string(str);
-#endif
-
-	/* Check whether the OTB bank is valid */
-	success &= imu_getOTPBankValid(&otpValid);
-#if (DEBUG_IMU == 1)
-	if (otpValid) {
-		app_uart_put_string("IMU OTP bank is valid\r\n");
-	} else {
-		app_uart_put_string("IMU OPT bank is invalid\r\n");
-	}
-#endif
-
-	/* Read the gyroscope offsets for all three axes */
-	success &= imu_getXGyroOffsetTC(&xgOffsetTC);
-	success &= imu_getYGyroOffsetTC(&ygOffsetTC);
-	success &= imu_getZGyroOffsetTC(&zgOffsetTC);
-	snprintf(str, sizeof(str), "IMU X gyro offset: %d\r\n", xgOffsetTC);
-	app_uart_put_string(str);
-	snprintf(str, sizeof(str), "IMU Y gyro offset: %d\r\n", ygOffsetTC);
-	app_uart_put_string(str);
-	snprintf(str, sizeof(str), "IMU Z gyro offset: %d\r\n", zgOffsetTC);
-	app_uart_put_string(str);
-
-	/* Setup weird I2C slave stuff.  The exact purpose of this is unknown. */
-
-	/* Set slave 0 address to 0x7F */
-	success &= mpu6050_writeReg(MPU6050_I2C_SLV0_ADDR_REG_ADDR, 0x7F);
-	/* Disable I2C master mode */
-	success &= mpu6050_clearBits(MPU6050_USER_CTRL_REG_ADDR, (1<<MPU6050_I2C_MST_EN_POSN));
-	/* Set slave 0 address to own address */
-	success &= mpu6050_writeReg(MPU6050_I2C_SLV0_ADDR_REG_ADDR, MPU6050_I2C_ADDR);
-	/* Reset I2C master */
-	success &= imu_resetI2CMaster();
-	nrf_delay_ms(20);
-
-	/* */
-	if (imu_writeMemoryBlock(dmpMemory, MPU6050_DMP_CODE_SIZE, 0, 0, true)) {
-#if (DEBUG_IMU == 1)
-		app_uart_put_string("IMU DMP code written and verified\r\n");
-#endif
-		if (imu_writeDMPConfigurationSet(dmpConfig, MPU6050_DMP_CONFIG_SIZE)) {
-#if (DEBUG_IMU == 1)
-			app_uart_put_string("IMU DMP configuration written and verified\r\n");
-#endif
-
-			/* Set clock source to Z-axis gyroscope */
-			success &= imu_setClockSource(MPU6050_CLK_SEL_PLL_ZGYRO);
-
-			/* Enable only the DMP and FIFO overflow interrupts */
-			success &= mpu6050_writeReg(MPU6050_INT_ENABLE_REG_ADDR,
-					(1<<MPU6050_DMP_INT_EN_POSN) | (1<<MPU6050_FIFO_OFLOW_EN_POSN));
-
-			/* Set the sample rate to 200Hz (1kHZ / (4+1) = 200Hz)*/
-			success &= mpu6050_writeReg(MPU6050_SMPLRT_DIV_REG_ADDR, 4);
-
-			/* Set the external frame sync to appear in the LSB of the temperature data*/
-			success &= imu_setExternalFrameSync(MPU6050_EXT_SYNC_SET_TEMP_OUT_L);
-
-			/* Set the digital low pass filter's bandwidth (44Hz for the
-			 * accelerometers, 42Hz for the gyroscopes) */
-			success &= imu_setDLPFMode(MPU6050_DLPF_CFG_44HZ_42HZ);
-
-			/* Set the gyroscopes' full-scale range to +/- 2000 deg/sec */
-			success &= imu_setFullScaleGyroRange(MPU6050_FS_SEL_2000DEGPERSEC);
-
-			/* Set the DMP configuration bytes--the rationale behind this is
-			 * unknown. */
-			success &= mpu6050_writeReg(MPU6050_DMP_CFG_1_REG_ADDR, 0x03);
-			success &= mpu6050_writeReg(MPU6050_DMP_CFG_2_REG_ADDR, 0x00);
-
-			/* Clear the OTP bank valid flag */
-			success &= imu_setOTPBankValid(false);
-
-			/* Re-set the gyro offsets from the values read from the same
-			 * registers earlier. */
-			success &= imu_setXGyroOffsetTC(xgOffsetTC);
-			success &= imu_setYGyroOffsetTC(ygOffsetTC);
-			success &= imu_setZGyroOffsetTC(zgOffsetTC);
-
-			success &= imu_writeMemoryBlock(dmpUpdates[0]->data, dmpUpdates[0]->size, dmpUpdates[0]->bank, dmpUpdates[0]->address, true);
-			success &= imu_writeMemoryBlock(dmpUpdates[1]->data, dmpUpdates[1]->size, dmpUpdates[1]->bank, dmpUpdates[1]->address, true);
-
-			success &= imu_resetFIFO();
-
-			success &= imu_getFIFOCount(&fifoCount);
-#if (DEBUG_IMU == 1)
-			snprintf(str, sizeof(str), "IMU FIFO count after FIFO reset: %u\r\n", fifoCount);
-			app_uart_put_string(str);
-#endif
-
-			success &= imu_getFIFOBytes(fifoBuffer, fifoCount);
-
-			success &= mpu6050_writeReg(MPU6050_MOT_THR_REG_ADDR, 2);
-			success &= mpu6050_writeReg(MPU6050_ZRMOT_THR_REG_ADDR, 156);
-			success &= mpu6050_writeReg(MPU6050_MOT_DUR_REG_ADDR, 80);
-			success &= mpu6050_writeReg(MPU6050_ZRMOT_DUR_REG_ADDR, 0);
-
-			success &= imu_resetFIFO();
-
-			success &= imu_setFIFOEnabled(true);
-
-			success &= imu_setDMPEnabled(true);
-
-			success &= imu_resetDMP();
-
-			success &= imu_writeMemoryBlock(dmpUpdates[2]->data, dmpUpdates[2]->size, dmpUpdates[2]->bank, dmpUpdates[2]->address, true);
-			success &= imu_writeMemoryBlock(dmpUpdates[3]->data, dmpUpdates[3]->size, dmpUpdates[3]->bank, dmpUpdates[3]->address, true);
-			success &= imu_writeMemoryBlock(dmpUpdates[4]->data, dmpUpdates[4]->size, dmpUpdates[4]->bank, dmpUpdates[4]->address, true);
-
-#if (DEBUG_IMU == 1)
-			app_uart_put_string("IMU waiting for FIFO count > 2\r\n");
-#endif
-			do {
-				success &= imu_getFIFOCount(&fifoCount);
-			} while (fifoCount < 3);
-			success &= imu_getFIFOBytes(fifoBuffer, fifoCount);
-
-#if (DEBUG_IMU == 1)
-			snprintf(str, sizeof(str), "IMU FIFO count after loading updates 3-5: %u\r\n", fifoCount);
-			app_uart_put_string(str);
-#endif
-
-			success &= mpu6050_readReg(MPU6050_INT_STATUS_REG_ADDR, &intStatus);
-#if (DEBUG_IMU == 1)
-			snprintf(str, sizeof(str), "IMU interrupt status: 0x%02x\r\n", intStatus);
-			app_uart_put_string(str);
-#endif
-
-			uint8_t dummyData[2];
-			success &= imu_readMemoryBlock(dummyData, dmpUpdates[5]->size, dmpUpdates[5]->bank, dmpUpdates[5]->address);
-
-#if (DEBUG_IMU == 1)
-			app_uart_put_string("IMU waiting for FIFO count > 2\r\n");
-#endif
-			do {
-				success &= imu_getFIFOCount(&fifoCount);
-			} while (fifoCount < 3);
-			success &= imu_getFIFOBytes(fifoBuffer, fifoCount);
-
-#if (DEBUG_IMU == 1)
-			snprintf(str, sizeof(str), "IMU FIFO count after reading(?) update 6: %u\r\n", fifoCount);
-			app_uart_put_string(str);
-#endif
-
-			success &= mpu6050_readReg(MPU6050_INT_STATUS_REG_ADDR, &intStatus);
-#if (DEBUG_IMU == 1)
-			snprintf(str, sizeof(str), "IMU interrupt status: 0x%02x\r\n", intStatus);
-			app_uart_put_string(str);
-#endif
-
-			success &= imu_writeMemoryBlock(dmpUpdates[6]->data, dmpUpdates[6]->size, dmpUpdates[6]->bank, dmpUpdates[6]->address, true);
-
-			/* Disable DMP for now, it can be re-enabled later */
-			success &= imu_setDMPEnabled(false);
-
-			success &= imu_resetFIFO();
-			success &= mpu6050_readReg(MPU6050_INT_STATUS_REG_ADDR, &intStatus);
-
-		} else {
-			success = false;
-#if (DEBUG_IMU == 1)
-			app_uart_put_string("IMP DMP configuration verification failed\r\n");
-#endif
+	/* Read packets from the FIFO until there are no complete packets
+	 * remaining. */
+	do {
+		/* Read the oldest packet from the FIFO.  If we fail to do so, return
+		 * false whithout providing the caller with the most recent packet. */
+		if (!mpu6050_getFIFOBytes(packet, IMU_FIFO_PACKET_SIZE)) {
+			return false;
 		}
 
-	} else {
-		success = false;
-#if (DEBUG_IMU == 1)
-		app_uart_put_string("IMP DMP code verification failed\r\n");
-#endif
-	}
+		/* Having read a packet, decrement the number of bytes in the FIFO by
+		 * the packet's size.  We will read another packet if the new count is
+		 * still equal to or larger than the size of a single packet. */
+		fifoCount -= IMU_FIFO_PACKET_SIZE;
+	} while (fifoCount >= IMU_FIFO_PACKET_SIZE);
 
-#if (DEBUG_IMU == 1)
-	if (success) {
-		app_uart_put_string("IMU DMP initialization complete\r\n");
-	} else {
-		app_uart_put_string("IMU DMP initialization failed\r\n");
-	}
-#endif
+	twi_master_deinit();
 
-	return success;
+	return true;
 }
 
-typedef struct {
-	float w;
-	float x;
-	float y;
-	float z;
-} quaternion_t;
 
-typedef struct {
-	float x;
-	float y;
-	float z;
-} vectorFloat_t;
-
-bool imu_getQuaternion(quaternion_t *q, const uint8_t *packet) {
+bool imu_getQuaternionFromPacket(quaternion_t *q, const uint8_t *packet) {
 	int16_t w_raw, x_raw, y_raw, z_raw;
 
     w_raw = ((int16_t)packet[0] << 8) + (int16_t)packet[1];
@@ -1071,87 +871,23 @@ float imu_getVectorAngle(const vectorFloat_t *v, const vectorFloat_t *u) {
 	return (180.0 / M_PI) * acosf(dotProduct);
 }
 
-
-bool imu_getLatestFIFOPacket(uint8_t *packet) {
-	bool success = true;
-	bool dmpEnabled, fifoEnabled;
-	uint16_t fifoCount;
-	uint8_t intStatus;
-
-	/* Return indicating failure if the DMP is not running or the FIFO is not
-	 * enabled. */
-	success &= imu_getDMPEnabled(&dmpEnabled);
-	success &= imu_getFIFOEnabled(&fifoEnabled);
-	if (!success || !dmpEnabled || !fifoEnabled) {
-		return false;
-	}
-
-	/* Read the interrupt flags and the number of bytes in the FIFO so that we
-	 * can check for FIFO overflow. */
-	success &= mpu6050_readReg(MPU6050_INT_STATUS_REG_ADDR, &intStatus);
-	success &= imu_getFIFOCount(&fifoCount);
-
-	/* If we fail to read the interrupt status register or the number of bytes
-	 * in the FIFO, we return failure without providing the caller with the
-	 * newest packet. */
-	if (!success) {
-		return false;
-	}
-
-	/* If the FIFO has overflowed, reset it */
-	if ((intStatus & (1<<MPU6050_FIFO_OFLOW_INT_POSN)) || (fifoCount >= 1024)) {
-		imu_resetFIFO();
-		fifoCount = 0;
-	}
-
-	/* Wait until the FIFO contains at least a single complete packet. */
-	while (fifoCount < IMU_FIFO_PACKET_SIZE) {
-		/* If we fail to read the number of bytes in the FIFO, return false
-		 * without providing the caller with the most recent FIFO packet. */
-		if (!imu_getFIFOCount(&fifoCount)) {
-			return false;
-		}
-	}
-
-	/* Read packets from the FIFO until there are no complete packets
-	 * remaining. */
-	do {
-		/* Read the oldest packet from the FIFO.  If we fail to do so, return
-		 * false whithout providing the caller with the most recent packet. */
-		if (!imu_getFIFOBytes(packet, IMU_FIFO_PACKET_SIZE)) {
-			return false;
-		}
-
-		/* Having read a packet, decrement the number of bytes in the FIFO by
-		 * the packet's size.  We will read another packet if the new count is
-		 * still equal to or larger than the size of a single packet. */
-		fifoCount -= IMU_FIFO_PACKET_SIZE;
-	} while (fifoCount >= IMU_FIFO_PACKET_SIZE);
-
-	return true;
-}
-
-const vectorFloat_t cornerVectors[3] = {
-		{0.0f, 0.0f, 1.0f},
-		{0.707107f, 0.707107f, 0.0f},
-		{0.707107f, -0.707107f, 0.0f},
-};
-
 void imu_testDMPLoop() {
 	char str[64];
-	uint16_t fifoCount;
-	uint8_t intStatus;
 	uint8_t packetBuffer[IMU_FIFO_PACKET_SIZE];
 	quaternion_t q;
 	vectorFloat_t gravity;
-
 	bool success = true;
 
-	success = imu_setDMPEnabled(true);
+	success = mpu6050_setDMPEnabled(true);
 
 	while (success) {
 		success &= imu_getLatestFIFOPacket(packetBuffer);
-		success &= imu_getQuaternion(&q, packetBuffer);
+		success &= imu_getQuaternionFromPacket(&q, packetBuffer);
+
+#if (0)
+		snprintf(str, sizeof(str), "Quaternion: %5.4f %5.4f %5.4f %5.4f\r\n", q.w, q.x, q.y, q.z);
+		app_uart_put_string(str);
+#endif
 
 		success &= imu_getGravityFromQuaternion(&gravity, &q);
 
@@ -1167,33 +903,45 @@ void imu_testDMPLoop() {
 
 		nrf_delay_ms(250);
 	}
-
-
-	while (success) {
-		success &= mpu6050_readReg(MPU6050_INT_STATUS_REG_ADDR, &intStatus);
-		success &= imu_getFIFOCount(&fifoCount);
-
-		if ((intStatus & (1<<MPU6050_FIFO_OFLOW_INT_POSN)) || (fifoCount == 1024)) {
-			app_uart_put_string("FIFO overflow\r\n");
-			imu_resetFIFO();
-		} else {
-			while (fifoCount < IMU_FIFO_PACKET_SIZE) {
-				success &= imu_getFIFOCount(&fifoCount);
-			}
-
-			success &= imu_getFIFOBytes(packetBuffer, sizeof(packetBuffer));
-			fifoCount -= sizeof(packetBuffer);
-
-			success &= imu_getQuaternion(&q, packetBuffer);
-
-			//snprintf(str, sizeof(str), "Quaternion: %5.4f %5.4f %5.4f %5.4f\r\n", q.w, q.x, q.y, q.z);
-			//app_uart_put_string(str);
-
-			success &= imu_getGravityFromQuaternion(&gravity, &q);
-
-			snprintf(str, sizeof(str), "Gravity: %5.4f %5.4f %5.4f\r\n", gravity.x, gravity.y, gravity.z);
-			app_uart_put_string(str);
-		}
-
-	}
 }
+
+bool imu_writeDMPConfigurationSet(const uint8_t *data, uint16_t dataSize) {
+    uint8_t *progBuffer, special;
+    uint16_t i;
+    uint8_t bank, offset, length;
+    bool success = true;
+
+    // config set data is a long string of blocks, each with the following structure:
+    // {bank} {offset} {length} {byte[0], byte[1], ..., byte[length-1] | special}
+    for (i = 0; i < dataSize;) {
+		bank = data[i++];
+		offset = data[i++];
+		length = data[i++];
+
+        // write data or perform special action
+        if (length > 0) {
+            // regular block of data to write
+            progBuffer = (uint8_t *)data + i;
+            success &= mpu6050_writeMemoryBlock(progBuffer, length, bank, offset, true);
+            i += length;
+        } else {
+            // special instruction
+            // NOTE: this kind of behavior (what and when to do certain things)
+            // is totally undocumented. This code is in here based on observed
+            // behavior only, and exactly why (or even whether) it has to be here
+            // is anybody's guess for now.
+
+            special = data[i++];
+            if (special == 0x01) {
+                // enable DMP-related interrupts
+            	success &= mpu6050_writeReg(MPU6050_INT_ENABLE_REG_ADDR,
+            			(1<<MPU6050_ZMOT_EN_POSN) | (1<<MPU6050_FIFO_OFLOW_EN_POSN) | (1<<MPU6050_DMP_INT_EN_POSN));
+            } else {
+                success = false;
+            }
+        }
+    }
+
+    return success;
+}
+

@@ -344,6 +344,12 @@
 #define MPU6050_LP_WAKE_CTRL_POSN				6
 #define MPU6050_LP_WAKE_CTRL_MASK				(0x03 << MPU6050_LP_WAKE_CTRL_POSN)
 
+/* LP_WAKE_CTRL field (bits 7:6 of the PWR_MGMT_2 register) definitions */
+#define MPU6050_LP_WAKE_CTRL_1_25HZ				0
+#define MPU6050_LP_WAKE_CTRL_2_5HZ				1
+#define MPU6050_LP_WAKE_CTRL_5HZ				2
+#define MPU6050_LP_WAKE_CTRL_10HZ				3
+
 /* BANK_SEL register (0x6D) bit definitions */
 #define MPU6050_MEM_SEL_POSN					0
 #define MPU6050_MEM_SEL_MASK					(0x1F << MPU6050_MEM_SEL_POSN)
@@ -364,10 +370,69 @@
 void mpu6050_setAddress(uint8_t address);
 bool mpu6050_writeReg(uint8_t addr, uint8_t data);
 bool mpu6050_readReg(uint8_t addr, uint8_t *data);
-bool mpu6050_writeBytes(const uint8_t *addrData, uint8_t nBytes);
+bool mpu6050_writeBytes(uint8_t *addrData, uint8_t nBytes);
 bool mpu6050_readBytes(uint8_t addr, uint8_t *data, uint8_t nBytes);
 
 bool mpu6050_setBits(uint8_t addr, uint8_t bitsToSet);
 bool mpu6050_clearBits(uint8_t addr, uint8_t bitsToClear);
+
+bool mpu6050_getWhoAmI(uint8_t *whoAmI);
+
+bool mpu6050_reset(void);
+bool mpu6050_resetSignalPaths(void);
+bool mpu6050_resetDMP(void);
+bool mpu6050_resetFIFO(void);
+bool mpu6050_resetI2CMaster(void);
+
+bool mpu6050_getFIFOEnabled(bool *fifoEnabled);
+bool mpu6050_setFIFOEnabled(bool fifoEnabled);
+
+bool mpu6050_getDMPEnabled(bool *dmpEnabled);
+bool mpu6050_setDMPEnabled(bool dmpEnabled);
+
+bool mpu6050_setClockSource(uint8_t clockSource);
+
+bool mpu6050_setExternalFrameSync(uint8_t externalSync);
+
+bool mpu6050_setDLPFMode(uint8_t dlpfMode);
+
+bool mpu6050_setFullScaleGyroRange(uint8_t fsGyroRange);
+
+bool mpu6050_setAccelHPFMode(uint8_t accelHPFMode);
+
+bool mpu6050_setFullScaleAccelRange(uint8_t fsAccelRange);
+
+bool mpu6050_getOTPBankValid(bool *otpBankValid);
+
+bool mpu6050_setOTPBankValid(bool otpBankValid);
+
+bool mpu6050_getXGyroOffsetTC(int8_t *offset);
+bool mpu6050_setXGyroOffsetTC(int8_t offset);
+
+bool mpu6050_getYGyroOffsetTC(int8_t *offset);
+bool mpu6050_setYGyroOffsetTC(int8_t offset);
+
+bool mpu6050_getZGyroOffsetTC(int8_t *offset);
+bool mpu6050_setZGyroOffsetTC(int8_t offset);
+
+bool mpu6050_setSleepEnabled(bool sleepEnabled);
+
+bool mpu6050_setCycleEnabled(bool cycleEnabled);
+
+bool mpu6050_setWakeupFrequency(uint8_t wakeupFreq);
+
+bool mpu6050_getFIFOCount(uint16_t *fifoCount);
+bool mpu6050_getFIFOBytes(uint8_t *fifoBuffer, uint16_t fifoCount) ;
+
+bool mpu6050_setMemoryBank(uint8_t bank, bool prefetchEnabled, bool userBank);
+
+bool mpu6050_setMemoryStartAddress(uint8_t address);
+
+bool mpu6050_readMemoryByte(uint8_t *data);
+
+bool mpu6050_writeMemoryByte(uint8_t data);
+bool mpu6050_readMemoryBlock(uint8_t *data, uint16_t dataSize, uint8_t bank, uint8_t address);
+
+bool mpu6050_writeMemoryBlock(const uint8_t *data, uint16_t dataSize, uint8_t bank, uint8_t address, bool verify);
 
 #endif /* MPU6050_H_ */

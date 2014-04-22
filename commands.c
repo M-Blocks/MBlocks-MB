@@ -18,6 +18,7 @@
 #include "util.h"
 #include "gitversion.h"
 #include "main.h"
+#include "twi_master.h"
 #include "pwm.h"
 #include "adc.h"
 #include "power.h"
@@ -818,6 +819,8 @@ void cmdIMUWrite(const char *args) {
 		return;
 	}
 
+	twi_master_init();
+
 	if (mpu6050_writeReg((uint8_t) addr, (uint8_t) data)) {
 		snprintf(str, sizeof(str), "Wrote 0x%02X to IMU register at 0x%02X\r\n",
 				(uint8_t) data, (uint8_t) addr);
@@ -825,6 +828,8 @@ void cmdIMUWrite(const char *args) {
 	} else {
 		app_uart_put_string("Write to IMU register failed\r\n");
 	}
+
+	twi_master_deinit();
 }
 
 void cmdIMURead(const char *args) {
@@ -836,6 +841,8 @@ void cmdIMURead(const char *args) {
 		return;
 	}
 
+	twi_master_init();
+
 	if (mpu6050_readReg((uint8_t)addr, &data)) {
 		snprintf(str, sizeof(str),
 				"Read 0x%02X from IMU register at 0x%02X\r\n", data,
@@ -844,16 +851,18 @@ void cmdIMURead(const char *args) {
 	} else {
 		app_uart_put_string("Read from IMU register failed\r\n");
 	}
+
+	twi_master_deinit();
 }
 
 void cmdIMUMotion(const char *args) {
-	if (imu_checkForMotion()) {
+	bool motionDetected;
+
+	if (imu_checkForMotion(&motionDetected) && motionDetected) {
 		app_uart_put_string("Motion detected\r\n");
 	} else {
 		app_uart_put_string("Motion not detected\r\n");
 	}
-
-	imu_resetMotionFlag();
 }
 
 /****************/

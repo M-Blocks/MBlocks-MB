@@ -55,6 +55,8 @@ typedef struct ble_sps_s
 
 uint32_t ble_sps_init(ble_sps_t * p_sps, const ble_sps_init_t * p_sps_init);
 
+bool ble_sps_getInitialized(void);
+
 void ble_sps_on_ble_evt(ble_sps_t * p_lbs, ble_evt_t * p_ble_evt);
 
 bool ble_sps_put_char(ble_sps_t *p_sps, uint8_t c);

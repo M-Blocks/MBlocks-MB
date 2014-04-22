@@ -21,6 +21,8 @@
 #include "util.h"
 #include "fifo.h"
 
+static bool initialized = false;
+
 static void on_connect(ble_sps_t * p_sps, ble_evt_t * p_ble_evt);
 static void on_disconnect(ble_sps_t * p_sps, ble_evt_t * p_ble_evt);
 static void on_write(ble_sps_t * p_sps, ble_evt_t * p_ble_evt);
@@ -499,7 +501,13 @@ uint32_t ble_sps_init(ble_sps_t * p_sps, const ble_sps_init_t * p_sps_init)
     	return err_code;
     }
     
+    initialized = true;
+
     return NRF_SUCCESS;
+}
+
+bool ble_sps_getInitialized() {
+	return initialized;
 }
 
 
