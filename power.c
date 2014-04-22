@@ -37,7 +37,7 @@
 #define MAXIMUM_IMBALANCE_MV				15		/* Maximum allowed imbalance between cells, over which we activate the cell's self-discharge switch */
 
 #define CHARGER_INPUT_VOLTAGE_START_THRESHOLD_MV	4300	/* Minimum input voltage above which we start charging. */
-#define CHARGER_INPUT_VOLTAGE_STOP_THRESHOLD_MV		4100	/* Maximum input voltage below which we stop charging. */
+#define CHARGER_INPUT_VOLTAGE_STOP_THRESHOLD_MV		3750	/* Maximum input voltage below which we stop charging. */
 
 #define PRECHARGE_CURRENT_MA				12		/* Precharge current, ~0.1C */
 #define CHARGE_CURRENT_1C_MA				125		/* Normal 1C charge rate */

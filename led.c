@@ -62,6 +62,7 @@ void led_deinit(void) {
 	}
 
 	for (led=0; led<LED_COUNT; led++) {
+		led_state[led] = LED_STATE_OFF;
 		nrf_gpio_pin_clear(led_pin_number[led]);
 	}
 
