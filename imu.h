@@ -11,12 +11,29 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#define IMU_FIFO_PACKET_SIZE		42
+
+typedef uint8_t imuFIFOPacket_t[IMU_FIFO_PACKET_SIZE];
+
+typedef struct {
+	int16_t w;
+	int16_t x;
+	int16_t y;
+	int16_t z;
+} quaternion16_t;
+
 typedef struct {
 	float w;
 	float x;
 	float y;
 	float z;
-} quaternion_t;
+} quaternionFloat_t;
+
+typedef struct {
+	int16_t x;
+	int16_t y;
+	int16_t z;
+} vector16_t;
 
 typedef struct {
 	float x;
@@ -36,8 +53,12 @@ bool imu_enableSleepMode(void);
 bool imu_checkForMotion(bool *motionDetected);
 bool imu_getLatestFIFOPacket(uint8_t *packet);
 
-bool imu_getQuaternionFromPacket(quaternion_t *q, const uint8_t *packet);
-bool imu_getGravityFromQuaternion(vectorFloat_t *v, const quaternion_t *q);
+
+bool imu_getUnitQuaternion16FromPacket(quaternion16_t *q16, const uint8_t *packet);
+bool imu_getUnitQuaternionFloatFromPacket(quaternionFloat_t *qf, const uint8_t *packet);
+bool imu_getGravity16FromPacket(vector16_t *v16, const uint8_t *packet);
+bool imu_getGravityFloatFromPacket(vectorFloat_t *vf, const uint8_t *packet);
+
 float imu_getVectorAngle(const vectorFloat_t *v, const vectorFloat_t *u);
 
 void imu_testDMPLoop(void);

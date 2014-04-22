@@ -73,6 +73,8 @@ static void cmdDBTemp(const char *args);
 static void cmdIMUWrite(const char *args);
 static void cmdIMURead(const char *args);
 static void cmdIMUMotion(const char *args);
+static void cmdIMUQuaternion(const char *args);
+static void cmdIMUGravity(const char *args);
 /* BLE Serial Port Service Testing Commands */
 static void cmdBLETx(const char *args);
 static void cmdBLERx(const char *args);
@@ -126,6 +128,8 @@ static const char cmdDBTempStr[] = "dbtemp";
 static const char cmdIMUWriteStr[] = "imuwrite";
 static const char cmdIMUReadStr[] = "imuread";
 static const char cmdIMUMotionStr[] = "imumotion";
+static const char cmdIMUQuaternionStr[] = "imuquat";
+static const char cmdIMUGravityStr[] = "imugravity";
 /* BLE Serial Port Service Testing Commands */
 static const char cmdBLETxStr[] = "bletx";
 static const char cmdBLERxStr[] = "blerx";
@@ -146,41 +150,59 @@ static const char cmdWobbleStr[] = "wobble";
 // This table correlates the command strings above to the actual functions that
 // are called when the user types the command into the terminal and presses
 // enter.
-static cmdFcnPair_t cmdTable[] = { { cmdVersionStr, cmdVersion }, {
-		cmdPWMSetStr, cmdPWMSet },
-/* Power management commands */
-{ cmdVInStr, cmdVIn }, { cmdVBatStr, cmdVBat }, { cmdIChargeStr, cmdICharge }, {
-		cmdBatShortStr, cmdBatShort }, { cmdChargeStr, cmdCharge }, {
-		cmdVBATSWStr, cmdVBATSW }, { cmdSleepStr, cmdSleep }, { cmdSleepTimeStr,
-		cmdSleepTime },
-/* Motor control commands */
-{ cmdBLDCAccelStr, cmdBLDCAccel }, { cmdBLDCSpeedStr, cmdBLDCSpeed }, {
-		cmdBLDCStopStr, cmdBLDCStop }, { cmdBLDCRPMStr, cmdBLDCRPM }, {
-		cmdBLDCDirRevStr, cmdBLDCDirRev }, { cmdBLDCSetKPStr, cmdBLDCSetKP }, {
-		cmdBLDCSetKIStr, cmdBLDCSetKI },
-/* SMA commands */
-{ cmdSMAStr, cmdSMA },
-/* Mechanical brake commands */
-{ cmdSimpleBrakeStr, cmdSimpleBrake }, { cmdBrakeStr, cmdBrake }, {
-		cmdBrakeDirRevStr, cmdBrakeDirRev },
-/* LED commands */
-{ cmdLEDStr, cmdLED },
-/* Daughterboard commands */
-{ cmdDBResetStr, cmdDBReset }, { cmdDBSleepStr, cmdDBSleep }, { cmdDBTempStr,
-		cmdDBTemp },
-/* IMU commands */
-{ cmdIMUWriteStr, cmdIMUWrite }, { cmdIMUReadStr, cmdIMURead }, {
-		cmdIMUMotionStr, cmdIMUMotion },
-/* BLE Serial Port Service Testing Commands */
-{ cmdBLETxStr, cmdBLETx }, { cmdBLERxStr, cmdBLERx }, { cmdBLEDisconStr,
-		cmdBLEDiscon }, { cmdBLEAdvStr, cmdBLEAdv },
-/* Motion commands */
-{ cmdChangePlaneStr, cmdChangePlane }, { cmdInertialActuationStr,
-		cmdInertialActuation },
-/* */
-{ cmdJumpStr, cmdJump }, { cmdJumpRStr, cmdJumpR }, { cmdSeqStr, cmdSeq }, {
-		cmdProgStr, cmdProg }, { cmdDelayStr, cmdDelay }, { cmdWobbleStr,
-		cmdWobble },
+static cmdFcnPair_t cmdTable[] = {
+		{cmdVersionStr, cmdVersion},
+		{cmdPWMSetStr, cmdPWMSet},
+		/* Power management commands */
+		{cmdVInStr, cmdVIn},
+		{cmdVBatStr, cmdVBat},
+		{cmdIChargeStr, cmdICharge},
+		{cmdBatShortStr, cmdBatShort},
+		{cmdChargeStr, cmdCharge},
+		{cmdVBATSWStr, cmdVBATSW},
+		{cmdSleepStr, cmdSleep},
+		{cmdSleepTimeStr, cmdSleepTime},
+		/* Motor control commands */
+		{cmdBLDCAccelStr, cmdBLDCAccel},
+		{cmdBLDCSpeedStr, cmdBLDCSpeed},
+		{cmdBLDCStopStr, cmdBLDCStop},
+		{cmdBLDCRPMStr, cmdBLDCRPM},
+		{cmdBLDCDirRevStr, cmdBLDCDirRev},
+		{cmdBLDCSetKPStr, cmdBLDCSetKP},
+		{cmdBLDCSetKIStr, cmdBLDCSetKI},
+		/* SMA commands */
+		{cmdSMAStr, cmdSMA },
+		/* Mechanical brake commands */
+		{cmdSimpleBrakeStr, cmdSimpleBrake},
+		{cmdBrakeStr, cmdBrake },
+		{cmdBrakeDirRevStr, cmdBrakeDirRev},
+		/* LED commands */
+		{cmdLEDStr, cmdLED },
+		/* Daughterboard commands */
+		{cmdDBResetStr, cmdDBReset},
+		{cmdDBSleepStr, cmdDBSleep},
+		{cmdDBTempStr, cmdDBTemp},
+		/* IMU commands */
+		{cmdIMUWriteStr, cmdIMUWrite},
+		{cmdIMUReadStr, cmdIMURead},
+		{cmdIMUMotionStr, cmdIMUMotion},
+		{cmdIMUQuaternionStr, cmdIMUQuaternion},
+		{cmdIMUGravityStr, cmdIMUGravity},
+		/* BLE Serial Port Service Testing Commands */
+		{cmdBLETxStr, cmdBLETx},
+		{cmdBLERxStr, cmdBLERx},
+		{cmdBLEDisconStr, cmdBLEDiscon},
+		{cmdBLEAdvStr, cmdBLEAdv},
+		/* Motion commands */
+		{cmdChangePlaneStr, cmdChangePlane },
+		{cmdInertialActuationStr, cmdInertialActuation },
+		/* */
+		{cmdJumpStr, cmdJump},
+		{cmdJumpRStr, cmdJumpR},
+		{cmdSeqStr, cmdSeq},
+		{cmdProgStr, cmdProg},
+		{cmdDelayStr, cmdDelay},
+		{cmdWobbleStr,	cmdWobble},
 // Always end the command table with an emptry string and null pointer
 		{ cmdEmptyStr, NULL } };
 
@@ -863,6 +885,40 @@ void cmdIMUMotion(const char *args) {
 	} else {
 		app_uart_put_string("Motion not detected\r\n");
 	}
+}
+
+void cmdIMUQuaternion(const char *args) {
+	char str[64];
+	imuFIFOPacket_t packet;
+	quaternion16_t q16;
+
+	if (!imu_getLatestFIFOPacket(packet)) {
+		return;
+	}
+
+	if (!imu_getUnitQuaternion16FromPacket(&q16, packet)) {
+		return;
+	}
+
+	snprintf(str, sizeof(str), "Rotation: [%d %d %d %d]\r\n", q16.w, q16.x, q16.y, q16.z);
+	app_uart_put_string(str);
+}
+
+void cmdIMUGravity(const char *args) {
+	char str[64];
+	imuFIFOPacket_t packet;
+	vector16_t v16;
+
+	if (!imu_getLatestFIFOPacket(packet)) {
+		return;
+	}
+
+	if (!imu_getGravity16FromPacket(&v16, packet)) {
+		return;
+	}
+
+	snprintf(str, sizeof(str), "Gravity: [%d %d %d]\r\n", v16.x, v16.y, v16.z);
+	app_uart_put_string(str);
 }
 
 /****************/

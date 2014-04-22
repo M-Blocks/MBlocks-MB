@@ -25,8 +25,6 @@
 #define DEBUG_IMU 					0
 #define ORIGINAL_DMP_CODE			0
 
-#define IMU_FIFO_PACKET_SIZE		42
-
 #define MPU6050_DMP_CODE_SIZE		1929 // dmpMemory[]
 #define MPU6050_DMP_CONFIG_SIZE		192 // dmpConfig[]
 #define MPU6050_DMP_UPDATES_SIZE	47 // dmpUpdates[]
@@ -532,7 +530,6 @@ bool imu_initDMP() {
 	return success;
 }
 
-#if (0)
 bool imu_enableMotionDetection(bool enable) {
 	uint8_t data;
 	bool success = true;
@@ -572,7 +569,7 @@ bool imu_enableMotionDetection(bool enable) {
 
 	/* Accumulate some accelerometer samples so that we have a reference value
 	 * against which to compare when sensing motion. */
-	delay_ms(5);
+	nrf_delay_ms(5);
 
 	/* Set the accelerometers' digital high pass filter to hold its current
 	 * sample.  All future output samples will be the difference between the
@@ -582,6 +579,10 @@ bool imu_enableMotionDetection(bool enable) {
 
 	/* Configure the wake-up frequency to 1.25Hz */
 	success &= mpu6050_setWakeupFrequency(MPU6050_LP_WAKE_CTRL_5HZ);
+
+	/* Put the gyroscopes into standby to save power */
+	success &= mpu6050_setBits(MPU6050_PWR_MGMT_2_REG_ADDR,
+			(1<<MPU6050_STBY_XG_POSN) | (1<<MPU6050_STBY_YG_POSN) |	(1<<MPU6050_STBY_ZG_POSN));
 
 	/* Set the CYCLE bit so that the IMU goes to sleep and routinely wakes up
 	 * to sample the accelerometers and determine whether motion has occurred.
@@ -595,78 +596,6 @@ bool imu_enableMotionDetection(bool enable) {
 
 	return success;
 }
-#else
-bool imu_enableMotionDetection(bool enable) {
-	uint8_t data;
-	bool success = true;
-
-	if (!imuInitialized) {
-		return false;
-	}
-
-	twi_master_init();
-
-	/* Clear the sleep and cycle bits in order to keep the IMU awake while we
-	 * configure motion detection. */
-	success &= mpu6050_readReg(MPU6050_PWR_MGMT_1_REG_ADDR, &data);
-	data &= ~(MPU6050_SLEEP_MASK | MPU6050_CYCLE_MASK);
-	success &= mpu6050_writeReg(MPU6050_PWR_MGMT_1_REG_ADDR, data);
-
-	/* Configure the wake-up frequency to 1.25Hz, put all 3 gyros into standby,
-	 * but keep all 3 accelerometers enabled. */
-	success &= mpu6050_writeReg(MPU6050_PWR_MGMT_2_REG_ADDR,
-			(0<<MPU6050_LP_WAKE_CTRL_POSN) |
-			(1<<MPU6050_STBY_XG_POSN) |
-			(1<<MPU6050_STBY_YG_POSN) |
-			(1<<MPU6050_STBY_ZG_POSN));
-
-	/* Reset the accelerometers' digital high pass filter (and stop/disable the
-	 * accelerometers self tests) while leaving the accelerometer full scale
-	 * value unchanged. */
-	success &= mpu6050_readReg(MPU6050_ACCEL_CONFIG_REG_ADDR, &data);
-	data &= ~(MPU6050_ACCEL_HPF_MASK | MPU6050_XA_ST_MASK | MPU6050_YA_ST_MASK | MPU6050_ZA_ST_MASK);
-	success &= mpu6050_writeReg(MPU6050_ACCEL_CONFIG_REG_ADDR, 0x00);
-
-	/* Set the digital low-pass filter to 260 Hz, (and disable the FSYNC pin).
-	 */
-	success &= mpu6050_writeReg(MPU6050_CONFIG_REG_ADDR, 0x00);
-
-	/* Enable only motion detection interrupts and no other interrupt */
-	success &= mpu6050_writeReg(MPU6050_INT_ENABLE_REG_ADDR, (1<<MPU6050_MOT_EN_POSN));
-
-	/* Set the motion detection duration threshold to 1 sample */
-	success &= mpu6050_writeReg(MPU6050_MOT_DUR_REG_ADDR, 0x01);
-
-	/* Set the motion threshold in terms of LSBs, where 1 LSB is 32mg. */
-	success &= mpu6050_writeReg(MPU6050_MOT_THR_REG_ADDR, 20);
-
-	/* Accumulate some accelerometer samples so that we have a reference value
-	 * against which to compare when sensing motion. */
-	delay_ms(5);
-
-	/* Set the accelerometers' digital high pass filter to hold its current
-	 * sample.  All future output samples will be the difference between the
-	 * input sample and the held sample. Leaving the accelerometer full scale
-	 * value unchanged. */
-	success &= mpu6050_readReg(MPU6050_ACCEL_CONFIG_REG_ADDR, &data);
-	data |= (7 << MPU6050_ACCEL_HPF_POSN);
-	success &= mpu6050_writeReg(MPU6050_ACCEL_CONFIG_REG_ADDR, 0x00);
-
-	/* Clear any pending interrupt flag */
-	success &= mpu6050_readReg(MPU6050_INT_STATUS_REG_ADDR, &data);
-
-	/* Set the CYCLE bit so that the IMU goes to sleep and routinely wakes up
-	 * to sample the accelerometers and determine whether motion has occurred.
-	 */
-	success &= mpu6050_readReg(MPU6050_PWR_MGMT_1_REG_ADDR, &data);
-	data |= (1 << MPU6050_CYCLE_POSN);
-	success &= mpu6050_writeReg(MPU6050_PWR_MGMT_1_REG_ADDR, data);
-
-	twi_master_deinit();
-
-	return success;
-}
-#endif
 
 bool imu_enableDMP() {
 	bool success = true;
@@ -680,17 +609,18 @@ bool imu_enableDMP() {
 	/* Disable cycle mode in which the IMU sleeps for large periods of time and
 	 * periodically wakes up to take a quick reading.  While the DMP is enabled,
 	 * the accelerometer needs to always be on. */
+	success &= mpu6050_setSleepEnabled(false);
 	success &= mpu6050_setCycleEnabled(false);
-
-	/* Using one of the gyroscopes as the clock source instead of the internal
-	 * 8MHz relaxation oscillator leads to increased accuracy at the expense of
-	 * power. */
-	success &= mpu6050_setClockSource(MPU6050_CLK_SEL_PLL_ZGYRO);
 
 	/* Bring all accelerometers and gyros out of standby mode */
 	success &= mpu6050_clearBits(MPU6050_PWR_MGMT_2_REG_ADDR,
 			(1<<MPU6050_STBY_XA_POSN) | (1<<MPU6050_STBY_YA_POSN) | (1<<MPU6050_STBY_ZA_POSN) |
 			(1<<MPU6050_STBY_XG_POSN) | (1<<MPU6050_STBY_YG_POSN) | (1<<MPU6050_STBY_ZG_POSN));
+
+	/* Using one of the gyroscopes as the clock source instead of the internal
+	 * 8MHz relaxation oscillator leads to increased accuracy at the expense of
+	 * power. */
+	success &= mpu6050_setClockSource(MPU6050_CLK_SEL_PLL_ZGYRO);
 
 	/* Enable the FIFO overflow interrupt */
 	success &= mpu6050_setBits(MPU6050_INT_ENABLE_REG_ADDR, (1<<MPU6050_FIFO_OFLOW_EN_POSN));
@@ -836,8 +766,7 @@ bool imu_getLatestFIFOPacket(uint8_t *packet) {
 	return true;
 }
 
-
-bool imu_getQuaternionFromPacket(quaternion_t *q, const uint8_t *packet) {
+bool imu_getUnitQuaternion16FromPacket(quaternion16_t *q16, const uint8_t *packet) {
 	int16_t w_raw, x_raw, y_raw, z_raw;
 
     w_raw = ((int16_t)packet[0] << 8) + (int16_t)packet[1];
@@ -845,22 +774,59 @@ bool imu_getQuaternionFromPacket(quaternion_t *q, const uint8_t *packet) {
     y_raw = ((int16_t)packet[8] << 8) + (int16_t)packet[9];
     z_raw = ((int16_t)packet[12] << 8) + (int16_t)packet[13];
 
-    q->w = (float)w_raw / 16384.0f;
-    q->x = (float)x_raw / 16384.0f;
-    q->y = (float)y_raw / 16384.0f;
-    q->z = (float)z_raw / 16384.0f;
+    /* We multiply by 2 in order to get full-scale int16's.  That is, before
+     * the multiplication, the maximum value of the raw measurements is
+     * +/-16,384, which is only half the maximum value of an int16. */
+    q16->w = 2*w_raw;
+    q16->x = 2*x_raw;
+    q16->y = 2*y_raw;
+    q16->z = 2*z_raw;
 
     return true;
 }
 
-bool imu_getGravityFromQuaternion(vectorFloat_t *v, const quaternion_t *q) {
-	if ((q == NULL) || (v == NULL)) {
+bool imu_getUnitQuaternionFloatFromPacket(quaternionFloat_t *qf, const uint8_t *packet) {
+	quaternion16_t q16;
+
+	if (!imu_getUnitQuaternion16FromPacket(&q16, packet)) {
 		return false;
 	}
 
-    v->x = 2 * (q->x * q->z - q->w*q->y);
-    v->y = 2 * (q->w * q->x + q->y * q->z);
-    v->z = q->w * q->w - q->x * q->x - q->y * q->y + q->z * q->z;
+    qf->w = (float)q16.w / 32768.0f;
+    qf->x = (float)q16.x / 32768.0f;
+    qf->y = (float)q16.y / 32768.0f;
+    qf->z = (float)q16.z / 32768.0f;
+
+    return true;
+}
+
+bool imu_getGravity16FromPacket(vector16_t *v16, const uint8_t *packet) {
+	vectorFloat_t vf;
+
+	if (!imu_getGravityFloatFromPacket(&vf, packet)) {
+		return false;
+	}
+
+	v16->x = (int16_t)(vf.x * 32768.0f);
+	v16->y = (int16_t)(vf.y * 32768.0f);
+	v16->z = (int16_t)(vf.z * 32768.0f);
+
+	return true;
+}
+
+bool imu_getGravityFloatFromPacket(vectorFloat_t *vf, const uint8_t *packet) {
+	quaternionFloat_t qf;
+
+	if ((vf == NULL) || (packet == NULL)) {
+		return false;
+	}
+
+	imu_getUnitQuaternionFloatFromPacket(&qf, packet);
+
+    vf->x = 2 * (qf.x * qf.z - qf.w * qf.y);
+    vf->y = 2 * (qf.w * qf.x + qf.y * qf.z);
+    vf->z = qf.w * qf.w - qf.x * qf.x - qf.y * qf.y + qf.z * qf.z;
+
     return true;
 }
 
@@ -874,7 +840,7 @@ float imu_getVectorAngle(const vectorFloat_t *v, const vectorFloat_t *u) {
 void imu_testDMPLoop() {
 	char str[64];
 	uint8_t packetBuffer[IMU_FIFO_PACKET_SIZE];
-	quaternion_t q;
+	quaternionFloat_t qf;
 	vectorFloat_t gravity;
 	bool success = true;
 
@@ -882,14 +848,14 @@ void imu_testDMPLoop() {
 
 	while (success) {
 		success &= imu_getLatestFIFOPacket(packetBuffer);
-		success &= imu_getQuaternionFromPacket(&q, packetBuffer);
+		success &= imu_getUnitQuaternionFloatFromPacket(&qf, packetBuffer);
 
 #if (0)
-		snprintf(str, sizeof(str), "Quaternion: %5.4f %5.4f %5.4f %5.4f\r\n", q.w, q.x, q.y, q.z);
+		snprintf(str, sizeof(str), "Quaternion: %5.4f %5.4f %5.4f %5.4f\r\n", qf.w, qf.x, qf.y, qf.z);
 		app_uart_put_string(str);
 #endif
 
-		success &= imu_getGravityFromQuaternion(&gravity, &q);
+		success &= imu_getGravityFloatFromPacket(&gravity, packetBuffer);
 
 		snprintf(str, sizeof(str), "Gravity: %5.4f %5.4f %5.4f\r\n", gravity.x, gravity.y, gravity.z);
 		app_uart_put_string(str);

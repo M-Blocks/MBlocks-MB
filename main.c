@@ -97,7 +97,6 @@ static bool sleeping = false;
 static uint32_t lastCharTime_rtcTicks = 0;
 static app_timer_id_t motionCheckTimerID = TIMER_NULL;
 static bool motionDetected = false;
-static uint32_t lastMotionTime_rtcTicks = 0;
 
 
 static void main_timersInit(void);
@@ -194,11 +193,6 @@ void main_timersStart() {
     
     err_code = app_timer_start(m_app_timer_id, TIMER_INTERVAL, NULL);
     APP_ERROR_CHECK(err_code); */
-
-    if (motionCheckTimerID != TIMER_NULL) {
-    	err_code = app_timer_start(motionCheckTimerID, APP_TIMER_TICKS(1000, APP_TIMER_PRESCALER), NULL);
-    	APP_ERROR_CHECK(err_code);
-    }
 
 	/* We have located most timer creation and start function in subroutines
 	 * related to the timer's purpose.  Typically, timers are created and
@@ -512,22 +506,14 @@ int main(void) {
 	bool ledsOnAfterBoot;
 	uint32_t currentTime_rtcTicks;
 
+	 nrf_delay_ms(10);
+
 	/* The timer subsystem must be initialized before we can create timers. */
     main_timersInit();
-
     main_gpioteInit();
 
-    nrf_delay_ms(10);
-#if (1)
     bleApp_stackInit();
-#endif
-
     main_gpioInit();
-
-    nrf_gpio_pin_set(LED_RED_PIN_NO);
-    nrf_gpio_pin_set(LED_GREEN_PIN_NO);
-    nrf_gpio_pin_set(LED_BLUE_PIN_NO);
-
     uart_init();
 
     /* We need to initialize the IMU's DMP before other sub-systems because
@@ -536,30 +522,22 @@ int main(void) {
      * added to the scheduler's queue, the queue will overflow and the nRF will
      * reset. */
     twi_master_init();
-    //mpu6050Initialized = imu_init(MPU6050_I2C_ADDR);
-    //dmpInitialized = imu_initDMP();
+    mpu6050Initialized = imu_init(MPU6050_I2C_ADDR);
+    dmpInitialized = imu_initDMP();
 
-#if (1)
     led_init();
-#endif
     pwm_init();
     spi_init();
-#if (1)
     power_init();
     commands_init();
-#endif
-
-    //
 
     main_schedulerInit();
-#if (1)
     bleApp_gapParamsInit();
     bleApp_servicesInit();
     bleApp_connParamsInit();
     bleApp_secParamsInit();
     bleApp_advertisingInit();
 
-    // Start execution
     main_timersStart();
 
     led_setAllOn();
@@ -589,9 +567,7 @@ int main(void) {
     } else {
     	app_uart_put_string("A4960: Fail\r\n");
     }
-#endif
 
-    mpu6050Initialized = imu_init(MPU6050_I2C_ADDR);
 	if (mpu6050Initialized) {
     	app_uart_put_string("MPU-6050: OK\r\n");
     } else {
@@ -611,10 +587,9 @@ int main(void) {
     	snprintf(str, sizeof(str), "Boot current: Fail (%u mA)\r\n", bootCurrent_mA);
     }
     app_uart_put_string(str);
-
     app_uart_put_string("\r\n");
 
-    imu_enableMotionDetection(true);
+    imu_enableDMP();
 
     // Enter main loop
     for (;;) {
@@ -660,7 +635,6 @@ void main_powerManage() {
 	uint32_t currentTime_rtcTicks;
 	uint32_t elapsedTime_rtcTicks;
 
-	uint32_t elapsedMotionTime_sec;
 	uint32_t elapsedCharTime_sec;
 	bool chargerActive;
 
@@ -669,8 +643,6 @@ void main_powerManage() {
 	elapsedTime_rtcTicks = 0x00FFFFFF & (currentTime_rtcTicks - lastCharTime_rtcTicks);
 	elapsedCharTime_sec = (elapsedTime_rtcTicks * USEC_PER_APP_TIMER_TICK) / 1000000;
 
-	elapsedTime_rtcTicks = 0x00FFFFFF & (currentTime_rtcTicks - lastMotionTime_rtcTicks);
-	elapsedMotionTime_sec = (elapsedTime_rtcTicks * USEC_PER_APP_TIMER_TICK) / 1000000;
 
 	if ((power_getChargeState() == POWER_CHARGESTATE_OFF) ||
 			(power_getChargeState() == POWER_CHARGESTATE_STANDBY) ||
@@ -681,10 +653,7 @@ void main_powerManage() {
 	}
 
 	if (sleepRequested ||
-			((elapsedCharTime_sec > sleepTime_sec) &&
-					(elapsedMotionTime_sec > sleepTime_sec) &&
-					(sleepTime_sec != 0) &&
-					!chargerActive)) {
+			((elapsedCharTime_sec > sleepTime_sec) && (sleepTime_sec != 0) && !chargerActive)) {
 		motionDetected = false;
 		sleepRequested = false;
 
@@ -709,6 +678,19 @@ void main_powerManage() {
 
 			/* Stop advertising */
 			bleApp_setAdvertisingEnabled(false);
+
+			/* Disable the DMP by placing the IMU into sleep mode and then
+			 * enable low-power motion detection.  We'll use motion to
+			 * wake-up from sleep. */
+			imu_enableSleepMode();
+			imu_enableMotionDetection(true);
+
+			/* Start the timer which we'll use to check whether the IMU has
+			 * sensed motion. */
+		    if (motionCheckTimerID != TIMER_NULL) {
+		    	err_code = app_timer_start(motionCheckTimerID, APP_TIMER_TICKS(1000, APP_TIMER_PRESCALER), NULL);
+		    	APP_ERROR_CHECK(err_code);
+		    }
 
 		    led_deinit();
 		    uart_deinit();
@@ -745,6 +727,14 @@ void main_powerManage() {
 		power_init();
 		bldc_init();
 
+	    if (motionCheckTimerID != TIMER_NULL) {
+	    	err_code = app_timer_stop(motionCheckTimerID);
+	    	APP_ERROR_CHECK(err_code);
+	    }
+
+		imu_enableSleepMode();
+		imu_enableDMP();
+
 		sleeping = false;
 
 		bleApp_setAdvertisingEnabled(true);
@@ -761,7 +751,7 @@ void main_powerManage() {
 
 void main_motionCheckTimerHandler(void *context) {
 	static uint32_t lastLEDFlashTime_rtcTicks = 0;
-	bool motionDetected;
+	bool newMotionDetected;
 	uint32_t currentTime_rtcTicks;
 	uint32_t elapsedTime_sec;
 
@@ -774,8 +764,7 @@ void main_motionCheckTimerHandler(void *context) {
 		nrf_delay_ms(25);
 	}
 
-	if (imu_checkForMotion(&motionDetected) && motionDetected) {
-		app_timer_cnt_get(&lastMotionTime_rtcTicks);
+	if (imu_checkForMotion(&newMotionDetected) && newMotionDetected) {
 		motionDetected = true;
 	}
 
