@@ -652,9 +652,63 @@ void main_powerManage() {
 		chargerActive = true;
 	}
 
-	if (sleepRequested ||
+
+	if (sleeping && motionDetected) {
+		/* If the processor was sleeping, the IMU has detected motion, we must
+		 * re-initialize the peripherals that we de-initialized before entering
+		 * sleep mode. */
+
+		/* Turn on all LEDs on the mainboard and the daughterboard for 1 second
+		 * as an indication that the M-Blocks has exited sleep. */
+		db_setLEDs(true, true, true);
+
+		nrf_gpio_pin_set(LED_RED_PIN_NO);
+		nrf_gpio_pin_set(LED_GREEN_PIN_NO);
+		nrf_gpio_pin_set(LED_BLUE_PIN_NO);
+		nrf_delay_ms(1000);
+
+		/* Turn off all of the LEDs.  The led_init() function will handle this
+		 * on the mainboard. */
+		db_setLEDs(false, false, false);
+		db_sleep(true);
+		led_init();
+
+		uart_init();
+		pwm_init();
+		spi_init();
+		power_init();
+		bldc_init();
+
+		if (motionCheckTimerID != TIMER_NULL) {
+			err_code = app_timer_stop(motionCheckTimerID);
+			APP_ERROR_CHECK(err_code);
+		}
+
+		imu_enableSleepMode();
+		imu_enableDMP();
+
+		sleeping = false;
+
+		/* So that the device does not go back to sleep immediately, we pretend
+		 * that we just received a character on one of the serial communication
+		 * interfaces.  This effectively resets the character timer. */
+		app_timer_cnt_get(&lastCharTime_rtcTicks);
+
+		bleApp_setAdvertisingEnabled(true);
+
+		/* Restart charging */
+		power_setChargeState(POWER_CHARGESTATE_STANDBY);
+
+		app_uart_put_string("Awoken from sleep\r\n");
+	} else if (sleepRequested ||
 			((elapsedCharTime_sec > sleepTime_sec) && (sleepTime_sec != 0) && !chargerActive)) {
-		motionDetected = false;
+		/* If we have received a sleep command, or it has been a long time
+		 * since we received the last character over one of the serial
+		 * interfaces, (and the batteries are not currently charging, we go to
+		 * sleep. */
+
+		/* Clear the sleep requested flag so that we do not re-enter sleep
+		 * immediately after waking-up.*/
 		sleepRequested = false;
 
 		if (!sleeping) {
@@ -692,6 +746,10 @@ void main_powerManage() {
 		    	APP_ERROR_CHECK(err_code);
 		    }
 
+		    /* Clear the motion detected flag so that we do not wake-up
+		     * immediately. */
+		    motionDetected = false;
+
 		    led_deinit();
 		    uart_deinit();
 		    twi_master_deinit();
@@ -702,47 +760,6 @@ void main_powerManage() {
 		}
 
 		sleeping = true;
-	} else if (sleeping && motionDetected) {
-		/* If the processor was sleeping, we must re-initialize the peripherals
-		 * that we de-initialized before entering sleep mode. */
-
-		/* Turn on all LEDs on the mainboard and the daughterboard for 1 second
-		 * as an indication that the M-Blocks has exited sleep. */
-		db_setLEDs(true, true, true);
-
-		nrf_gpio_pin_set(LED_RED_PIN_NO);
-		nrf_gpio_pin_set(LED_GREEN_PIN_NO);
-		nrf_gpio_pin_set(LED_BLUE_PIN_NO);
-		nrf_delay_ms(1000);
-
-		/* Turn off all of the LEDs.  The led_init() function will handle this
-		 * on the mainboard. */
-		db_setLEDs(false, false, false);
-		db_sleep(true);
-		led_init();
-
-		uart_init();
-		pwm_init();
-		spi_init();
-		power_init();
-		bldc_init();
-
-	    if (motionCheckTimerID != TIMER_NULL) {
-	    	err_code = app_timer_stop(motionCheckTimerID);
-	    	APP_ERROR_CHECK(err_code);
-	    }
-
-		imu_enableSleepMode();
-		imu_enableDMP();
-
-		sleeping = false;
-
-		bleApp_setAdvertisingEnabled(true);
-
-		/* Restart charging */
-		power_setChargeState(POWER_CHARGESTATE_STANDBY);
-
-		app_uart_put_string("Awoken from sleep\r\n");
 	}
 
 	err_code = sd_app_event_wait();
