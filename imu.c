@@ -236,10 +236,12 @@ static const dmpUpdate_t *dmpUpdates[7] = {
 		&dmpUpdate6
 };
 
-const vectorFloat_t cornerVectors[3] = {
+/* These vectors are ordered so that "forward" plane changes progress through
+ * the vectors in increasing order. */
+const vectorFloat_t frameAlignmentVectorsFloat[3] = {
 		{0.0f, 0.0f, 1.0f},
-		{0.707107f, 0.707107f, 0.0f},
 		{0.707107f, -0.707107f, 0.0f},
+		{0.707107f, 0.707107f, 0.0f},
 };
 
 static bool imuInitialized = false;
@@ -766,6 +768,76 @@ bool imu_getLatestFIFOPacket(uint8_t *packet) {
 	return true;
 }
 
+bool imu_getGyros16(vector16_t *v16) {
+	imuFIFOPacket_t packet;
+
+	if (v16 == NULL) {
+		return false;
+	}
+
+	if (!imu_getLatestFIFOPacket(packet)) {
+		return false;
+	}
+
+	return imu_getGyros16FromPacket(v16, packet);
+}
+
+bool imu_getGyros16FromPacket(vector16_t *v16, const uint8_t *packet) {
+	int16_t x_raw, y_raw, z_raw;
+
+    x_raw = ((int16_t)packet[16] << 8) + (int16_t)packet[17];
+    y_raw = ((int16_t)packet[20] << 8) + (int16_t)packet[21];
+    z_raw = ((int16_t)packet[24] << 8) + (int16_t)packet[25];
+
+    v16->x = 2*x_raw;
+    v16->y = 2*y_raw;
+    v16->z = 2*z_raw;
+
+    return true;
+}
+
+bool imu_getGyrosFloat(vectorFloat_t *vf) {
+	imuFIFOPacket_t packet;
+
+	if (vf == NULL) {
+		return false;
+	}
+
+	if (!imu_getLatestFIFOPacket(packet)) {
+		return false;
+	}
+
+	return imu_getGyrosFloatFromPacket(vf, packet);
+}
+
+bool imu_getGyrosFloatFromPacket(vectorFloat_t *vf, const uint8_t *packet) {
+	vector16_t v16;
+
+	if (!imu_getGyros16FromPacket(&v16, packet)) {
+		return false;
+	}
+
+    vf->x = (float)v16.x / 32768.0f;
+    vf->y = (float)v16.y / 32768.0f;
+    vf->z = (float)v16.z / 32768.0f;
+
+    return true;
+}
+
+bool imu_getUnitQuaternion16(quaternion16_t *q16) {
+	imuFIFOPacket_t packet;
+
+	if (q16 == NULL) {
+		return false;
+	}
+
+	if (!imu_getLatestFIFOPacket(packet)) {
+		return false;
+	}
+
+	return imu_getUnitQuaternion16FromPacket(q16, packet);
+}
+
 bool imu_getUnitQuaternion16FromPacket(quaternion16_t *q16, const uint8_t *packet) {
 	int16_t w_raw, x_raw, y_raw, z_raw;
 
@@ -785,6 +857,20 @@ bool imu_getUnitQuaternion16FromPacket(quaternion16_t *q16, const uint8_t *packe
     return true;
 }
 
+bool imu_getUnitQuaternionFloat(quaternionFloat_t *qf) {
+	imuFIFOPacket_t packet;
+
+	if (qf == NULL) {
+		return false;
+	}
+
+	if (!imu_getLatestFIFOPacket(packet)) {
+		return false;
+	}
+
+	return imu_getUnitQuaternionFloatFromPacket(qf, packet);
+}
+
 bool imu_getUnitQuaternionFloatFromPacket(quaternionFloat_t *qf, const uint8_t *packet) {
 	quaternion16_t q16;
 
@@ -800,6 +886,20 @@ bool imu_getUnitQuaternionFloatFromPacket(quaternionFloat_t *qf, const uint8_t *
     return true;
 }
 
+bool imu_getGravity16(vector16_t *v16) {
+	imuFIFOPacket_t packet;
+
+	if (v16 == NULL) {
+		return false;
+	}
+
+	if (!imu_getLatestFIFOPacket(packet)) {
+		return false;
+	}
+
+	return imu_getGravity16FromPacket(v16, packet);
+}
+
 bool imu_getGravity16FromPacket(vector16_t *v16, const uint8_t *packet) {
 	vectorFloat_t vf;
 
@@ -812,6 +912,20 @@ bool imu_getGravity16FromPacket(vector16_t *v16, const uint8_t *packet) {
 	v16->z = (int16_t)(vf.z * 32768.0f);
 
 	return true;
+}
+
+bool imu_getGravityFloat(vectorFloat_t *vf) {
+	imuFIFOPacket_t packet;
+
+	if (vf == NULL) {
+		return false;
+	}
+
+	if (!imu_getLatestFIFOPacket(packet)) {
+		return false;
+	}
+
+	return imu_getGravityFloatFromPacket(vf, packet);
 }
 
 bool imu_getGravityFloatFromPacket(vectorFloat_t *vf, const uint8_t *packet) {
@@ -830,11 +944,20 @@ bool imu_getGravityFloatFromPacket(vectorFloat_t *vf, const uint8_t *packet) {
     return true;
 }
 
-float imu_getVectorAngle(const vectorFloat_t *v, const vectorFloat_t *u) {
+float imu_getVectorFloatAngle(const vectorFloat_t *v, const vectorFloat_t *u) {
 	float dotProduct;
+	float vMag, uMag;
+
+	vMag = imu_getVectorFloatMagnitude(v);
+	uMag = imu_getVectorFloatMagnitude(u);
 
 	dotProduct = (v->x * u->x) + (v->y * u->y) + (v->z * u->z);
-	return (180.0 / M_PI) * acosf(dotProduct);
+
+	return (180.0 / M_PI) * acosf(dotProduct / (uMag * vMag));
+}
+
+float imu_getVectorFloatMagnitude(const vectorFloat_t *v) {
+	return sqrtf((v->x * v->x) + (v->y * v->y) + (v->z * v->z));
 }
 
 void imu_testDMPLoop() {
@@ -861,9 +984,9 @@ void imu_testDMPLoop() {
 		app_uart_put_string(str);
 
 		snprintf(str, sizeof(str), "Alignment angles: %4.1f %4.1f %4.1f\r\n",
-				imu_getVectorAngle(&gravity, &cornerVectors[0]),
-				imu_getVectorAngle(&gravity, &cornerVectors[1]),
-				imu_getVectorAngle(&gravity, &cornerVectors[2])
+				imu_getVectorFloatAngle(&gravity, &frameAlignmentVectorsFloat[0]),
+				imu_getVectorFloatAngle(&gravity, &frameAlignmentVectorsFloat[1]),
+				imu_getVectorFloatAngle(&gravity, &frameAlignmentVectorsFloat[2])
 				);
 		app_uart_put_string(str);
 

@@ -41,6 +41,14 @@ uint32_t app_uart_put_string(const char *str) {
 	return err_code;
 }
 
+uint32_t app_uart_put_debug(const char *str, bool debug) {
+	if (debug) {
+		return app_uart_put_string(str);
+	} else {
+		return NRF_SUCCESS;
+	}
+}
+
 bool delay_ms(uint32_t ms) {
     uint32_t startTicks;
     uint32_t nowTicks;

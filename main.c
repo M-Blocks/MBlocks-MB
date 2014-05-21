@@ -708,7 +708,7 @@ void main_powerManage() {
 		 * sleep. */
 
 		/* Clear the sleep requested flag so that we do not re-enter sleep
-		 * immediately after waking-up.*/
+		 * immediately after waking up.*/
 		sleepRequested = false;
 
 		if (!sleeping) {

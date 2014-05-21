@@ -199,6 +199,22 @@ bool sma_retract(uint16_t hold_ms, app_sched_event_handler_t smaEventHandler){
 	return true;
 }
 
+uint16_t sma_getHoldTimeRemaining_ms() {
+	uint32_t rtcTicks;
+	uint32_t elapsedTime_ms;
+
+	app_timer_cnt_get(&rtcTicks);
+	elapsedTime_ms = ((0x00FFFFFF & (rtcTicks - retractStartTime_rtcTicks)) * USEC_PER_APP_TIMER_TICK) / 1000;
+
+	if (smaState == SMA_STATE_RETRACTING) {
+		return holdTime_ms;
+	} else if (smaState == SMA_STATE_HOLDING) {
+		return holdTime_ms - (elapsedTime_ms - retractTime_ms);
+	} else {
+		return 0;
+	}
+}
+
 
 bool sma_extend(app_sched_event_handler_t smaEventHandler) {
 	uint32_t err_code;

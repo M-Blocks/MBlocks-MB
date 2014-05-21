@@ -75,6 +75,7 @@ static void cmdIMURead(const char *args);
 static void cmdIMUMotion(const char *args);
 static void cmdIMUQuaternion(const char *args);
 static void cmdIMUGravity(const char *args);
+static void cmdIMUGyros(const char *args);
 /* BLE Serial Port Service Testing Commands */
 static void cmdBLETx(const char *args);
 static void cmdBLERx(const char *args);
@@ -130,6 +131,7 @@ static const char cmdIMUReadStr[] = "imuread";
 static const char cmdIMUMotionStr[] = "imumotion";
 static const char cmdIMUQuaternionStr[] = "imuquat";
 static const char cmdIMUGravityStr[] = "imugravity";
+static const char cmdIMUGyrosStr[] = "imugyros";
 /* BLE Serial Port Service Testing Commands */
 static const char cmdBLETxStr[] = "bletx";
 static const char cmdBLERxStr[] = "blerx";
@@ -188,6 +190,7 @@ static cmdFcnPair_t cmdTable[] = {
 		{cmdIMUMotionStr, cmdIMUMotion},
 		{cmdIMUQuaternionStr, cmdIMUQuaternion},
 		{cmdIMUGravityStr, cmdIMUGravity},
+		{cmdIMUGyrosStr, cmdIMUGyros},
 		/* BLE Serial Port Service Testing Commands */
 		{cmdBLETxStr, cmdBLETx},
 		{cmdBLERxStr, cmdBLERx},
@@ -889,14 +892,10 @@ void cmdIMUMotion(const char *args) {
 
 void cmdIMUQuaternion(const char *args) {
 	char str[64];
-	imuFIFOPacket_t packet;
 	quaternion16_t q16;
 
-	if (!imu_getLatestFIFOPacket(packet)) {
-		return;
-	}
-
-	if (!imu_getUnitQuaternion16FromPacket(&q16, packet)) {
+	if (!imu_getUnitQuaternion16(&q16)) {
+		app_uart_put_string("Failed to read quaternion data from IMU\r\n");
 		return;
 	}
 
@@ -905,19 +904,50 @@ void cmdIMUQuaternion(const char *args) {
 }
 
 void cmdIMUGravity(const char *args) {
-	char str[64];
-	imuFIFOPacket_t packet;
+	char str[128];
 	vector16_t v16;
 
-	if (!imu_getLatestFIFOPacket(packet)) {
-		return;
-	}
-
-	if (!imu_getGravity16FromPacket(&v16, packet)) {
+	if (!imu_getGravity16(&v16)) {
+		app_uart_put_string("Failed to read gravity data from IMU\r\n");
 		return;
 	}
 
 	snprintf(str, sizeof(str), "Gravity: [%d %d %d]\r\n", v16.x, v16.y, v16.z);
+	app_uart_put_string(str);
+
+#if (1)
+	uint8_t i;
+	vectorFloat_t gravity;
+	float angleDiff;
+
+	if (!imu_getGravityFloat(&gravity)) {
+		return;
+	}
+
+	snprintf(str, sizeof(str), "Gravity (float): [%f %f %f]\r\n", gravity.x, gravity.y, gravity.z);
+	app_uart_put_string(str);
+
+	for (i=0; i<3; i++) {
+		angleDiff = fabs(imu_getVectorFloatAngle(&gravity, &frameAlignmentVectorsFloat[i]));
+
+		snprintf(str, sizeof(str), "Angle between gravity vector and [%f %f %f]: %f degrees\r\n",
+				frameAlignmentVectorsFloat[i].x, frameAlignmentVectorsFloat[i].y, frameAlignmentVectorsFloat[i].z,
+				angleDiff);
+		app_uart_put_string(str);
+	}
+#endif
+}
+
+void cmdIMUGyros(const char *args) {
+	char str[64];
+	vector16_t v16;
+
+	if (!imu_getGyros16(&v16)) {
+		app_uart_put_string("Failed to read gyroscope data from IMU\r\n");
+		return;
+	}
+
+	snprintf(str, sizeof(str), "Gyros: [%d %d %d]\r\n", v16.x, v16.y, v16.z);
 	app_uart_put_string(str);
 }
 
@@ -1272,6 +1302,9 @@ void cmdMotionPrimitiveHandler(void *p_event_data, uint16_t event_size) {
 		break;
 	case MOTION_PRIMITIVE_BLDC_COASTING:
 		app_uart_put_string("BLDC motor coasting to stop\r\n");
+		break;
+	case MOTION_PRIMITIVE_BLDC_STOPPED:
+		app_uart_put_string("BLDC motor stopped\r\n");
 		break;
 	default:
 		app_uart_put_string("Motion primitive unrecognized\r\n");

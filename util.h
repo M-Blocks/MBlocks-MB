@@ -12,6 +12,7 @@
 #include <stdbool.h>
 
 uint32_t app_uart_put_string(const char *str);
+uint32_t app_uart_put_debug(const char *str, bool debug);
 bool delay_ms(uint32_t ms);
 
 #endif /* UTIL_H_ */

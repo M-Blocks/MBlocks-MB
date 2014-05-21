@@ -37,7 +37,7 @@
 #define SEC_PARAM_MIN_KEY_SIZE          7                                           /**< Minimum encryption key size. */
 #define SEC_PARAM_MAX_KEY_SIZE          16                                          /**< Maximum encryption key size. */
 
-#define BLE_TX_FIFO_SIZE	384
+#define BLE_TX_FIFO_SIZE	512
 #define BLE_RX_FIFO_SIZE	64
 
 /* Version number service */

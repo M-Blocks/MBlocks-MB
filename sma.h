@@ -31,6 +31,7 @@ uint16_t sma_getRetractTime_ms(void);
 smaState_t sma_getState(void);
 
 bool sma_retract(uint16_t holdTime_ms, app_sched_event_handler_t smaEventHandler);
+uint16_t sma_getHoldTimeRemaining_ms(void);
 bool sma_extend(app_sched_event_handler_t smaEventHandler);
 
 

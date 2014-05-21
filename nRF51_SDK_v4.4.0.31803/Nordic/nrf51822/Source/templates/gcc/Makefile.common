@@ -41,14 +41,14 @@ OBJECT_DIRECTORY := _build
 LISTING_DIRECTORY := _build
 
 C_SOURCE_FILES += system_$(DEVICESERIES).c
-ASSEMBLER_SOURCE_FILES += gcc_startup_$(DEVICESERIES).s
+ASSEMBLER_SOURCE_FILES += gcc_startup_$(DEVICESERIES).sx
 
 # Linker flags
 LDFLAGS += -L"$(GNU_INSTALL_ROOT)/arm-none-eabi/lib/armv6-m"
 LDFLAGS += -L"$(GNU_INSTALL_ROOT)/lib/gcc/arm-none-eabi/$(GNU_VERSION)/armv6-m"
 LDFLAGS += -Xlinker -Map=$(LISTING_DIRECTORY)/$(OUTPUT_FILENAME).map
-LDFLAGS += --specs=nano.specs
-#LDFLAGS += --specs=nano.specs -lc -u _printf_float
+#LDFLAGS += --specs=nano.specs
+LDFLAGS += --specs=nano.specs -lc -u _printf_float
 LDFLAGS += -mcpu=$(CPU) -mthumb -mabi=aapcs -L $(TEMPLATE_PATH) -T$(LINKER_SCRIPT)
 
 LIBFLAGS += -lm
@@ -78,11 +78,11 @@ C_SOURCE_PATHS += ../ $(SDK_SOURCE_PATH) $(TEMPLATE_PATH) $(wildcard $(SDK_SOURC
 ASSEMBLER_SOURCE_PATHS = ../ $(SDK_SOURCE_PATH) $(TEMPLATE_PATH) $(wildcard $(SDK_SOURCE_PATH)*/)
 
 C_OBJECTS = $(addprefix $(OBJECT_DIRECTORY)/, $(C_SOURCE_FILENAMES:.c=.o) )
-ASSEMBLER_OBJECTS = $(addprefix $(OBJECT_DIRECTORY)/, $(ASSEMBLER_SOURCE_FILENAMES:.s=.o) )
+ASSEMBLER_OBJECTS = $(addprefix $(OBJECT_DIRECTORY)/, $(ASSEMBLER_SOURCE_FILENAMES:.sx=.o) )
 
 # Set source lookup paths
 vpath %.c $(C_SOURCE_PATHS)
-vpath %.s $(ASSEMBLER_SOURCE_PATHS)
+vpath %.sx $(ASSEMBLER_SOURCE_PATHS)
 
 # Include automatically previously generated dependencies
 -include $(addprefix $(OBJECT_DIRECTORY)/, $(COBJS:.o=.d))
@@ -117,8 +117,8 @@ updateGitVersion:
 	bash -c "../bin/update_gitVersionStr.sh ../gitversion_template.h ../gitversion.h"
 	bash -c "../bin/update_gitVersionStr.sh ../gitversion_template.c ../gitversion.c"
 
-## Assemble .s files
-$(OBJECT_DIRECTORY)/%.o: %.s
+## Assemble .sx files
+$(OBJECT_DIRECTORY)/%.o: %.sx
 	$(CC) $(ASMFLAGS) $(INCLUDEPATHS) -c -o $@ $<
 
 ## Link C and assembler objects to an .out file

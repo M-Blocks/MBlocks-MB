@@ -12,6 +12,7 @@
 #include <stdbool.h>
 
 typedef enum {
+	MOTION_PRIMITIVE_START_SEQUENCE,
 	MOTION_PRIMITIVE_TIMER_EXPIRED,
 	MOTION_PRIMITIVE_MECHBRAKE_SUCCESS,
 	MOTION_PRIMITIVE_MECHBRAKE_FAILURE,
@@ -23,6 +24,7 @@ typedef enum {
 	MOTION_PRIMITIVE_BLDC_TIMEOUT,
 	MOTION_PRIMITIVE_BLDC_ACCEL_COMPLETE,
 	MOTION_PRIMITIVE_BLDC_COASTING,
+	MOTION_PRIMITIVE_BLDC_STOPPED
 } motionPrimitive_t;
 
 typedef enum {
@@ -36,5 +38,7 @@ bool motionEvent_init(void);
 bool motionEvent_startAccelPlaneChange(uint16_t accelCurrent_mA, uint16_t accelTime_ms, bool reverse, app_sched_event_handler_t motionEventHandler);
 bool motionEvent_startEBrakePlaneChange(uint16_t bldcSpeed_rpm, uint16_t ebrakeTime_ms, bool reverse, app_sched_event_handler_t motionEventHandler);
 bool motionEvent_startInertialActuation(uint16_t bldcSpeed_rpm, uint16_t brakeCurrent_mA, uint16_t brakeTime_ms, bool reverse, app_sched_event_handler_t motionEventHandler);
+
+bool motionEvent_getFlywheelFrameAligned(bool *flywheelFrameAligned, unsigned int *axisIndex);
 
 #endif /* MOTIONEVENT_H_ */

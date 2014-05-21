@@ -11,6 +11,8 @@ C_SOURCE_FILES += ble_debug_assert_handler.c ble_error_log.c ble_flash.c
 CFLAGS += -DBLE_DEBUG=0
 CFLAGS += -DENABLE_BLE_COMMANDS=1
 
+ASMFLAGS += -D__HEAP_SIZE=512 
+
 SDK_PATH = ../nRF51_SDK_v4.4.0.31803/Nordic/nrf51822/
 OUTPUT_FILENAME := MBlocks-MB
 
