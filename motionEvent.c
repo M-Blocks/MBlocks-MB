@@ -40,6 +40,13 @@ static uint16_t accelPlaneChangeAccelCurrent_mA;
 static uint16_t accelPlaneChangeAccelTime_ms;
 static bool accelPlaneChangeReverse;
 
+/* These module-level variable must be set when changing planes using acceleration followed by the electronic brake */
+static uint16_t accelBrakePlaneChangeAccelCurrent_mA;
+static uint16_t accelBrakePlaneChangeAccelTime_ms;
+static uint16_t accelBrakePlaneChangeCoastTime_ms;
+static uint16_t accelBrakePlaneChangeBrakeTime_ms;
+static uint16_t accelBrakePlaneChangeReverse;
+
 /* These module-level variables must be set when changing planes using the electronic brake*/
 static uint16_t ebrakePlaneChangeSMAHoldTime_ms;
 static uint16_t ebrakePlaneChangeBLDCSpeed_rpm;
@@ -55,6 +62,7 @@ static uint16_t inertialActuationBrakeTime_ms;
 static bool inertialActuationReverse;
 
 static void accelPlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size);
+static void accelBrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size);
 static void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size);
 static void inertialActuationPrimitiveHandler(void *p_event_data, uint16_t event_size);
 
@@ -128,6 +136,52 @@ void accelPlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) {
 		bldc_setSpeed(0, false, BLDC_EBRAKE_COMPLETE_STOP_TIME_MS, accelPlaneChangePrimitiveHandler);
 		break;
 	case MOTION_PRIMITIVE_BLDC_COASTING:
+		if (eventHandler != NULL) {
+			motionEvent = MOTION_EVENT_PLANE_CHANGE_SUCCESS;
+			err_code = app_sched_event_put(&motionEvent, sizeof(motionEvent), eventHandler);
+			APP_ERROR_CHECK(err_code);
+		}
+		break;
+	default:
+		break;
+	}
+}
+
+bool motionEvent_startAccelBrakePlaneChange(uint16_t accelCurrent_mA, uint16_t accelTime_ms, uint16_t coastTime_ms, uint16_t brakeTime_ms, bool reverse, app_sched_event_handler_t motionEventHandler) {
+	accelBrakePlaneChangeAccelCurrent_mA = accelCurrent_mA;
+	accelBrakePlaneChangeAccelTime_ms = accelTime_ms;
+	accelBrakePlaneChangeCoastTime_ms = coastTime_ms;
+	accelBrakePlaneChangeBrakeTime_ms = brakeTime_ms;
+	accelBrakePlaneChangeReverse = reverse;
+
+	eventHandler = motionEventHandler;
+
+	sma_retract(3000, accelBrakePlaneChangePrimitiveHandler);
+
+	return true;
+}
+
+void accelBrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) {
+	uint32_t err_code;
+	motionPrimitive_t motionPrimitive;
+	motionEvent_t motionEvent;
+
+	motionPrimitive = *(motionPrimitive_t *)p_event_data;
+
+	switch(motionPrimitive) {
+	case MOTION_PRIMITIVE_SMA_RETRACTED:
+		bldc_setAccel(accelBrakePlaneChangeAccelCurrent_mA, accelBrakePlaneChangeAccelTime_ms, accelBrakePlaneChangeReverse, accelBrakePlaneChangePrimitiveHandler);
+		break;
+	case MOTION_PRIMITIVE_BLDC_ACCEL_COMPLETE:
+		motionEvent_delay(accelBrakePlaneChangeCoastTime_ms, accelBrakePlaneChangePrimitiveHandler);
+		break;
+	case MOTION_PRIMITIVE_TIMER_EXPIRED:
+		bldc_setSpeed(0, false, accelBrakePlaneChangeBrakeTime_ms, accelBrakePlaneChangePrimitiveHandler);
+		break;
+	case MOTION_PRIMITIVE_BLDC_COASTING:
+		//sma_extend(accelBrakePlaneChangePrimitiveHandler);
+		//break;
+	case MOTION_PRIMITIVE_SMA_EXTENDED:
 		if (eventHandler != NULL) {
 			motionEvent = MOTION_EVENT_PLANE_CHANGE_SUCCESS;
 			err_code = app_sched_event_put(&motionEvent, sizeof(motionEvent), eventHandler);

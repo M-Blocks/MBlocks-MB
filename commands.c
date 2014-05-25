@@ -1043,14 +1043,16 @@ void cmdBLEAdv(const char *args) {
 /* Motion commands */
 /*******************/
 void cmdChangePlane(const char *args) {
+	int nArgs;
 	char modeStr[2];
 	char dirStr[2];
-	unsigned int params[2];
+	unsigned int params[4];
 	uint16_t accelCurrent_mA, accelTime_ms;
 	uint16_t speed_rpm, ebrakeTime_ms;
+	uint16_t coastTime_ms;
 	bool reverse;
 
-	if (sscanf(args, "%1s %1s %u %u", modeStr, dirStr, &params[0], &params[1]) != 4) {
+	if ((nArgs = sscanf(args, "%1s %1s %u %u %u %u", modeStr, dirStr, &params[0], &params[1], &params[2], &params[3])) < 4) {
 		return;
 	}
 
@@ -1076,9 +1078,16 @@ void cmdChangePlane(const char *args) {
 				cmdMotionEventHandler)) {
 			app_uart_put_string("Starting e-brake based plane change...\r\n");
 		}
+	} else if ((modeStr[0] == 'm') && (nArgs == 6)) {
+		accelCurrent_mA = params[0];
+		accelTime_ms = params[1];
+		coastTime_ms = params[2];
+		ebrakeTime_ms = params[3];
+		if (motionEvent_startAccelBrakePlaneChange(accelCurrent_mA, accelTime_ms, coastTime_ms, ebrakeTime_ms,
+				reverse, cmdMotionEventHandler)) {
+			app_uart_put_string("Starting mixed accel/e-brake based plane change...\r\n");
+		}
 	}
-
-
 }
 
 void cmdInertialActuation(const char *args) {

@@ -182,7 +182,7 @@ bool bldc_config() {
 		return false;
 	}
 
-	/* Duty-cycle limited start-up torque, 6.25% hold torque limit, 58ms hold
+	/* Duty-cycle limited start-up torque, 6.25% hold torque limit, 2ms hold
 	 * time */
 	if (!a4960_writeReg(A4960_CONFIG3_REG_ADDR,
 			(0x01 << A4960_TORQUECONTROL_POSN) |
@@ -260,6 +260,7 @@ bool bldc_start(bool reverse) {
 	/* Depending on how the 3 BLDC wires are connected, the direction in which
 	 * the motor spins will change. */
 	reverse = bldc_translateDirection(reverse);
+
 
 	/* Read the current value of the run register */
 	if (!a4960_readReg(A4960_RUN_REG_ADDR, &runReg)) {
@@ -710,15 +711,31 @@ void bldc_speedControlLoop(bool reinit, bldcMode_t bldcModeTimerStart) {
 		return;
 	}
 
-	if ((bldcModeCurrent == BLDC_MODE_EBRAKE) || (bldcModeCurrent == BLDC_MODE_ACCEL)) {
-		/* If we have just finished applying the e-brake for the specified
-		 * amount of time or if the motor has finished accelerating, we
-		 * allow the motor to coast to a stop, (if it is not already stopped as
-		 * a consequence of actuating the electronic break for enough time).
+	if (bldcModeCurrent == BLDC_MODE_ACCEL) {
+		/* If we have just finished accelerating, we allow the motor to coast
+		 * to a stop.
 		 * By calling the bldc_stop function with an argument of 0, we will
 		 * restart the speed control loop timer.  When it next expires, the
 		 * motor will have spun down to a stop, at which point we can remove
 		 * power. */
+		bldc_stop(0);
+
+		/* For now, queue an event to indicate that the motor is now
+		 * coasting. */
+		if (eventHandler != NULL) {
+			motionPrimitive = MOTION_PRIMITIVE_BLDC_ACCEL_COMPLETE;
+			err_code = app_sched_event_put(&motionPrimitive, sizeof(motionPrimitive), eventHandler);
+			APP_ERROR_CHECK(err_code);
+		}
+		return;
+	} else if (bldcModeCurrent == BLDC_MODE_EBRAKE) {
+		/* If we have just finished applying the e-brake for the specified
+		 * amount of time we allow the motor to coast to a stop, (if it is
+		 * not already stopped as a consequence of actuating the electronic
+		 * break for enough time). By calling the bldc_stop function with an
+		 * argument of 0, we will restart the speed control loop timer.
+		 * When it next expires, the motor will have spun down to a stop,
+		 * at which point we can remove power. */
 		bldc_stop(0);
 
 		/* For now, queue an event to indicate that the motor is now
