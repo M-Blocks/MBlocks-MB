@@ -103,31 +103,27 @@ static bool bldc_updateStable(int32_t newestError);
 bool bldc_init() {
 	uint32_t err_code;
 
-	if (bldc_speedControlTimerID == TIMER_NULL) {
-		err_code = app_timer_create(&bldc_speedControlTimerID, APP_TIMER_MODE_REPEATED, bldc_speedControlTimerHandler);
+	if (bldc_speedControlTimerID == TIMER_NULL ) {
+		err_code = app_timer_create(&bldc_speedControlTimerID,
+				APP_TIMER_MODE_REPEATED, bldc_speedControlTimerHandler);
 		APP_ERROR_CHECK(err_code);
 	}
 
 	/* The BLDCSPEED is a PWM input to the A4960 which can be used to modulate
 	 * speed, but we use the IREF input instead.  To keep the A4960 from
 	 * stopping the motor, the BLDCSPEED pin must be tied high. */
-    nrf_gpio_pin_set(BLDCSPEED_PIN_NO);
-    GPIO_PIN_CONFIG((BLDCSPEED_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+	nrf_gpio_pin_set(BLDCSPEED_PIN_NO);
+	nrf_gpio_cfg_output(BLDCSPEED_PIN_NO);
 
-    /* If the charging voltage is removed while the MBlock is charging, it
-     * causes a dip in the 3.3V supply.  This can reset the BLDC controller, so
-     * after this happens, we need to reconfigure the controller. */
-    power_registerImproperTerminationFlag(&needToReconfigure);
-    power_registerVBATSWTurnedOffFlag(&needToReconfigure);
+	/* If the charging voltage is removed while the MBlock is charging, it
+	 * causes a dip in the 3.3V supply.  This can reset the BLDC controller, so
+	 * after this happens, we need to reconfigure the controller. */
+	power_registerImproperTerminationFlag(&needToReconfigure);
+	power_registerVBATSWTurnedOffFlag(&needToReconfigure);
 
-    initialized = true;
+	initialized = true;
 
-    return true;
+	return true;
 }
 
 void bldc_deinit() {
@@ -135,17 +131,12 @@ void bldc_deinit() {
 		return;
 	}
 
-    /* The A4960 consumes about 50uA additional current when the BLDCSPEED pin
-     * is high, so we drive it low after de-initializing the BLDC controller. */
-    nrf_gpio_pin_clear(BLDCSPEED_PIN_NO);
-    GPIO_PIN_CONFIG((BLDCSPEED_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+	/* The A4960 consumes about 50uA additional current when the BLDCSPEED pin
+	 * is high, so we drive it low after de-initializing the BLDC controller. */
+	nrf_gpio_pin_clear(BLDCSPEED_PIN_NO);
+	nrf_gpio_cfg_output(BLDCSPEED_PIN_NO);
 
-    initialized = false;
+	initialized = false;
 }
 
 bool bldc_config() {
@@ -160,52 +151,43 @@ bool bldc_config() {
 
 	/* 50us commutation blank time, 1.6us blank time, 0.3us dead time */
 	if (!a4960_writeReg(A4960_CONFIG0_REG_ADDR,
-			(0x00 << A4960_COMMBLANKTIME_POSN) |
-			(0x04 << A4960_BLANKTIME_POSN) |
-			(0x06 << A4960_DEADTIME_POSN),
-			NULL)) {
+			(0x00 << A4960_COMMBLANKTIME_POSN) | (0x04 << A4960_BLANKTIME_POSN)
+					| (0x06 << A4960_DEADTIME_POSN), NULL )) {
 		return false;
 	}
 
 	/* 6.25% reference ratio, 0.8V VDS threshold */
 	if (!a4960_writeReg(A4960_CONFIG1_REG_ADDR,
-			(0x00 << A4960_REFERENCERATIO_POSN) |
-			(0x20 << A4960_VDSTHRESHOLD_POSN),
-			NULL)) {
+			(0x00 << A4960_REFERENCERATIO_POSN)
+					| (0x20 << A4960_VDSTHRESHOLD_POSN), NULL )) {
 		return false;
 	}
 
 	/* 18.0us PWM fixed off time */
-	if (!a4960_writeReg(A4960_CONFIG2_REG_ADDR,
-			(0x05 << A4960_PWMOFFTIME_POSN),
-			NULL)) {
+	if (!a4960_writeReg(A4960_CONFIG2_REG_ADDR, (0x05 << A4960_PWMOFFTIME_POSN),
+			NULL )) {
 		return false;
 	}
 
 	/* Duty-cycle limited start-up torque, 6.25% hold torque limit, 2ms hold
 	 * time */
 	if (!a4960_writeReg(A4960_CONFIG3_REG_ADDR,
-			(0x01 << A4960_TORQUECONTROL_POSN) |
-			(0x00 << A4960_HOLDTORQUE_POSN) |
-			(0x07 << A4960_HOLDTIME_POSN),
-			NULL)) {
+			(0x01 << A4960_TORQUECONTROL_POSN) | (0x00 << A4960_HOLDTORQUE_POSN)
+					| (0x07 << A4960_HOLDTIME_POSN), NULL )) {
 		return false;
 	}
 
 	/* 104ms starting commutation time, 1.0ms ending commutation time */
 	if (!a4960_writeReg(A4960_CONFIG4_REG_ADDR,
-			(0x04 << A4960_ENDCOMM_POSN) |
-			(0x0C << A4960_STARTCOMM_POSN),
-			NULL)) {
+			(0x04 << A4960_ENDCOMM_POSN) | (0x0C << A4960_STARTCOMM_POSN),
+			NULL )) {
 		return false;
 	}
 
 	/* 28.125 degree phase advance, 12.5% ramp torque, -3.0ms ramp rate */
 	if (!a4960_writeReg(A4960_CONFIG5_REG_ADDR,
-			(0x0F << A4960_PHASEADV_POSN) |
-			(0x01 << A4960_RAMPTORQUE_POSN) |
-			(0x0E << A4960_RAMPRATE_POSN),
-			NULL)) {
+			(0x0F << A4960_PHASEADV_POSN) | (0x01 << A4960_RAMPTORQUE_POSN)
+					| (0x0E << A4960_RAMPRATE_POSN), NULL )) {
 		return false;
 	}
 
@@ -213,33 +195,29 @@ bool bldc_config() {
 	 * fail, fault-low true on diagnostic pin, no restart after loss of sync,
 	 * brake off, forward direction, disable outputs */
 	if (!a4960_writeReg(A4960_RUN_REG_ADDR,
-			(0x00 << A4960_BEMFHYSTERESIS_POSN) |
-			(0x04 << A4960_BEMFWINDOW_POSN) |
-			(0x01 << A4960_ENABLESTOPFAIL_POSN) |
-			(0x00 << A4960_DIAGSIGNAL_POSN) |
-			(0x00 << A4960_RESTART_POSN) |
-			(0x00 << A4960_BRAKE_POSN) |
-			(0x00 << A4960_DIRECTION_POSN) |
-			(0x00 << A4960_RUN_POSN),
-			NULL)) {
+			(0x00 << A4960_BEMFHYSTERESIS_POSN)
+					| (0x04 << A4960_BEMFWINDOW_POSN)
+					| (0x01 << A4960_ENABLESTOPFAIL_POSN)
+					| (0x00 << A4960_DIAGSIGNAL_POSN)
+					| (0x00 << A4960_RESTART_POSN) | (0x00 << A4960_BRAKE_POSN)
+					| (0x00 << A4960_DIRECTION_POSN) | (0x00 << A4960_RUN_POSN),
+			NULL )) {
 		return false;
 	}
 
 	/* Enable detection of all faults */
 	if (!a4960_writeReg(A4960_MASK_REG_ADDR,
-			(0x00 << A4960_HIGHTEMP_POSN) |
-			(0x00 << A4960_OVERTEMP_POSN) |
-			(0x00 << A4960_BEMFLOST_POSN) |
-			(0x00 << A4960_PHASEABOOTCAP_POSN) |
-			(0x00 << A4960_PHASEBBOOTCAP_POSN) |
-			(0x00 << A4960_PHASECBOOTCAP_POSN) |
-			(0x00 << A4960_PHASEAHIGH_POSN) |
-			(0x00 << A4960_PHASEALOW_POSN) |
-			(0x00 << A4960_PHASEBHIGH_POSN) |
-			(0x00 << A4960_PHASEBLOW_POSN) |
-			(0x00 << A4960_PHASECHIGH_POSN) |
-			(0x00 << A4960_PHASECLOW_POSN),
-			NULL)) {
+			(0x00 << A4960_HIGHTEMP_POSN) | (0x00 << A4960_OVERTEMP_POSN)
+					| (0x00 << A4960_BEMFLOST_POSN)
+					| (0x00 << A4960_PHASEABOOTCAP_POSN)
+					| (0x00 << A4960_PHASEBBOOTCAP_POSN)
+					| (0x00 << A4960_PHASECBOOTCAP_POSN)
+					| (0x00 << A4960_PHASEAHIGH_POSN)
+					| (0x00 << A4960_PHASEALOW_POSN)
+					| (0x00 << A4960_PHASEBHIGH_POSN)
+					| (0x00 << A4960_PHASEBLOW_POSN)
+					| (0x00 << A4960_PHASECHIGH_POSN)
+					| (0x00 << A4960_PHASECLOW_POSN), NULL )) {
 		return false;
 	}
 
@@ -261,7 +239,6 @@ bool bldc_start(bool reverse) {
 	 * the motor spins will change. */
 	reverse = bldc_translateDirection(reverse);
 
-
 	/* Read the current value of the run register */
 	if (!a4960_readReg(A4960_RUN_REG_ADDR, &runReg)) {
 		return false;
@@ -270,7 +247,7 @@ bool bldc_start(bool reverse) {
 	/* Clear the run bit.  It will still be set if the motor was stopped with
 	 * the electronic brake. */
 	runReg &= ~(0x01 << A4960_RUN_POSN);
-	if (!a4960_writeReg(A4960_RUN_REG_ADDR, runReg, NULL)) {
+	if (!a4960_writeReg(A4960_RUN_REG_ADDR, runReg, NULL )) {
 		return false;
 	}
 
@@ -288,7 +265,7 @@ bool bldc_start(bool reverse) {
 	/* Before starting the motor with the run bit, write the modified run
 	 * register back to the A4960.  If the direction bit is set at the
 	 * same time as the run bit, it will be ignored. */
-	if (!a4960_writeReg(A4960_RUN_REG_ADDR, runReg, NULL)) {
+	if (!a4960_writeReg(A4960_RUN_REG_ADDR, runReg, NULL )) {
 		return false;
 	}
 
@@ -297,7 +274,7 @@ bool bldc_start(bool reverse) {
 
 	/* Re-write the modified run register back to the A4960, now with the run
 	 * bit set. */
-	if (!a4960_writeReg(A4960_RUN_REG_ADDR, runReg, NULL)) {
+	if (!a4960_writeReg(A4960_RUN_REG_ADDR, runReg, NULL )) {
 		return false;
 	}
 
@@ -325,9 +302,9 @@ bool bldc_stop(uint16_t brakeTime_ms) {
 
 	if (brakeTime_ms > 0) {
 		/* Set the brake bit if requested by the caller.  For the brake to be
-	     * effective, we have to leave the run bit set.  We assume that the run
-	     * bit is already set, but if it is not the motor is already stopped,
-	     * so the state of the brake bit does not matter. */
+		 * effective, we have to leave the run bit set.  We assume that the run
+		 * bit is already set, but if it is not the motor is already stopped,
+		 * so the state of the brake bit does not matter. */
 		runReg |= (0x01 << A4960_BRAKE_POSN);
 		/* When using the brake, the brake bit is ignored unless the run bit is
 		 * also set.  If we are trying to brake the motor as it is coasting to
@@ -336,7 +313,7 @@ bool bldc_stop(uint16_t brakeTime_ms) {
 		runReg |= (0x01 << A4960_RUN_POSN);
 
 		/* Write the modified run register back to the A4960 */
-		if (!a4960_writeReg(A4960_RUN_REG_ADDR, runReg, NULL)) {
+		if (!a4960_writeReg(A4960_RUN_REG_ADDR, runReg, NULL )) {
 			return false;
 		}
 
@@ -352,7 +329,8 @@ bool bldc_stop(uint16_t brakeTime_ms) {
 		/* Re-start the timer, indicating that when it expires that the eBrake
 		 * should be released. */
 		err_code = app_timer_start(bldc_speedControlTimerID,
-				APP_TIMER_TICKS(brakeTime_ms, APP_TIMER_PRESCALER), &bldcModeEBrake);
+				APP_TIMER_TICKS(brakeTime_ms, APP_TIMER_PRESCALER),
+				&bldcModeEBrake);
 		APP_ERROR_CHECK(err_code);
 	} else {
 		/* If we are allowing the motor to coast to a stop without using the
@@ -361,7 +339,7 @@ bool bldc_stop(uint16_t brakeTime_ms) {
 		runReg &= ~(0x01 << A4960_RUN_POSN);
 
 		/* Write the modified run register back to the A4960 */
-		if (!a4960_writeReg(A4960_RUN_REG_ADDR, runReg, NULL)) {
+		if (!a4960_writeReg(A4960_RUN_REG_ADDR, runReg, NULL )) {
 			return false;
 		}
 
@@ -375,7 +353,8 @@ bool bldc_stop(uint16_t brakeTime_ms) {
 		/* Re-start the timer, indicating that when it expires that the motor
 		 * has coasted to a stop. */
 		err_code = app_timer_start(bldc_speedControlTimerID,
-				APP_TIMER_TICKS(COAST_TIME_MAX_MS, APP_TIMER_PRESCALER), &bldcModeCoast);
+				APP_TIMER_TICKS(COAST_TIME_MAX_MS, APP_TIMER_PRESCALER),
+				&bldcModeCoast);
 		APP_ERROR_CHECK(err_code);
 
 	}
@@ -419,7 +398,9 @@ bool bldc_setMaxCurrent_mA(uint16_t iLimit_mA) {
 	return true;
 }
 
-bool bldc_setSpeed(uint16_t speed_rpm, bool reverse, uint16_t brakeTime_ms, app_sched_event_handler_t bldcEventHandler) {
+bool bldc_setSpeed(uint16_t speed_rpm, bool reverse, uint16_t brakeTime_ms,
+		app_sched_event_handler_t bldcEventHandler) {
+	bool success = true;
 	uint32_t err_code;
 	motionPrimitive_t motionPrimitive;
 
@@ -430,15 +411,16 @@ bool bldc_setSpeed(uint16_t speed_rpm, bool reverse, uint16_t brakeTime_ms, app_
 	/* If the caller passed a speed of 0, we brake the motor in order to
 	 * decelerate it as rapidly as possible. */
 	if (speed_rpm == 0) {
-		bldc_stop(brakeTime_ms);
+		success &= bldc_stop(brakeTime_ms);
 
-		if ((brakeTime_ms == 0) && (bldcEventHandler != NULL)) {
+		if ((brakeTime_ms == 0) && (bldcEventHandler != NULL )) {
 			motionPrimitive = MOTION_PRIMITIVE_BLDC_COASTING;
-			err_code = app_sched_event_put(&motionPrimitive, sizeof(motionPrimitive), bldcEventHandler);
+			err_code = app_sched_event_put(&motionPrimitive,
+					sizeof(motionPrimitive), bldcEventHandler);
 			APP_ERROR_CHECK(err_code);
 		}
 
-		return true;
+		return success;
 	}
 
 	eventHandler = bldcEventHandler;
@@ -447,7 +429,7 @@ bool bldc_setSpeed(uint16_t speed_rpm, bool reverse, uint16_t brakeTime_ms, app_
 	 * necessary. */
 	power_setVBATSWState(VBATSW_USER_BLDC, true);
 	if (!configured || needToReconfigure) {
-		bldc_config();
+		success &= bldc_config();
 	}
 
 	/* Limit the speed to about 20000 RPM.  With fresh batteries, we can hit
@@ -466,11 +448,11 @@ bool bldc_setSpeed(uint16_t speed_rpm, bool reverse, uint16_t brakeTime_ms, app_
 	 * are reduced because the output current levels are so low it is easy
 	 * to overshoot the correct current level.*/
 	if (setSpeed_rpm < 6000) {
-		bldc_setKP(3, 1);
-		bldc_setKI(3, 100000);
+		success &= bldc_setKP(3, 1);
+		success &= bldc_setKI(3, 100000);
 	} else {
-		bldc_setKP(3, 1);
-		bldc_setKI(16, 100000);
+		success &= bldc_setKP(3, 1);
+		success &= bldc_setKI(16, 100000);
 	}
 
 	/* Start the frequency counter which we will use to measure the motor's
@@ -478,7 +460,7 @@ bool bldc_setSpeed(uint16_t speed_rpm, bool reverse, uint16_t brakeTime_ms, app_
 	freqcntr_init();
 
 	/* Start the motor running */
-	bldc_start(reverse);
+	success &= bldc_start(reverse);
 
 	bldcModeCurrent = BLDC_MODE_CONSTANT_SPEED;
 
@@ -498,11 +480,13 @@ bool bldc_setSpeed(uint16_t speed_rpm, bool reverse, uint16_t brakeTime_ms, app_
 	 * instructing it to reinitialize. */
 	bldc_speedControlLoop(true, BLDC_MODE_CONSTANT_SPEED);
 
-	return true;
+	return success;
 }
 
-bool bldc_setAccel(uint16_t accel_mA, uint16_t time_ms, bool reverse, app_sched_event_handler_t bldcEventHandler) {
+bool bldc_setAccel(uint16_t accel_mA, uint16_t time_ms, bool reverse,
+		app_sched_event_handler_t bldcEventHandler) {
 	uint32_t err_code;
+	bool success = true;
 
 	if (!initialized) {
 		return false;
@@ -522,24 +506,24 @@ bool bldc_setAccel(uint16_t accel_mA, uint16_t time_ms, bool reverse, app_sched_
 	 * necessary. */
 	power_setVBATSWState(VBATSW_USER_BLDC, true);
 	if (!configured || needToReconfigure) {
-		bldc_config();
+		success &= bldc_config();
 	}
 
 	/* Set the BLDC controller chip's software-controlled current limit to its
 	 * maximum value.  We will control acceleration solely though the voltage
 	 * on the IREF pin. */
-	bldc_setIRefRatio(0x0F);
+	success &= bldc_setIRefRatio(0x0F);
 
 	/* Start driving voltage on the IREF pin of the A4960 (and allow it to
 	 * stabilize if the motor is not already being driven at constant speed).
 	 * This stabilization should lead to more constant acceleration. */
-	bldc_setMaxCurrent_mA(accel_mA);
+	success &= bldc_setMaxCurrent_mA(accel_mA);
 	if (bldcModeCurrent != BLDC_MODE_CONSTANT_SPEED) {
 		delay_ms(25);
 	}
 
 	/* Start the motor spinning */
-	bldc_start(reverse);
+	success &= bldc_start(reverse);
 
 	bldcModeCurrent = BLDC_MODE_ACCEL;
 
@@ -559,7 +543,7 @@ bool bldc_setAccel(uint16_t accel_mA, uint16_t time_ms, bool reverse, app_sched_
 			APP_TIMER_TICKS(time_ms, APP_TIMER_PRESCALER), &bldcModeAccel);
 	APP_ERROR_CHECK(err_code);
 
-	return true;
+	return success;
 }
 
 void bldc_setReverseDirections(bool reverse) {
@@ -620,7 +604,7 @@ void bldc_speedControlTimerHandler(void *p_context) {
 	 * accelerate, e-brake, cost, off) at the time when the timer was started.
 	 * This mode may be different than the current mode if there was a pending
 	 * timer event in the event queue before the timer was restarted. */
-	bldcMode_t bldcModeTimerStart = *(bldcMode_t *)p_context;
+	bldcMode_t bldcModeTimerStart = *(bldcMode_t *) p_context;
 	bldc_speedControlLoop(false, bldcModeTimerStart);
 }
 
@@ -658,7 +642,7 @@ bool bldc_setIRefRatio(uint8_t refRatio) {
 	config1 |= refRatio << A4960_REFERENCERATIO_POSN;
 
 	/* Write the modified register back to the controller */
-	if (!a4960_writeReg(A4960_CONFIG1_REG_ADDR, config1, NULL)) {
+	if (!a4960_writeReg(A4960_CONFIG1_REG_ADDR, config1, NULL )) {
 		return false;
 	}
 
@@ -694,8 +678,8 @@ void bldc_speedControlLoop(bool reinit, bldcMode_t bldcModeTimerStart) {
 	 * control loop to be executing.  Consequently, we stop the timer that
 	 * triggers the control loop and then we make sure that the motor is
 	 * stopped before returning. */
-	if (!initialized || !power_getVBATSWState() ||
-			!configured || needToReconfigure) {
+	if (!initialized || !power_getVBATSWState() || !configured
+			|| needToReconfigure) {
 		app_timer_stop(bldc_speedControlTimerID);
 		bldc_stop(0);
 		return;
@@ -722,9 +706,10 @@ void bldc_speedControlLoop(bool reinit, bldcMode_t bldcModeTimerStart) {
 
 		/* For now, queue an event to indicate that the motor is now
 		 * coasting. */
-		if (eventHandler != NULL) {
+		if (eventHandler != NULL ) {
 			motionPrimitive = MOTION_PRIMITIVE_BLDC_ACCEL_COMPLETE;
-			err_code = app_sched_event_put(&motionPrimitive, sizeof(motionPrimitive), eventHandler);
+			err_code = app_sched_event_put(&motionPrimitive,
+					sizeof(motionPrimitive), eventHandler);
 			APP_ERROR_CHECK(err_code);
 		}
 		return;
@@ -740,13 +725,15 @@ void bldc_speedControlLoop(bool reinit, bldcMode_t bldcModeTimerStart) {
 
 		/* For now, queue an event to indicate that the motor is now
 		 * coasting. */
-		if (eventHandler != NULL) {
+		if (eventHandler != NULL ) {
 			motionPrimitive = MOTION_PRIMITIVE_BLDC_COASTING;
-			err_code = app_sched_event_put(&motionPrimitive, sizeof(motionPrimitive), eventHandler);
+			err_code = app_sched_event_put(&motionPrimitive,
+					sizeof(motionPrimitive), eventHandler);
 			APP_ERROR_CHECK(err_code);
 		}
 		return;
-	} else if ((bldcModeCurrent == BLDC_MODE_COAST) || (bldcModeCurrent == BLDC_MODE_OFF)) {
+	} else if ((bldcModeCurrent == BLDC_MODE_COAST)
+			|| (bldcModeCurrent == BLDC_MODE_OFF)) {
 		/* When the current operation mode is COAST and the timer expires, it
 		 * indicates that enough time has expired for the motor to completely
 		 * spin down to its stopped state.  As such, we disable the speed
@@ -761,9 +748,10 @@ void bldc_speedControlLoop(bool reinit, bldcMode_t bldcModeTimerStart) {
 
 		/* Finally, queue an event to indicate that the motor is definitely
 		 * stopped and power potentially removed. */
-		if (eventHandler != NULL) {
+		if (eventHandler != NULL ) {
 			motionPrimitive = MOTION_PRIMITIVE_BLDC_STOPPED;
-			err_code = app_sched_event_put(&motionPrimitive, sizeof(motionPrimitive), eventHandler);
+			err_code = app_sched_event_put(&motionPrimitive,
+					sizeof(motionPrimitive), eventHandler);
 			APP_ERROR_CHECK(err_code);
 		}
 	}
@@ -809,7 +797,8 @@ void bldc_speedControlLoop(bool reinit, bldcMode_t bldcModeTimerStart) {
 	pError = (kp_numerator * error_rpm) / kp_denominator;
 
 	/* Calculate the integrated error */
-	intError += (ki_numerator * error_rpm * (int32_t)elapsedTime_us) / ki_denominator;
+	intError += (ki_numerator * error_rpm * (int32_t) elapsedTime_us)
+			/ ki_denominator;
 
 	/* We limit the point at which the integrator saturates to the maximum
 	 * allowable control input (3000mA).  */
@@ -878,24 +867,28 @@ void bldc_speedControlLoop(bool reinit, bldcMode_t bldcModeTimerStart) {
 		/* If the motor's speed just stabilized and there is a callback which
 		 * needs to be executed, we add the callback to the scheduler's
 		 * queue now. */
-		if (eventHandler != NULL) {
+		if (eventHandler != NULL ) {
 			motionPrimitive = MOTION_PRIMITIVE_BLDC_STABLE;
-			err_code = app_sched_event_put(&motionPrimitive, sizeof(motionPrimitive), eventHandler);
+			err_code = app_sched_event_put(&motionPrimitive,
+					sizeof(motionPrimitive), eventHandler);
 			APP_ERROR_CHECK(err_code);
 		}
 	}
 
 	/* Compute the amount of time that has elapsed since we turned the motor
 	 * on.*/
-	elapsedTime_msec = ((0x00FFFFFF & (rtcTicks - startTime_rtcTicks)) * USEC_PER_APP_TIMER_TICK) / 1000;
+	elapsedTime_msec = ((0x00FFFFFF & (rtcTicks - startTime_rtcTicks))
+			* USEC_PER_APP_TIMER_TICK ) / 1000;
 	/* If the elapsed time exceeds the maximum amount of time which is should
 	 * take to reach the desired speed, and if there is a valid callback
 	 * function, we add the callback to the scheduler and with an argument
 	 * indicating that the motor did not reach its desired speed within a
 	 * reasonable amount of time. */
-	if (!stabilized && (elapsedTime_msec > bldc_getSpeedTime_ms(setSpeed_rpm)) && (eventHandler != NULL) && !timeoutPrimitiveSent) {
+	if (!stabilized && (elapsedTime_msec > bldc_getSpeedTime_ms(setSpeed_rpm))
+			&& (eventHandler != NULL )&& !timeoutPrimitiveSent){
 		motionPrimitive = MOTION_PRIMITIVE_BLDC_TIMEOUT;
-		err_code = app_sched_event_put(&motionPrimitive, sizeof(motionPrimitive), eventHandler);
+		err_code = app_sched_event_put(&motionPrimitive,
+				sizeof(motionPrimitive), eventHandler);
 		APP_ERROR_CHECK(err_code);
 		timeoutPrimitiveSent = true;
 	}
@@ -973,7 +966,8 @@ bool bldc_updateStable(int32_t newestError) {
 		meanError = -meanError;
 	}
 
-	if ((setSpeed_rpm >= 6000) && (meanError < setSpeed_rpm / 100) && (varianceError <= 2500)) {
+	if ((setSpeed_rpm >= 6000) && (meanError < setSpeed_rpm / 100)
+			&& (varianceError <= 2500)) {
 		/* To claim that the motor has reached a stable speed, we require that
 		 * there be less than 1% error in the speed and the variance of the
 		 * error be less than an experimentally chosen value. */
@@ -1005,7 +999,8 @@ bool bldc_isStable() {
 	/* If the controller does not have battery power or the motor is not in
 	 * constant speed mode, we say, by definition, that the motor speed is not
 	 * stable. */
-	if (!power_getVBATSWState() || (bldcModeCurrent != BLDC_MODE_CONSTANT_SPEED)) {
+	if (!power_getVBATSWState()
+			|| (bldcModeCurrent != BLDC_MODE_CONSTANT_SPEED)) {
 		return false;
 	}
 

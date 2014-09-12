@@ -27,33 +27,27 @@ bool adc_init() {
 	/* Make the VINSENSE, FRAMETEMP, LIPROVBATOUT, and ICHARGE pins inputs with
 	 * their input buffers disabled so that they do not consume current when
 	 * the pins are at a voltage somewhere between 0 and VCC. */
-	GPIO_PIN_CONFIG((VINSENSE_PIN_NO),
-			GPIO_PIN_CNF_DIR_Input,
-			GPIO_PIN_CNF_INPUT_Disconnect,
-			GPIO_PIN_CNF_PULL_Disabled,
-			GPIO_PIN_CNF_DRIVE_S0S1,
-			GPIO_PIN_CNF_SENSE_Disabled);
 
-	GPIO_PIN_CONFIG((FRAMETEMP_PIN_NO),
-			GPIO_PIN_CNF_DIR_Input,
-			GPIO_PIN_CNF_INPUT_Disconnect,
-			GPIO_PIN_CNF_PULL_Disabled,
-			GPIO_PIN_CNF_DRIVE_S0S1,
-			GPIO_PIN_CNF_SENSE_Disabled);
+    NRF_GPIO->PIN_CNF[VINSENSE_PIN_NO] =
+    		(GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
+    		(GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
+    		(GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
+    		(GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
+    		(GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
 
-	GPIO_PIN_CONFIG((LIPROVBATOUT_PIN_NO),
-			GPIO_PIN_CNF_DIR_Input,
-			GPIO_PIN_CNF_INPUT_Disconnect,
-			GPIO_PIN_CNF_PULL_Disabled,
-			GPIO_PIN_CNF_DRIVE_S0S1,
-			GPIO_PIN_CNF_SENSE_Disabled);
+    NRF_GPIO->PIN_CNF[LIPROVBATOUT_PIN_NO] =
+    		(GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
+    		(GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
+    		(GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
+    		(GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
+    		(GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
 
-	GPIO_PIN_CONFIG((ICHARGE_PIN_NO),
-			GPIO_PIN_CNF_DIR_Input,
-			GPIO_PIN_CNF_INPUT_Disconnect,
-			GPIO_PIN_CNF_PULL_Disabled,
-			GPIO_PIN_CNF_DRIVE_S0S1,
-			GPIO_PIN_CNF_SENSE_Disabled);
+    NRF_GPIO->PIN_CNF[ICHARGE_PIN_NO] =
+    		(GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
+    		(GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
+    		(GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
+    		(GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
+    		(GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
 
 	return true;
 }

@@ -424,11 +424,17 @@ void cmdBLDCAccel(const char *args) {
 	}
 
 	if (str[0] == 'f') {
-		bldc_setAccel(accel_mA, time_ms, false, cmdMotionPrimitiveHandler);
-		app_uart_put_string("Accelerating BLDC motor forward...\r\n");
+		if (bldc_setAccel(accel_mA, time_ms, false, cmdMotionPrimitiveHandler)) {
+			app_uart_put_string("Accelerating BLDC motor forward...\r\n");
+		} else {
+			app_uart_put_string("Problem accelerating BLDC motor\r\n");
+		}
 	} else if (str[0] == 'r') {
-		bldc_setAccel(accel_mA, time_ms, true, cmdMotionPrimitiveHandler);
-		app_uart_put_string("Accelerating BLDC motor in reverse...\r\n");
+		if (bldc_setAccel(accel_mA, time_ms, true, cmdMotionPrimitiveHandler)) {
+			app_uart_put_string("Accelerating BLDC motor in reverse...\r\n");
+		} else {
+			app_uart_put_string("Problem accelerating BLDC motor\r\n");
+		}
 	}
 }
 
@@ -445,19 +451,31 @@ void cmdBLDCSpeed(const char *args) {
 	 * be 'f' for forward, 'r' for reverse.  If the speed is 0, the first
 	 * argument must be 'c' for coast or 'b' for brake. */
 	if ((speed_rpm > 0) && (str[0] == 'f')) {
-		bldc_setSpeed(speed_rpm, false, 0, cmdMotionPrimitiveHandler);
-		app_uart_put_string("Starting BLDC motor spinning forward...\r\n");
+		if (bldc_setSpeed(speed_rpm, false, 0, cmdMotionPrimitiveHandler)) {
+			app_uart_put_string("Starting BLDC motor spinning forward...\r\n");
+		} else {
+			app_uart_put_string("Problem starting BLDC motor\r\n");
+		}
 	} else if ((speed_rpm > 0) && (str[0] == 'r')) {
-		bldc_setSpeed(speed_rpm, true, 0, cmdMotionPrimitiveHandler);
-		app_uart_put_string("Starting BLDC motor spinning in reverse...\r\n");
+		if (bldc_setSpeed(speed_rpm, true, 0, cmdMotionPrimitiveHandler)) {
+			app_uart_put_string("Starting BLDC motor spinning in reverse...\r\n");
+		} else {
+			app_uart_put_string("Problem starting BLDC motor\r\n");
+		}
 	} else if ((speed_rpm == 0) && (str[0] == 'c')) {
-		bldc_setSpeed(0, false, 0, cmdMotionPrimitiveHandler);
-		app_uart_put_string(
-				"Stopping BLDC motor without electric brake...\r\n");
+		if (bldc_setSpeed(0, false, 0, cmdMotionPrimitiveHandler)) {
+			app_uart_put_string(
+					"Stopping BLDC motor without electric brake...\r\n");
+		} else {
+			app_uart_put_string("Problem stopping BLDC motor\r\n");
+		}
 	} else if ((speed_rpm == 0) && (str[0] == 'b')) {
-		bldc_setSpeed(0, false, BLDC_EBRAKE_COMPLETE_STOP_TIME_MS,
-				cmdMotionPrimitiveHandler);
-		app_uart_put_string("Stopping BLDC motor with electric brake...\r\n");
+		if (bldc_setSpeed(0, false, BLDC_EBRAKE_COMPLETE_STOP_TIME_MS,
+				cmdMotionPrimitiveHandler)) {
+			app_uart_put_string("Stopping BLDC motor with electric brake...\r\n");
+		} else {
+			app_uart_put_string("Problem stopping BLDC motor\r\n");
+		}
 	}
 }
 

@@ -117,71 +117,32 @@ void power_deinit() {
 	/* Drive both the LIPROCTL3 and LIPOCTL4 lines high to keep them from
 	 * floating and consuming extra current when in sleep mode. */
     nrf_gpio_pin_set(LIPROCTL3_PIN_NO);
-	GPIO_PIN_CONFIG((LIPROCTL3_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+    nrf_gpio_cfg_output(LIPROCTL3_PIN_NO);
+
 	nrf_gpio_pin_set(LIPROCTL4_PIN_NO);
-	GPIO_PIN_CONFIG((LIPROCTL4_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+	nrf_gpio_cfg_output(LIPROCTL4_PIN_NO);
 
 	/* Drive the CHRGEN and PRECHRGEN lines low to disable the charger and
 	 * minimize current consumption. */
     nrf_gpio_pin_clear(CHRGEN_PIN_NO);
-    GPIO_PIN_CONFIG((CHRGEN_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+    nrf_gpio_cfg_output(CHRGEN_PIN_NO);
 
     nrf_gpio_pin_clear(PRECHRGEN_PIN_NO);
-    GPIO_PIN_CONFIG((PRECHRGEN_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+    nrf_gpio_cfg_output(PRECHRGEN_PIN_NO);
 
     /* Drive all of the BATxDISCHRG pins low to keep the discharge MOFSETs off
      * by default. */
     nrf_gpio_pin_clear(BAT1DISCHRG_PIN_NO);
-    GPIO_PIN_CONFIG((BAT1DISCHRG_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+    nrf_gpio_cfg_output(BAT1DISCHRG_PIN_NO);
 
     nrf_gpio_pin_clear(BAT2DISCHRG_PIN_NO);
-    GPIO_PIN_CONFIG((BAT2DISCHRG_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+    nrf_gpio_cfg_output(BAT2DISCHRG_PIN_NO);
 
     nrf_gpio_pin_clear(BAT3DISCHRG_PIN_NO);
-    GPIO_PIN_CONFIG((BAT3DISCHRG_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+    nrf_gpio_cfg_output(BAT3DISCHRG_PIN_NO);
 
     nrf_gpio_pin_clear(BAT4DISCHRG_PIN_NO);
-    GPIO_PIN_CONFIG((BAT4DISCHRG_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+    nrf_gpio_cfg_output(BAT4DISCHRG_PIN_NO);
 
 	initialized = false;
 }
@@ -483,18 +444,18 @@ uint16_t power_getBatteryVoltage_mV(uint8_t batNum) {
 		nrf_gpio_pin_set(LIPROCTL4_PIN_NO);
 	} else if (batNum == 2) {
 		/* CTL3 floating, CTL4 floating, with input buffers disabled */
-	    GPIO_PIN_CONFIG((LIPROCTL3_PIN_NO),
-	    		GPIO_PIN_CNF_DIR_Input,
-	    		GPIO_PIN_CNF_INPUT_Disconnect,
-	    		GPIO_PIN_CNF_PULL_Disabled,
-	    		GPIO_PIN_CNF_DRIVE_S0S1,
-	    		GPIO_PIN_CNF_SENSE_Disabled);
-	    GPIO_PIN_CONFIG((LIPROCTL4_PIN_NO),
-	    		GPIO_PIN_CNF_DIR_Input,
-	    		GPIO_PIN_CNF_INPUT_Disconnect,
-	    		GPIO_PIN_CNF_PULL_Disabled,
-	    		GPIO_PIN_CNF_DRIVE_S0S1,
-	    		GPIO_PIN_CNF_SENSE_Disabled);
+	    NRF_GPIO->PIN_CNF[LIPROCTL3_PIN_NO] =
+	    		(GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
+	    		(GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
+	    		(GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
+	    		(GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
+	    		(GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
+	    NRF_GPIO->PIN_CNF[LIPROCTL4_PIN_NO] =
+	    		(GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
+	    		(GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
+	    		(GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
+	    		(GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
+	    		(GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
 	} else if (batNum == 3) {
 		/* CTL3 High, CTL4 Low */
 		nrf_gpio_cfg_output(LIPROCTL3_PIN_NO);
@@ -517,42 +478,42 @@ uint16_t power_getBatteryVoltage_mV(uint8_t batNum) {
 		/* CTL3 Low, CTL4 floating (with input buffer disabled) */
 		nrf_gpio_cfg_output(LIPROCTL3_PIN_NO);
 		nrf_gpio_pin_clear(LIPROCTL3_PIN_NO);
-	    GPIO_PIN_CONFIG((LIPROCTL4_PIN_NO),
-	    		GPIO_PIN_CNF_DIR_Input,
-	    		GPIO_PIN_CNF_INPUT_Disconnect,
-	    		GPIO_PIN_CNF_PULL_Disabled,
-	    		GPIO_PIN_CNF_DRIVE_S0S1,
-	    		GPIO_PIN_CNF_SENSE_Disabled);
+	    NRF_GPIO->PIN_CNF[LIPROCTL4_PIN_NO] =
+	    		(GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
+	    		(GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
+	    		(GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
+	    		(GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
+	    		(GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
 	} else if (batNum == 2) {
 		/* CTL3 floating (with input buffer disabled), CTL4 Low */
-	    GPIO_PIN_CONFIG((LIPROCTL3_PIN_NO),
-	    		GPIO_PIN_CNF_DIR_Input,
-	    		GPIO_PIN_CNF_INPUT_Disconnect,
-	    		GPIO_PIN_CNF_PULL_Disabled,
-	    		GPIO_PIN_CNF_DRIVE_S0S1,
-	    		GPIO_PIN_CNF_SENSE_Disabled);
+	    NRF_GPIO->PIN_CNF[LIPROCTL3_PIN_NO] =
+	    		(GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
+	    		(GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
+	    		(GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
+	    		(GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
+	    		(GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
 		nrf_gpio_cfg_output(LIPROCTL4_PIN_NO);
 		nrf_gpio_pin_clear(LIPROCTL4_PIN_NO);
 	} else if (batNum == 3) {
 		/* CTL3 floating (with input buffer disabled), CTL4 High */
-	    GPIO_PIN_CONFIG((LIPROCTL3_PIN_NO),
-	    		GPIO_PIN_CNF_DIR_Input,
-	    		GPIO_PIN_CNF_INPUT_Disconnect,
-	    		GPIO_PIN_CNF_PULL_Disabled,
-	    		GPIO_PIN_CNF_DRIVE_S0S1,
-	    		GPIO_PIN_CNF_SENSE_Disabled);
+	    NRF_GPIO->PIN_CNF[LIPROCTL3_PIN_NO] =
+	    		(GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
+	    		(GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
+	    		(GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
+	    		(GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
+	    		(GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
 		nrf_gpio_cfg_output(LIPROCTL4_PIN_NO);
 		nrf_gpio_pin_set(LIPROCTL4_PIN_NO);
 	} else if (batNum == 4) {
 		/* CTL3 High, CTL4 floating (with input buffer disabled) */
 		nrf_gpio_cfg_output(LIPROCTL3_PIN_NO);
 		nrf_gpio_pin_set(LIPROCTL3_PIN_NO);
-	    GPIO_PIN_CONFIG((LIPROCTL4_PIN_NO),
-	    		GPIO_PIN_CNF_DIR_Input,
-	    		GPIO_PIN_CNF_INPUT_Disconnect,
-	    		GPIO_PIN_CNF_PULL_Disabled,
-	    		GPIO_PIN_CNF_DRIVE_S0S1,
-	    		GPIO_PIN_CNF_SENSE_Disabled);
+	    NRF_GPIO->PIN_CNF[LIPROCTL4_PIN_NO] =
+	    		(GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
+	    		(GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
+	    		(GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
+	    		(GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
+	    		(GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
 	}
 
 	nrf_delay_ms(1);
@@ -561,18 +522,18 @@ uint16_t power_getBatteryVoltage_mV(uint8_t batNum) {
 
 	/* Return both control lines to their high impedance states with the nRF's
 	 * input buffers disabled to reduce current consumption. */
-    GPIO_PIN_CONFIG((LIPROCTL3_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Input,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
-    GPIO_PIN_CONFIG((LIPROCTL4_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Input,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+    NRF_GPIO->PIN_CNF[LIPROCTL3_PIN_NO] =
+    		(GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
+    		(GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
+    		(GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
+    		(GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
+    		(GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
+    NRF_GPIO->PIN_CNF[LIPROCTL4_PIN_NO] =
+    		(GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
+    		(GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
+    		(GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
+    		(GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
+    		(GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
 
 	/* Subtract the offset voltage and multiply by five to arrive at the actual
 	 * battery voltage. This comes from the Seiko datasheet. */

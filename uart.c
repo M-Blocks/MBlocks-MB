@@ -60,21 +60,11 @@ void uart_deinit() {
 
 	/* Make the TXD pin an output which drives high */
     nrf_gpio_pin_set(UART_TX_PIN_NO);
-    GPIO_PIN_CONFIG((UART_TX_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+    nrf_gpio_cfg_output(UART_TX_PIN_NO);
 
     /* Make the RXD pin an input will a pull-up */
     nrf_gpio_pin_set(UART_RX_PIN_NO);
-    GPIO_PIN_CONFIG((UART_RX_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Input,
-    		GPIO_PIN_CNF_INPUT_Connect,
-    		GPIO_PIN_CNF_PULL_Pullup,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+    nrf_gpio_cfg_input(UART_RX_PIN_NO, NRF_GPIO_PIN_PULLUP);
 
 	initialized = false;
 }

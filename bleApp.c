@@ -19,8 +19,11 @@
 #include "ble_srv_common.h"
 #include "ble_advdata.h"
 #include "ble_conn_params.h"
-#include "ble_stack_handler.h"
 #include "ble_debug_assert_handler.h"
+#include "ble_stack_handler_types.h"
+
+#include "softdevice_handler.h"
+
 
 #include "global.h"
 #include "fifo.h"
@@ -68,19 +71,12 @@ static void bleApp_connParamsErrorHandler(uint32_t nrf_error);
  * @details Initializes the SoftDevice and the BLE event interrupt.
  */
 void bleApp_stackInit() {
-    // YOUR_JOB: If the MTU size is changed by the application, the MTU_SIZE parameter to
-    //           BLE_STACK_HANDLER_INIT() must be changed accordingly.
-    /*
-	BLE_STACK_HANDLER_INIT(NRF_CLOCK_LFCLKSRC_XTAL_20_PPM,
-                           BLE_L2CAP_MTU_DEF,
-                           ble_evt_dispatch,
-                           true);
-    */
+	uint32_t err_code;
 
-	BLE_STACK_HANDLER_INIT(NRF_CLOCK_LFCLKSRC_RC_250_PPM_4000MS_CALIBRATION,
-			BLE_L2CAP_MTU_DEF,
-			bleApp_evtDispatch,
-			true);
+	SOFTDEVICE_HANDLER_INIT(NRF_CLOCK_LFCLKSRC_RC_250_PPM_4000MS_CALIBRATION, true);
+
+	err_code = softdevice_ble_evt_handler_set(bleApp_evtDispatch);
+	APP_ERROR_CHECK(err_code);
 }
 
 

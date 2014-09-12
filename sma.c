@@ -67,13 +67,8 @@ bool sma_init() {
 		return true;
 	}
 
-	nrf_gpio_pin_clear(SMAIREF_PIN_NO);
-    GPIO_PIN_CONFIG((SMAIREF_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+	nrf_gpio_pin_clear(SMAPWM_PIN_NO);
+	nrf_gpio_cfg_output(SMAPWM_PIN_NO);
 
 	if (sma_timerID == TIMER_NULL) {
 		/* If the timer has not yet been created, create it now. At the moment,
@@ -103,7 +98,7 @@ void sma_deinit() {
 	}
 
 	/* Disable the SMA controller */
-	nrf_gpio_pin_clear(SMAIREF_PIN_NO);
+	nrf_gpio_pin_clear(SMAPWM_PIN_NO);
 
 	smaState = SMA_STATE_EXTENDED;
 
@@ -194,7 +189,7 @@ bool sma_retract(uint16_t hold_ms, app_sched_event_handler_t smaEventHandler){
 	APP_ERROR_CHECK(err_code);
 
 	/* Turn the SMA on */
-	nrf_gpio_pin_set(SMAIREF_PIN_NO);
+	nrf_gpio_pin_set(SMAPWM_PIN_NO);
 
 	return true;
 }
@@ -256,7 +251,7 @@ bool sma_extend(app_sched_event_handler_t smaEventHandler) {
 
 	/* Disable the SMA controller thereby allowing the SMA to cool down and
 	 * extend to its resting length. */
-	nrf_gpio_pin_clear(SMAIREF_PIN_NO);
+	nrf_gpio_pin_clear(SMAPWM_PIN_NO);
 
 	return true;
 }
@@ -298,7 +293,7 @@ void sma_timerHandler(void *p_context) {
 			APP_ERROR_CHECK(err_code);
 
 			/* Stop driving current through the SMA */
-			nrf_gpio_pin_clear(SMAIREF_PIN_NO);
+			nrf_gpio_pin_clear(SMAPWM_PIN_NO);
 			return;
 		} else if (elapsedTime_ms > retractTime_ms) {
 			/* If we were retracting but now the retract time has expired, we
@@ -325,7 +320,7 @@ void sma_timerHandler(void *p_context) {
 		/* If we reach this point, we know that we need to continue, PWM-ing
 		 * the SMA. */
 
-		if (nrf_gpio_pin_read(SMAIREF_PIN_NO)) {
+		if (nrf_gpio_pin_read(SMAPWM_PIN_NO)) {
 			/* If the PWM output is currently high, we just finished the on-
 			 * interval, so now we need to disable the SMA driver for the
 			 * remainder of this period. */
@@ -337,7 +332,7 @@ void sma_timerHandler(void *p_context) {
 				APP_ERROR_CHECK(err_code);
 
 				/* Finally, we turn off the SMA controller */
-				nrf_gpio_pin_clear(SMAIREF_PIN_NO);
+				nrf_gpio_pin_clear(SMAPWM_PIN_NO);
 			} else {
 				/* Otherwise, the PWM duty cycle is 100%, so we restart the
 				 * timer with the same on-time as the interval that just
@@ -355,7 +350,7 @@ void sma_timerHandler(void *p_context) {
 					APP_TIMER_TICKS(pwmOnTime_ms, APP_TIMER_PRESCALER), NULL);
 			APP_ERROR_CHECK(err_code);
 
-			nrf_gpio_pin_set(SMAIREF_PIN_NO);
+			nrf_gpio_pin_set(SMAPWM_PIN_NO);
 		}
 	} else if (smaState == SMA_STATE_EXTENDING) {
 		/* When setting the SMA state to EXTENDING above, we configured the

@@ -9,6 +9,9 @@
 #include <stdbool.h>
 #include <string.h>
 
+#include "nrf51.h"
+#include "nrf51_bitfields.h"
+
 #include "util.h"
 #include "twi_master_config.h"
 #include "twi_master.h"

@@ -23,30 +23,31 @@
  * and how you can customize.
  */
 
+
 #include <stdint.h>
 #include <string.h>
+
 #include "nordic_common.h"
 #include "nrf.h"
 #include "nrf_gpio.h"
 #include "nrf_delay.h"
 #include "nrf_soc.h"
-#include "boards/nrf6310.h"
-#include "app_error.h"
-#include "app_uart.h"
 #include "nrf51_bitfields.h"
+
 #include "ble.h"
 #include "ble_hci.h"
 #include "ble_srv_common.h"
 #include "ble_advdata.h"
 #include "ble_conn_params.h"
-#include "ble_nrf6310_pins.h"
+#include "ble_debug_assert_handler.h"
+
 #include "app_scheduler.h"
-#include "ble_stack_handler.h"
 #include "app_timer.h"
 #include "app_gpiote.h"
 #include "app_button.h"
 #include "app_timer.h"
-#include "ble_debug_assert_handler.h"
+#include "app_error.h"
+#include "app_uart.h"
 
 #include "global.h"
 #include "pins.h"
@@ -215,108 +216,47 @@ void main_gpioInit() {
 	main_configUnusedPins();
 
     nrf_gpio_pin_clear(BAT1DISCHRG_PIN_NO);
-    GPIO_PIN_CONFIG((BAT1DISCHRG_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+    nrf_gpio_cfg_output(BAT1DISCHRG_PIN_NO);
 
     nrf_gpio_pin_clear(BAT2DISCHRG_PIN_NO);
-    GPIO_PIN_CONFIG((BAT2DISCHRG_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+    nrf_gpio_cfg_output(BAT2DISCHRG_PIN_NO);
 
     nrf_gpio_pin_clear(BAT3DISCHRG_PIN_NO);
-    GPIO_PIN_CONFIG((BAT3DISCHRG_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+    nrf_gpio_cfg_output(BAT3DISCHRG_PIN_NO);
 
     nrf_gpio_pin_clear(BAT4DISCHRG_PIN_NO);
-    GPIO_PIN_CONFIG((BAT4DISCHRG_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+    nrf_gpio_cfg_output(BAT4DISCHRG_PIN_NO);
 
     /* The S-8243B datasheet states that CTL3 and CTL4 pins should not both be
      * low.  So, we default to setting them high. */
     nrf_gpio_pin_set(LIPROCTL3_PIN_NO);
-    GPIO_PIN_CONFIG((LIPROCTL3_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+    nrf_gpio_cfg_output(LIPROCTL3_PIN_NO);
 
     nrf_gpio_pin_set(LIPROCTL4_PIN_NO);
-    GPIO_PIN_CONFIG((LIPROCTL4_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+    nrf_gpio_cfg_output(LIPROCTL4_PIN_NO);
 
     nrf_gpio_pin_clear(CHRGEN_PIN_NO);
-    GPIO_PIN_CONFIG((CHRGEN_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+    nrf_gpio_cfg_output(CHRGEN_PIN_NO);
 
 	/* Make the SCK, MOSI, and CS pins outputs with well defined states */
 	nrf_gpio_pin_clear(SPI_SCK_PIN_NO);
-    GPIO_PIN_CONFIG((SPI_SCK_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+	nrf_gpio_cfg_output(SPI_SCK_PIN_NO);
 
 	nrf_gpio_pin_clear(SPI_MOSI_PIN_NO);
-    GPIO_PIN_CONFIG((SPI_MOSI_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+	nrf_gpio_cfg_output(SPI_MOSI_PIN_NO);
 
 	nrf_gpio_pin_set(SPI_BLDCCS_PIN_NO);
-    GPIO_PIN_CONFIG((SPI_BLDCCS_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+	nrf_gpio_cfg_output(SPI_BLDCCS_PIN_NO);
 
 	/* Make sure the MISO pin has a pull-down so that it does not float and
 	 * consume extra current. */
-    GPIO_PIN_CONFIG((SPI_MISO_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Input,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Pulldown,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+	nrf_gpio_cfg_input(SPI_MOSI_PIN_NO, NRF_GPIO_PIN_PULLDOWN);
 
     /* The BLDCRESETN pin serves as the active-low reset for the A4960 but it
      * also enables the switched battery rail when high. This switched battery
-     * rail supplies the A4960 and the SMA controller. Additionally, BLDCRESETN
-     * provides power to the thermistor next to the frame. */
+     * rail supplies the A4960 and the SMA controller. */
     nrf_gpio_pin_clear(BLDCRESETN_PIN_NO);
-    GPIO_PIN_CONFIG((BLDCRESETN_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+    nrf_gpio_cfg_output(BLDCRESETN_PIN_NO);
 
     /* Despite plans to use PWM output to control the BLDC motor's speed, we
      * have found that adjusting the current limit (via the A4960's REF pin)
@@ -325,172 +265,90 @@ void main_gpioInit() {
      * said, the A4960 consume about 50uA additional current when the pin is
      * high, so we keep it low for now. */
     nrf_gpio_pin_clear(BLDCSPEED_PIN_NO);
-    GPIO_PIN_CONFIG((BLDCSPEED_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+    nrf_gpio_cfg_output(BLDCSPEED_PIN_NO);
 
-    /* Make the BLDCTACHO pin an input.  We will detect and count all rising
-     * edges.*/
-    GPIO_PIN_CONFIG((BLDCTACHO_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Input,
-    		GPIO_PIN_CNF_INPUT_Connect,
-    		GPIO_PIN_CNF_PULL_Pulldown,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+    /* Make the BLDCTACHO pin an input with pull-down.  We will detect and
+     * count all rising edges.*/
+    nrf_gpio_cfg_input(BLDCTACHO_PIN_NO, NRF_GPIO_PIN_PULLDOWN);
 
-	/* Make the VINSENSE, FRAMETEMP, LIPROVBATOUT, and ICHARGE pins inputs with
+	/* Make the VINSENSE, LIPROVBATOUT, and ICHARGE pins inputs with
 	 * their input buffers disabled so that they do not consume current when
 	 * the pins are at a voltage somewhere between 0 and VCC. */
-	GPIO_PIN_CONFIG((VINSENSE_PIN_NO),
-			GPIO_PIN_CNF_DIR_Input,
-			GPIO_PIN_CNF_INPUT_Disconnect,
-			GPIO_PIN_CNF_PULL_Disabled,
-			GPIO_PIN_CNF_DRIVE_S0S1,
-			GPIO_PIN_CNF_SENSE_Disabled);
+    NRF_GPIO->PIN_CNF[VINSENSE_PIN_NO] =
+    		(GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
+    		(GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
+    		(GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
+    		(GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
+    		(GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
 
-	GPIO_PIN_CONFIG((FRAMETEMP_PIN_NO),
-			GPIO_PIN_CNF_DIR_Input,
-			GPIO_PIN_CNF_INPUT_Disconnect,
-			GPIO_PIN_CNF_PULL_Disabled,
-			GPIO_PIN_CNF_DRIVE_S0S1,
-			GPIO_PIN_CNF_SENSE_Disabled);
+    NRF_GPIO->PIN_CNF[LIPROVBATOUT_PIN_NO] =
+    		(GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
+    		(GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
+    		(GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
+    		(GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
+    		(GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
 
-	GPIO_PIN_CONFIG((LIPROVBATOUT_PIN_NO),
-			GPIO_PIN_CNF_DIR_Input,
-			GPIO_PIN_CNF_INPUT_Disconnect,
-			GPIO_PIN_CNF_PULL_Disabled,
-			GPIO_PIN_CNF_DRIVE_S0S1,
-			GPIO_PIN_CNF_SENSE_Disabled);
-
-	GPIO_PIN_CONFIG((ICHARGE_PIN_NO),
-			GPIO_PIN_CNF_DIR_Input,
-			GPIO_PIN_CNF_INPUT_Disconnect,
-			GPIO_PIN_CNF_PULL_Disabled,
-			GPIO_PIN_CNF_DRIVE_S0S1,
-			GPIO_PIN_CNF_SENSE_Disabled);
+    NRF_GPIO->PIN_CNF[ICHARGE_PIN_NO] =
+    		(GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
+    		(GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
+    		(GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
+    		(GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
+    		(GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
 
 	/* Make the TXD pin an output which drives high */
     nrf_gpio_pin_set(UART_TX_PIN_NO);
-    GPIO_PIN_CONFIG((UART_TX_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+    nrf_gpio_cfg_output(UART_TX_PIN_NO);
 
     /* Make the RXD pin an input will a pull-up */
     nrf_gpio_pin_set(UART_RX_PIN_NO);
-    GPIO_PIN_CONFIG((UART_RX_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Input,
-    		GPIO_PIN_CNF_INPUT_Connect,
-    		GPIO_PIN_CNF_PULL_Pullup,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+    nrf_gpio_cfg_input(UART_RX_PIN_NO, NRF_GPIO_PIN_PULLUP);
 
 	/* Set the PWM pins to 0 until they are turned on. */
 	nrf_gpio_pin_clear(PRECHRGEN_PIN_NO);
-    GPIO_PIN_CONFIG((PRECHRGEN_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+	nrf_gpio_cfg_output(PRECHRGEN_PIN_NO);
 
     nrf_gpio_pin_clear(BLDCIREF_PIN_NO);
-    GPIO_PIN_CONFIG((BLDCIREF_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+    nrf_gpio_cfg_output(BLDCIREF_PIN_NO);
 
-    /* The SMAIREF is controller by software-based PWM, but we still need to
+    /* The SMAPWM is controlled by software-based PWM, but we still need to
      * set its initial state to 0. */
-	nrf_gpio_pin_clear(SMAIREF_PIN_NO);
-    GPIO_PIN_CONFIG((SMAIREF_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+	nrf_gpio_pin_clear(SMAPWM_PIN_NO);
+	nrf_gpio_cfg_output(SMAPWM_PIN_NO);
 
 	/* Ensure that the SCL and SDA pins are inputs.  We assume that they do not
 	 * need to be pulled-up as there should be external pull-up resistors on
 	 * the I2C bus. */
-    GPIO_PIN_CONFIG((TWI_MASTER_CONFIG_CLOCK_PIN_NUMBER),
-    		GPIO_PIN_CNF_DIR_Input,
-    		GPIO_PIN_CNF_INPUT_Connect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+	nrf_gpio_cfg_input(TWI_MASTER_CONFIG_CLOCK_PIN_NUMBER, NRF_GPIO_PIN_NOPULL);
+	nrf_gpio_cfg_input(TWI_MASTER_CONFIG_DATA_PIN_NUMBER, NRF_GPIO_PIN_NOPULL);
 
-    GPIO_PIN_CONFIG((TWI_MASTER_CONFIG_DATA_PIN_NUMBER),
-    		GPIO_PIN_CNF_DIR_Input,
-    		GPIO_PIN_CNF_INPUT_Connect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+    /* The IMUINT pin should be configured as an input without pull-up or pull-
+     * down as the accelerometer default to making its interrupt pin a push-
+     * pull output.*/
+    nrf_gpio_cfg_input(IMUINT_PIN_NO, NRF_GPIO_PIN_NOPULL);
 
     /* Configure the LED pins as outputs */
     nrf_gpio_pin_clear(LED_RED_PIN_NO);
-    GPIO_PIN_CONFIG((LED_RED_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+    nrf_gpio_cfg_output(LED_RED_PIN_NO);
 
     nrf_gpio_pin_clear(LED_GREEN_PIN_NO);
-    GPIO_PIN_CONFIG((LED_GREEN_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+    nrf_gpio_cfg_output(LED_GREEN_PIN_NO);
 
     nrf_gpio_pin_clear(LED_BLUE_PIN_NO);
-    GPIO_PIN_CONFIG((LED_BLUE_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+    nrf_gpio_cfg_output(LED_BLUE_PIN_NO);
 }
 
 void main_configUnusedPins() {
 	/* P0.26 is truly unconnected */
 	nrf_gpio_pin_clear(26);
-    GPIO_PIN_CONFIG((26),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+	nrf_gpio_cfg_output(26);
 
-	/* The SMAEN pin (P0.27) was initially used to turn the SMA driver
-	 * circuitry on, but with the LED2000-based expansion board, it is
-	 * now left unconnected. */
-    nrf_gpio_pin_clear(SMAEN_PIN_NO);
-    GPIO_PIN_CONFIG((SMAEN_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+    /* P0.03 is truly unconnected.*/
+    nrf_gpio_pin_clear(3);
+    nrf_gpio_cfg_output(3);
 
-    /* The SMAVOLTS pin (P0.03) was initially used to sense the voltage across
-     * the SMA, but with the LED2000-based expansion board, we do not bother
-     * to do this, and the pin is unconnected. */
-    nrf_gpio_pin_clear(SMAVOLTS_PIN_NO);
-    GPIO_PIN_CONFIG((SMAVOLTS_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+    /* P0.02 is truly unconnected.*/
+    nrf_gpio_pin_clear(2);
+    nrf_gpio_cfg_output(2);
 }
 
 
@@ -506,7 +364,9 @@ int main(void) {
 	bool ledsOnAfterBoot;
 	uint32_t currentTime_rtcTicks;
 
-	 nrf_delay_ms(10);
+	nrf_delay_ms(10);
+
+	main_schedulerInit();
 
 	/* The timer subsystem must be initialized before we can create timers. */
     main_timersInit();
@@ -531,7 +391,7 @@ int main(void) {
     power_init();
     commands_init();
 
-    main_schedulerInit();
+    //main_schedulerInit();
     bleApp_gapParamsInit();
     bleApp_servicesInit();
     bleApp_connParamsInit();
@@ -762,7 +622,7 @@ void main_powerManage() {
 		sleeping = true;
 	}
 
-	err_code = sd_app_event_wait();
+	err_code = sd_app_evt_wait();
 	APP_ERROR_CHECK(err_code);
 }
 

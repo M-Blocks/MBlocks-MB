@@ -83,20 +83,10 @@ void pwm_init() {
 
 	/* Set the PWM pins to 0 until they are turned on. */
 	nrf_gpio_pin_clear(PWM0_PIN_NO);
-    GPIO_PIN_CONFIG((PWM0_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+	nrf_gpio_cfg_output(PWM0_PIN_NO);
 
 	nrf_gpio_pin_clear(PWM1_PIN_NO);
-    GPIO_PIN_CONFIG((PWM1_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+	nrf_gpio_cfg_output(PWM1_PIN_NO);
 
 	/* Compare match on channel 0 is used to reset the counter to 0. */
 	NRF_TIMER2->SHORTS = (TIMER_SHORTS_COMPARE0_CLEAR_Enabled << TIMER_SHORTS_COMPARE0_CLEAR_Pos);

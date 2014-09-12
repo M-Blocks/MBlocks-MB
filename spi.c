@@ -48,37 +48,17 @@ void spi_deinit() {
 
 	/* Make the SCK, MOSI, and CS pins outputs with well defined states */
 	nrf_gpio_pin_clear(SPI_SCK_PIN_NO);
-    GPIO_PIN_CONFIG((SPI_SCK_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+	nrf_gpio_cfg_output(SPI_SCK_PIN_NO);
 
 	nrf_gpio_pin_clear(SPI_MOSI_PIN_NO);
-    GPIO_PIN_CONFIG((SPI_MOSI_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+	nrf_gpio_cfg_output(SPI_MOSI_PIN_NO);
 
 	nrf_gpio_pin_set(SPI_BLDCCS_PIN_NO);
-    GPIO_PIN_CONFIG((SPI_BLDCCS_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Output,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Disabled,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+	nrf_gpio_cfg_output(SPI_BLDCCS_PIN_NO);
 
 	/* Make sure the MISO pin has a pull-down so that it does not float and
 	 * consume extra current. */
-    GPIO_PIN_CONFIG((SPI_MISO_PIN_NO),
-    		GPIO_PIN_CNF_DIR_Input,
-    		GPIO_PIN_CNF_INPUT_Disconnect,
-    		GPIO_PIN_CNF_PULL_Pulldown,
-    		GPIO_PIN_CNF_DRIVE_S0S1,
-    		GPIO_PIN_CNF_SENSE_Disabled);
+	nrf_gpio_cfg_input(SPI_MISO_PIN_NO, NRF_GPIO_PIN_PULLDOWN);
 
 	initialized = false;
 }

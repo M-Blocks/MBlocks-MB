@@ -8,6 +8,7 @@
 #include "nrf_gpio.h"
 #include "nrf_assert.h"
 
+
 #include "app_timer.h"
 
 #include "global.h"
@@ -29,8 +30,8 @@ void led_init() {
 	uint32_t led;
 
 	for (led=0; led<LED_COUNT; led++) {
-		GPIO_LED_CONFIG(led_pin_number[led]);
 		nrf_gpio_pin_clear(led_pin_number[led]);
+		nrf_gpio_cfg_output(led_pin_number[led]);
 		led_state[led] = LED_STATE_OFF;
 	}
 

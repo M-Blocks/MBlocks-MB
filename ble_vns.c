@@ -79,7 +79,6 @@ uint32_t version_char_add(ble_vns_t * p_vns, const ble_vns_init_t * p_vns_init) 
     ble_gatts_attr_t attr_char_value;
     ble_uuid_t ble_version_char_uuid;
     ble_gatts_attr_md_t attr_md;
-    uint32_t err_code;
 
 	/* The characteristic should be read-able only. This block of code
 	 * configures the characteristic's descriptors. */
@@ -99,7 +98,7 @@ uint32_t version_char_add(ble_vns_t * p_vns, const ble_vns_init_t * p_vns_init) 
     attr_md.vloc		= BLE_GATTS_VLOC_STACK;
     attr_md.vlen		= 1;
 
-
+#if (0)
     /* Add a vendor specific 128-bit UUID to the BLE stack's table of UUIDs.
      * In particular, this UUID will be used to identify the acknowledged data
      * characteristic. An index identifying this new UUID will be stored in
@@ -109,11 +108,16 @@ uint32_t version_char_add(ble_vns_t * p_vns, const ble_vns_init_t * p_vns_init) 
     if (err_code != NRF_SUCCESS) {
     	return err_code;
     }
+#endif
 
     /* Create a more easily used 24-bit UUID from the new vendor-specific
      * acknowledged data characteristic UUID base and the two TimeLow bytes
      * that are specific to the acknowledged data characteristic. */
+#if (0)
     ble_version_char_uuid.type = p_vns->version_char_uuid_type;
+#else
+    ble_version_char_uuid.type = p_vns->service_uuid_type;
+#endif
     ble_version_char_uuid.uuid = VNS_UUID_VERSION_CHAR;
 
     memset(&attr_char_value, 0, sizeof(attr_char_value));
@@ -138,7 +142,6 @@ uint32_t ble_vns_init(ble_vns_t * p_vns, const ble_vns_init_t * p_vns_init)
     /* Initialize service structure */
     p_vns->conn_handle = BLE_CONN_HANDLE_INVALID;
 
-
     /* Add a vendor specific 128-bit UUID to the BLE stack's table of UUIDs.
      * In particular, this UUID will be used to identify the Serial Port
      * Service.  An index identifying this new UUID will be stored in
@@ -154,7 +157,7 @@ uint32_t ble_vns_init(ble_vns_t * p_vns, const ble_vns_init_t * p_vns_init)
     ble_service_uuid.type = p_vns->service_uuid_type;
     ble_service_uuid.uuid = VNS_UUID_SERVICE;
 
-    /* Add the Serial Port Service to the BLE stack using the 24-bit
+    /* Add the version number service to the BLE stack using the 24-bit
      * abbreviated UUID which we just created. */
     err_code = sd_ble_gatts_service_add(BLE_GATTS_SRVC_TYPE_PRIMARY, &ble_service_uuid, &p_vns->service_handle);
     if (err_code != NRF_SUCCESS){

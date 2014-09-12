@@ -33,17 +33,7 @@
 								<inputType id="org.eclipse.cdt.build.core.settings.holder.inType.1651649104" languageId="org.eclipse.cdt.core.assembly" languageName="Assembly" sourceContentType="org.eclipse.cdt.core.asmSource" superClass="org.eclipse.cdt.build.core.settings.holder.inType"/>
 							</tool>
 							<tool id="org.eclipse.cdt.build.core.settings.holder.1716540617" name="GNU C++" superClass="org.eclipse.cdt.build.core.settings.holder">
-								<option id="org.eclipse.cdt.build.core.settings.holder.incpaths.114087578" name="Include Paths" superClass="org.eclipse.cdt.build.core.settings.holder.incpaths" valueType="includePath">
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nRF51_SDK_v4.4.0.31803/Nordic/nrf51822/Include}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nRF51_SDK_v4.4.0.31803/Nordic/nrf51822/Include/ble/softdevice}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nRF51_SDK_v4.4.0.31803/Nordic/nrf51822/Include/ble/ble_services}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nRF51_SDK_v4.4.0.31803/Nordic/nrf51822/Include/ble}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nRF51_SDK_v4.4.0.31803/Nordic/nrf51822/Include/app_common}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nRF51_SDK_v4.4.0.31803/Nordic/nrf51822/Include/gcc}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;C:\Program Files (x86)\GNU Tools ARM Embedded\4.8 2013q4\arm-none-eabi\include&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;C:\Program Files (x86)\GNU Tools ARM Embedded\4.8 2013q4\lib\gcc\arm-none-eabi\4.8.3\include&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB}&quot;"/>
-								</option>
+								<option id="org.eclipse.cdt.build.core.settings.holder.incpaths.114087578" name="Include Paths" superClass="org.eclipse.cdt.build.core.settings.holder.incpaths" valueType="includePath"/>
 								<option id="org.eclipse.cdt.build.core.settings.holder.symbols.613855105" name="Symbols" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="BLE_DEBUG=1"/>
 									<listOptionValue builtIn="false" value="ENABLE_BLE_COMMANDS=1"/>
@@ -53,14 +43,13 @@
 							<tool id="org.eclipse.cdt.build.core.settings.holder.1864511664" name="GNU C" superClass="org.eclipse.cdt.build.core.settings.holder">
 								<option id="org.eclipse.cdt.build.core.settings.holder.incpaths.532485751" name="Include Paths" superClass="org.eclipse.cdt.build.core.settings.holder.incpaths" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nRF51_SDK_v4.4.0.31803/Nordic/nrf51822/Include}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nRF51_SDK_v4.4.0.31803/Nordic/nrf51822/Include/ble/softdevice}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nRF51_SDK_v4.4.0.31803/Nordic/nrf51822/Include/ble/ble_services}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nRF51_SDK_v4.4.0.31803/Nordic/nrf51822/Include/ble}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nRF51_SDK_v4.4.0.31803/Nordic/nrf51822/Include/app_common}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nRF51_SDK_v4.4.0.31803/Nordic/nrf51822/Include/gcc}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;C:\Program Files (x86)\GNU Tools ARM Embedded\4.8 2013q4\arm-none-eabi\include&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;C:\Program Files (x86)\GNU Tools ARM Embedded\4.8 2013q4\lib\gcc\arm-none-eabi\4.8.3\include&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nrf51_sdk_v5_2_0_39364/nrf51422/Include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nrf51_sdk_v5_2_0_39364/nrf51422/Include/ble}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nrf51_sdk_v5_2_0_39364/nrf51422/Include/app_common}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nrf51_sdk_v5_2_0_39364/nrf51422/Include/gcc}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nrf51_sdk_v5_2_0_39364/nrf51422/Include/sd_common}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;C:\Program Files (x86)\GNU Tools ARM Embedded\4.7 2013q1\arm-none-eabi\include&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;C:\Program Files (x86)\GNU Tools ARM Embedded\4.7 2013q1\lib\gcc\arm-none-eabi\4.7.3\include&quot;"/>
 								</option>
 								<option id="org.eclipse.cdt.build.core.settings.holder.symbols.1633499216" name="Symbols" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__INLINE=__attribute__((always_inline))"/>
@@ -71,6 +60,9 @@
 							</tool>
 						</toolChain>
 					</folderInfo>
+					<sourceEntries>
+						<entry excluding="nrf51_sdk_v5_2_0_39364/Documentation/|s310_nrf51422_1.0.0/" flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name=""/>
+					</sourceEntries>
 				</configuration>
 			</storageModule>
 			<storageModule moduleId="org.eclipse.cdt.core.externalSettings"/>
@@ -79,18 +71,25 @@
 	<storageModule moduleId="cdtBuildSystem" version="4.0.0">
 		<project id="nRFCode.null.179899858" name="nRFCode"/>
 	</storageModule>
-	<storageModule moduleId="scannerConfiguration">
-		<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
-		<scannerConfigBuildInfo instanceId="0.479527954">
-			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
-		</scannerConfigBuildInfo>
-	</storageModule>
 	<storageModule moduleId="org.eclipse.cdt.core.LanguageSettingsProviders"/>
 	<storageModule moduleId="refreshScope" versionNumber="2">
 		<configuration configurationName="Default">
 			<resource resourceType="PROJECT" workspacePath="/nRFCode"/>
 		</configuration>
+		<configuration configurationName="Debug 2.1">
+			<resource resourceType="PROJECT" workspacePath="/MBlocks-MB"/>
+		</configuration>
 		<configuration configurationName="Debug"/>
+		<configuration configurationName="Debug 2.0"/>
 	</storageModule>
 	<storageModule moduleId="org.eclipse.cdt.internal.ui.text.commentOwnerProjectMappings"/>
+	<storageModule moduleId="scannerConfiguration">
+		<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
+		<scannerConfigBuildInfo instanceId="0.479527954">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
+		</scannerConfigBuildInfo>
+		<scannerConfigBuildInfo instanceId="0.479527954.449554566">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
+		</scannerConfigBuildInfo>
+	</storageModule>
 </cproject>
