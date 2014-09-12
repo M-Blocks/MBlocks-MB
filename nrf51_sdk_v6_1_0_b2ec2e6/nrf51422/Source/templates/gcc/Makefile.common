@@ -6,11 +6,21 @@ SDK_SOURCE_PATH = $(SDK_PATH)/Source/
 TEMPLATE_PATH += $(SDK_SOURCE_PATH)/templates/gcc/
 OUTPUT_BINARY_DIRECTORY := _build
 
-ifeq ($(OS),Windows_NT)
+#ifeq ($(OS),Windows_NT)
 include $(TEMPLATE_PATH)Makefile.windows
-else
-include $(TEMPLATE_PATH)Makefile.posix
-endif
+#else
+#include $(TEMPLATE_PATH)Makefile.posix
+#endif
+
+INCLUDEPATHS += -I"../"
+INCLUDEPATHS += -I"$(SDK_PATH)Include"
+INCLUDEPATHS += -I"$(SDK_PATH)Include/gcc"
+INCLUDEPATHS += -I"$(SDK_PATH)Include/ext_sensors"
+INCLUDEPATHS += -I"$(SDK_PATH)Include/app_common"
+INCLUDEPATHS += -I"$(SDK_PATH)Include/sd_common"
+INCLUDEPATHS += -I"$(SDK_PATH)Include/ble"
+INCLUDEPATHS += -I"$(SDK_PATH)Include/ble/ble_services"
+
 
 ifeq ($(LINKER_SCRIPT),)
 	ifeq ($(USE_SOFTDEVICE), S110)
@@ -20,9 +30,16 @@ ifeq ($(LINKER_SCRIPT),)
 		ifeq ($(USE_SOFTDEVICE), S210)
 			LINKER_SCRIPT = gcc_$(DEVICESERIES)_s210_$(DEVICE_VARIANT).ld
 			OUTPUT_FILENAME := $(OUTPUT_FILENAME)_s210_$(DEVICE_VARIANT)
+			INCLUDEPATHS += -I"$(SDK_PATH)Include/s210"
 		else
-			LINKER_SCRIPT = gcc_$(DEVICESERIES)_blank_$(DEVICE_VARIANT).ld
-			OUTPUT_FILENAME := $(OUTPUT_FILENAME)_$(DEVICE_VARIANT)
+			ifeq ($(USE_SOFTDEVICE), S310)
+				LINKER_SCRIPT = gcc_$(DEVICESERIES)_s310_$(DEVICE_VARIANT).ld
+				OUTPUT_FILENAME := $(OUTPUT_FILENAME)_s310_$(DEVICE_VARIANT)
+				INCLUDEPATHS += -I"$(SDK_PATH)Include/s310"
+			else
+				LINKER_SCRIPT = gcc_$(DEVICESERIES)_blank_$(DEVICE_VARIANT).ld
+				OUTPUT_FILENAME := $(OUTPUT_FILENAME)_$(DEVICE_VARIANT)
+			endif
 		endif
 	endif
 else
@@ -50,23 +67,23 @@ C_SOURCE_FILES += system_$(DEVICESERIES).c
 ASSEMBLER_SOURCE_FILES += gcc_startup_$(DEVICESERIES).s
 
 # Linker flags
-#LDFLAGS += -L"$(GNU_INSTALL_ROOT)/arm-none-eabi/lib/armv6-m"
-#LDFLAGS += -L"$(GNU_INSTALL_ROOT)/lib/gcc/arm-none-eabi/$(GNU_VERSION)/armv6-m"
+LDFLAGS += -L"$(GNU_INSTALL_ROOT)/arm-none-eabi/lib/armv6-m"
+LDFLAGS += -L"$(GNU_INSTALL_ROOT)/lib/gcc/arm-none-eabi/$(GNU_VERSION)/armv6-m"
 LDFLAGS += -Xlinker -Map=$(LISTING_DIRECTORY)/$(OUTPUT_FILENAME).map
+#LDFLAGS += --specs=nano.specs
+LDFLAGS += --specs=nano.specs -lc -u _printf_float
 LDFLAGS += -mcpu=$(CPU) -mthumb -mabi=aapcs -L $(TEMPLATE_PATH) -T$(LINKER_SCRIPT) 
+
 
 # Compiler flags
 CFLAGS += -mcpu=$(CPU) -mthumb -mabi=aapcs -D$(DEVICE) -D$(BOARD) -D$(TARGET_CHIP) --std=gnu99
-CFLAGS += -Wall -Werror
+CFLAGS += -Wall
 CFLAGS += -mfloat-abi=soft
 
 # Assembler flags
 ASMFLAGS += -x assembler-with-cpp
  
-INCLUDEPATHS += -I"../"
-INCLUDEPATHS += -I"$(SDK_PATH)Include"
-INCLUDEPATHS += -I"$(SDK_PATH)Include/gcc"
-INCLUDEPATHS += -I"$(SDK_PATH)Include/ext_sensors"
+
 
 # Sorting removes duplicates
 BUILD_DIRECTORIES := $(sort $(OBJECT_DIRECTORY) $(OUTPUT_BINARY_DIRECTORY) $(LISTING_DIRECTORY) )
@@ -95,13 +112,13 @@ vpath %.s $(ASSEMBLER_SOURCE_PATHS)
 ### Targets
 debug:    CFLAGS += -DDEBUG -g3 -O0
 debug:    ASMFLAGS += -DDEBUG -g3 -O0
-debug:    $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).bin $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).hex
+debug:    $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).bin $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).hex $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)-IncSD.hex
 
 .PHONY: release
 release: clean
 release:  CFLAGS += -DNDEBUG -O3
 release:  ASMFLAGS += -DNDEBUG -O3
-release:  $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).bin $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).hex
+release:  $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).bin $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).hex $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)-IncSD.hex
 
 echostuff:
 	@echo C_OBJECTS: [$(C_OBJECTS)]
@@ -125,7 +142,7 @@ $(OBJECT_DIRECTORY)/%.o: %.s
 
 ## Link C and assembler objects to an .out file
 $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).out: $(BUILD_DIRECTORIES) $(C_OBJECTS) $(ASSEMBLER_OBJECTS) $(LIBRARIES)
-	$(CC) $(LDFLAGS) $(C_OBJECTS) $(ASSEMBLER_OBJECTS) $(LIBRARIES) -o $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).out
+	$(CC) $(LDFLAGS) $(C_OBJECTS) $(ASSEMBLER_OBJECTS) $(LIBFLAGS) $(LIBRARIES) -o $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).out
 
 ## Create binary .bin file from the .out file
 $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).bin: $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).out
@@ -135,9 +152,13 @@ $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).bin: $(OUTPUT_BINARY_DIRECTORY)/$(
 $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).hex: $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).out
 	$(OBJCOPY) -O ihex $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).out $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).hex
 
+## Merge softdevice with application hex file
+$(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)-IncSD.hex: $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).hex
+	mergehex --merge $(SOFTDEVICE) $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).hex --output $@
+
 ## Default build target
 .PHONY: all
-all: clean release
+all: debug
 
 clean:
 	$(RM) $(OUTPUT_BINARY_DIRECTORY)

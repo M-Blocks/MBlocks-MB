@@ -23,7 +23,7 @@ ASMFLAGS += -D__HEAP_SIZE=512
 
 LIBFLAGS += -lm
 
-SDK_PATH = ../nrf51_sdk_v5_2_0_39364/nrf51422/
+SDK_PATH = ../nrf51_sdk_v6_1_0_b2ec2e6/nrf51422/
 SOFTDEVICE = ../s310_nrf51422_1.0.0/s310_nrf51422_1.0.0_softdevice.hex
 
 OUTPUT_FILENAME := MBlocks-MB

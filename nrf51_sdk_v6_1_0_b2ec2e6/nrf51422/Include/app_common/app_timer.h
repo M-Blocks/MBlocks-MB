@@ -116,6 +116,8 @@ typedef enum
     APP_TIMER_MODE_REPEATED                     /**< The timer will restart each time it expires. */
 } app_timer_mode_t;
 
+#define TIMER_NULL                  ((app_timer_id_t)(0 - 1))                   /**< Invalid timer id. */
+
 /**@brief Macro for initializing the application timer module.
  *
  * @details It will handle dimensioning and allocation of the memory buffer required by the timer,
