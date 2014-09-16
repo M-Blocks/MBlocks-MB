@@ -150,14 +150,39 @@ smaState_t sma_getState(void) {
 
 bool sma_retract(uint16_t hold_ms, app_sched_event_handler_t smaEventHandler){
 	uint32_t err_code;
+	motionPrimitive_t motionPrimitive;
 
 	if (hold_ms > HOLD_TIME_MAX_MS) {
 		return false;
 	}
 
-	if (smaState != SMA_STATE_EXTENDED) {
+	if (smaState == SMA_STATE_EXTENDING) {
 		return false;
+	} else if (smaState == SMA_STATE_HOLDING) {
+		/* If the SMA is already retracted and holding, we update the event
+		 * handler pointer and then schedule execution of the handler
+		 * immediately.  We do not allow the caller the lengthen the time that
+		 * the SMA is held retracted. */
+		eventHandler = smaEventHandler;
+		if (eventHandler != NULL) {
+			motionPrimitive = MOTION_PRIMITIVE_SMA_RETRACTED;
+			app_sched_event_put(&motionPrimitive, sizeof(motionPrimitive), eventHandler);
+		}
+		return true;
+	} if (smaState == SMA_STATE_RETRACTING) {
+		/* If the SMA is already retracting, we simply update the hold time and
+		 * the callback before returning. */
+		holdTime_ms = hold_ms;
+		eventHandler = smaEventHandler;
+		return true;
 	}
+
+	/* Execution only reaches this point if the current SMA state is EXTENDED.
+	 */
+
+	/* Save the hold time and the event handler pointer. */
+	holdTime_ms = hold_ms;
+	eventHandler = smaEventHandler;
 
 	/* We take care of automatically initializing the SMA controller when a
 	 * caller attempts to use it. */
@@ -165,10 +190,6 @@ bool sma_retract(uint16_t hold_ms, app_sched_event_handler_t smaEventHandler){
 
 	/* Supply power to the SMA circuitry */
 	power_setVBATSWState(VBATSW_USER_SMA, true);
-
-	/* Save the hold time and the event handler pointer. */
-	holdTime_ms = hold_ms;
-	eventHandler = smaEventHandler;
 
 	/* Calculate the PWM on-times while both retracting and holding the SMA */
 	retractPWMOnTime_ms = (retractCurrent_mA * TIMER_PERIOD_MS) / MAX_CURRENT_MA;
