@@ -53,8 +53,8 @@ static uint16_t ebrakePlaneChangeBLDCSpeed_rpm;
 static uint16_t ebrakePlaneChangeEBrakeTime_ms;
 static int16_t ebrakePlaneChangeBLDCSpeedChange_rpm;
 static int16_t ebrakePlaneChangeEBrakeTimeChange_ms;
-static uint16_t ebrakePlaneChangeAccelCurrent_mA;
-static uint16_t ebrakePlaneChangeAccelTime_ms;
+static uint16_t ebrakePlaneChangePostBrakeAccelCurrent_mA;
+static uint16_t ebrakePlaneChangePostBrakeAccelTime_ms;
 static bool ebrakePlaneChangeReverse;
 
 /* These module variables must be set when performing a simple inertial actuation */
@@ -196,7 +196,7 @@ void accelBrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_si
 }
 
 bool motionEvent_startEBrakePlaneChange(uint16_t bldcSpeed_rpm, uint16_t ebrakeTime_ms,
-		int16_t bldcSpeedChange_rpm, int16_t ebrakeTimeChange_ms,
+		uint16_t postBrakeAccelCurrent_ma, uint16_t postBrakeAccelTime_ms,
 		bool reverse, app_sched_event_handler_t motionEventHandler) {
 	uint32_t err_code;
 	motionPrimitive_t motionPrimitive;
@@ -205,11 +205,12 @@ bool motionEvent_startEBrakePlaneChange(uint16_t bldcSpeed_rpm, uint16_t ebrakeT
 	ebrakePlaneChangeBLDCSpeed_rpm = bldcSpeed_rpm;
 	ebrakePlaneChangeEBrakeTime_ms = ebrakeTime_ms;
 
-	ebrakePlaneChangeBLDCSpeedChange_rpm = bldcSpeedChange_rpm;
-	ebrakePlaneChangeEBrakeTimeChange_ms = ebrakeTimeChange_ms;
+	ebrakePlaneChangePostBrakeAccelCurrent_mA = postBrakeAccelCurrent_ma;
+	ebrakePlaneChangePostBrakeAccelTime_ms = postBrakeAccelTime_ms;
 
-	ebrakePlaneChangeAccelCurrent_mA = 5000;
-	ebrakePlaneChangeAccelTime_ms = 200;
+	ebrakePlaneChangeBLDCSpeedChange_rpm = 0;
+	ebrakePlaneChangeEBrakeTimeChange_ms = 0;
+
 	ebrakePlaneChangeReverse = reverse;
 
 	eventHandler = motionEventHandler;
@@ -512,8 +513,46 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 	case MOTION_PRIMITIVE_BLDC_STABLE:
 		/* Once the motor's speed has stabilized, begin to retract the pin. */
 		app_uart_put_debug("Flywheel speed stabilized\r\n", DEBUG_MOTION_EVENTS);
-		app_uart_put_debug("Retracting SMA pin\r\n", DEBUG_MOTION_EVENTS);
-		sma_retract(ebrakePlaneChangeSMAHoldTime_ms, ebrakePlaneChangePrimitiveHandler);
+
+		/* If the SMA pin is not already retracted, retract it now */
+		if (sma_getState() != SMA_STATE_HOLDING) {
+			app_uart_put_debug("Retracting SMA pin\r\n", DEBUG_MOTION_EVENTS);
+			sma_retract(ebrakePlaneChangeSMAHoldTime_ms, ebrakePlaneChangePrimitiveHandler);
+			break;
+		}
+
+		/* At this point, we know that the SMA is already retracted, so we must
+		 * be making the second+ attempt at changing planes.  If the central
+		 * actuator is not moving after bring the flywheel up to speed, we check
+		 * whether bringing the motor up to speed caused they central actuator to
+		 * accidently fall into the desired position. */
+		imu_getGyrosFloat(&gyrosRates);
+		gyroMag = imu_getVectorFloatMagnitude(&gyrosRates);
+
+		if (gyroMag < 0.000488f) {
+			/* Central actuator is not moving, so we read the gravity vector
+			 * from the IMU and check whether it is 1) aligned with one of the
+			 * cube's faces, and 2) aligned with a the correct face. */
+
+			if (!motionEvent_getFlywheelFrameAligned(&flywheelFrameAligned, &alignmentAxisIndex)) {
+				app_uart_put_debug("Failed to determine whether flywheel and frame are aligned\r\n", DEBUG_MOTION_EVENTS);
+			} else if (flywheelFrameAligned && (alignmentAxisIndex == alignmentAxisIndexDesired)) {
+				app_uart_put_debug("Bringing flywheel up to speed accidently aligned central actuator with desired frame axis\r\n", DEBUG_MOTION_EVENTS);
+				app_uart_put_debug("Extending SMA pin\r\n", DEBUG_MOTION_EVENTS);
+				success = true;
+				sma_extend(ebrakePlaneChangePrimitiveHandler);
+				break;
+			} else {
+				app_uart_put_debug("Brining flywheel up to speed did not bump central actuator into the desired position\r\n", DEBUG_MOTION_EVENTS);
+			}
+		}
+
+		/* If bringing the flywheel up to speed did not happen to bring the
+		 * central actuator into alignment with the desired frame axis, we
+		 * proceed to actuate the e-brake. */
+		app_uart_put_debug("Applying e-brake to flywheel\r\n", DEBUG_MOTION_EVENTS);
+		bldc_setSpeed(0, false, ebrakePlaneChangeEBrakeTime_ms, ebrakePlaneChangePrimitiveHandler);
+		ebrakePlaneChangeEBrakeTime_ms += ebrakePlaneChangeEBrakeTimeChange_ms;
 		break;
 	case MOTION_PRIMITIVE_SMA_RETRACTED:
 		/* Once the pin is retracted, apply the electronic brake for the
@@ -524,11 +563,29 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 		ebrakePlaneChangeEBrakeTime_ms += ebrakePlaneChangeEBrakeTimeChange_ms;
 		break;
 	case MOTION_PRIMITIVE_BLDC_COASTING:
+		app_uart_put_debug("E-brake released\r\n", DEBUG_MOTION_EVENTS);
+
+		if ((ebrakePlaneChangePostBrakeAccelCurrent_mA == 0) || (ebrakePlaneChangePostBrakeAccelTime_ms == 0)) {
+			app_uart_put_debug("Post-e-brake acceleration time or current is set to 0, skipping acceleration\r\n", DEBUG_MOTION_EVENTS);
+			app_uart_put_debug("Waiting for central actuator to stabilize\r\n", DEBUG_MOTION_EVENTS);
+			motionEvent_delay(1000, ebrakePlaneChangePrimitiveHandler);
+			break;
+		}
+
+		reverseAcceleration = ebrakePlaneChangeReverse;
+		if (!reverseAcceleration) {
+			app_uart_put_debug("Accelerating flywheel forward to counteract e-brake torque\r\n", DEBUG_MOTION_EVENTS);
+		} else {
+			app_uart_put_debug("Accelerating flywheel in reverse to counteract e-brake torque\r\n", DEBUG_MOTION_EVENTS);
+		}
+
+		bldc_setAccel(ebrakePlaneChangePostBrakeAccelCurrent_mA, ebrakePlaneChangePostBrakeAccelTime_ms, reverseAcceleration, ebrakePlaneChangePrimitiveHandler);
+		break;
 	case MOTION_PRIMITIVE_BLDC_ACCEL_COMPLETE:
-		/* After applying the electronic brake to the flywheel, or after the
-		 * flywheel finishes accelerating, we pause briefly to allow the
+		/* After the acceleration is complete, we pause briefly to allow the
 		 * central actuator to stop rotating and stabilize before we check
-		 * whether the central actuator has rotated into the correct position. */
+		 * whether the central actuator has rotated into the correct position.
+		 */
 		app_uart_put_debug("Waiting for central actuator to stabilize\r\n", DEBUG_MOTION_EVENTS);
 		motionEvent_delay(1000, ebrakePlaneChangePrimitiveHandler);
 		break;
