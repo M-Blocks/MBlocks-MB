@@ -12,6 +12,7 @@
 #define MAJOR_VERSION $MAJOR_VERSION_STR$
 #define MINOR_VERSION $MINOR_VERSION_STR$
 
-extern const char gitVersionStr[];
+extern const char gitVersionStr[16];
+extern const char gitVersionLongStr[];
 
 #endif /* VERSION_H_ */

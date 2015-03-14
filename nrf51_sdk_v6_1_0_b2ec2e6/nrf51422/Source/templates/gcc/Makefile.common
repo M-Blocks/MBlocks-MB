@@ -87,7 +87,7 @@ ASMFLAGS += -x assembler-with-cpp
 
 
 # Sorting removes duplicates
-BUILD_DIRECTORIES := $(sort $(OBJECT_DIRECTORY) $(OUTPUT_BINARY_DIRECTORY) $(LISTING_DIRECTORY) )
+#BUILD_DIRECTORIES := $(sort $(OBJECT_DIRECTORY) $(OUTPUT_BINARY_DIRECTORY) $(LISTING_DIRECTORY) )
 
 ####################################################################
 # Rules                                                            #
@@ -111,20 +111,50 @@ vpath %.s $(ASSEMBLER_SOURCE_PATHS)
 -include $(addprefix $(OBJECT_DIRECTORY)/, $(COBJS:.o=.d))
 
 ### Targets
-debug:    CFLAGS += -DDEBUG -g3 -O0
-debug:    ASMFLAGS += -DDEBUG -g3 -O0
-debug:    $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).bin $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).hex $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)-IncSD.hex
+
+## Default build target
+.PHONY: all
+all: release
+
+.PHONY: debug
+debug: $(eval OUTPUT_FILENAME := $(OUTPUT_FILENAME)_Debug)
+debug: $(eval OUTPUT_BINARY_DIRECTORY := $(OUTPUT_BINARY_DIRECTORY)_Debug)
+debug: $(eval OBJECT_DIRECTORY := $(OBJECT_DIRECTORY)_Debug)
+debug: $(eval LISTING_DIRECTORY := $(LISTING_DIRECTORY)_Debug)
+debug: $(eval BUILD_DIRECTORIES := $(sort $(OBJECT_DIRECTORY) $(OUTPUT_BINARY_DIRECTORY) $(LISTING_DIRECTORY)))
+debug: CFLAGS += -DDEBUG -g3 -O0
+debug: ASMFLAGS += -DDEBUG -g3 -O0
+debug: updateGitVersion
+debug: $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).bin 
+debug: $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_AppWithSoftdevice.hex
 
 .PHONY: release
+release: $(eval OUTPUT_FILENAME := $(OUTPUT_FILENAME)_Release)
+release: $(eval OUTPUT_BINARY_DIRECTORY := $(OUTPUT_BINARY_DIRECTORY)_Release)
+release: $(eval OBJECT_DIRECTORY := $(OBJECT_DIRECTORY)_Release)
+release: $(eval LISTING_DIRECTORY := $(LISTING_DIRECTORY)_Release)
+release: $(eval BUILD_DIRECTORIES := $(sort $(OBJECT_DIRECTORY) $(OUTPUT_BINARY_DIRECTORY) $(LISTING_DIRECTORY)))
 release: clean
-release:  CFLAGS += -DNDEBUG -O3
-release:  ASMFLAGS += -DNDEBUG -O3
-release:  $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).bin $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).hex $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)-IncSD.hex
+release: CFLAGS += -DRELEASE -Os
+release: ASMFLAGS += -DRELEASE -Os
+release: updateGitVersion
+release: $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).bin 
+release: $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_BootloaderInput.hex
+release: $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_CompleteImage.hex
+
+.PHONY: clean
+clean:
+	$(RM) $(OUTPUT_BINARY_DIRECTORY)
 
 echostuff:
 	@echo C_OBJECTS: [$(C_OBJECTS)]
 	@echo C_SOURCE_FILES: [$(C_SOURCE_FILES)]
 	@echo C_SOURCE_PATHS: [$(C_SOURCE_PATHS)]
+
+.PHONY: updateGitVersion
+updateGitVersion:
+	bash -c "../bin/update_gitVersionStr.sh ../gitversion_template.h ../gitversion.h"
+	bash -c "../bin/update_gitVersionStr.sh ../gitversion_template.c ../gitversion.c"
 
 ## Create build directories
 $(BUILD_DIRECTORIES):
@@ -150,30 +180,26 @@ $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).bin: $(OUTPUT_BINARY_DIRECTORY)/$(
 	$(OBJCOPY) -O binary $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).out $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).bin
 
 ## Create binary .hex file from the .out file
-$(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).hex: $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).out
-	$(OBJCOPY) -O ihex $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).out $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).hex
+$(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_BootloaderInput.hex: $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).out
+	$(OBJCOPY) -O ihex $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).out $@
 	$(SIZE) $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).out
+	bash -c "../bin/append_gitVersionStr.sh $@ ../gitversion.c"
 
-## Merge softdevice with application hex file
-$(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)-IncSD.hex: $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).hex
-	mergehex --merge $(SOFTDEVICE) $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).hex --output $@
+## Merge the basic application image with the softdevice
+$(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_AppWithSoftdevice.hex: $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_BootloaderInput.hex
+	 mergehex --merge $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_BootloaderInput.hex $(SOFTDEVICE) --output $@
+	 bash -c "../bin/append_gitVersionStr.sh $@ ../gitversion.c"
 
-## Default build target
-.PHONY: all
-all: debug
+## Merge the basic application image with the bootloader and the softdevice, and configure the bootloader configuration settings to mark the application image valid 
+$(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_CompleteImage.hex: $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_BootloaderInput.hex
+	mergehex --merge $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_BootloaderInput.hex $(BOOTLOADER) --output $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_AppWithBootloaderCode.hex
+	mergehex --merge $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_AppWithBootloaderCode.hex $(SOFTDEVICE) --output $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_AppWithBootloaderCodeAndSoftdevice.hex
+	bash -c "../bin/appendBootloaderSettings.sh $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_AppWithBootloaderCodeAndSoftdevice.hex $@"
+	$(RM) $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_AppWithBootloaderCode.hex
+	$(RM) $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_AppWithBootloaderCodeAndSoftdevice.hex
+	bash -c "../bin/append_gitVersionStr.sh $@ ../gitversion.c"
+	
+appendGitVersion:
+	
 
-clean:
-	$(RM) $(OUTPUT_BINARY_DIRECTORY)
 
-## Program device
-.PHONY: flash
-flash: $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).hex
-	nrfjprog --reset --program $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).hex
-
-.PHONY: reset
-reset:
-	nrfjprog --reset
-
-.PHONY: erase
-erase:
-	nrfjprog --erase

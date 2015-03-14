@@ -466,7 +466,7 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 	char str[128];
 
 	static bool flywheelFrameAlignedInitial;
-	static unsigned int alignmentAxisIndexInitial, alignmentAxisIndexDesired, alignmentAxisIndexUnwanted;
+	static unsigned int alignmentAxisIndexInitial, alignmentAxisIndexDesired;
 	static bool success = false;
 
 	motionPrimitive = *(motionPrimitive_t *)p_event_data;

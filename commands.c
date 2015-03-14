@@ -9,6 +9,9 @@
 #include <string.h>
 #include <math.h>
 
+#include "nrf_soc.h"
+#include "nrf_delay.h"
+
 #include "ble_hci.h"
 #include "ble_gap.h"
 
@@ -39,6 +42,7 @@
 extern ble_sps_t m_sps;
 
 static void cmdVersion(const char *args);
+static void cmdBootloader(const char *args);
 static void cmdPWMSet(const char *args);
 /* Power management commands */
 static void cmdVIn(const char *args);
@@ -95,6 +99,7 @@ static void cmdWobble(const char *args);
 // These string are what the command line processes looking for the user to
 // type on the serial terminal.
 static const char cmdVersionStr[] = "ver";
+static const char cmdBootloaderStr[] = "bootloader";
 static const char cmdPWMSetStr[] = "pwmset";
 /* Power management commands */
 static const char cmdVInStr[] = "vin";
@@ -154,6 +159,7 @@ static const char cmdWobbleStr[] = "wobble";
 // enter.
 static cmdFcnPair_t cmdTable[] = {
 		{cmdVersionStr, cmdVersion},
+		{cmdBootloaderStr, cmdBootloader},
 		{cmdPWMSetStr, cmdPWMSet},
 		/* Power management commands */
 		{cmdVInStr, cmdVIn},
@@ -226,12 +232,30 @@ void cmdVersion(const char *args) {
 
 	app_uart_put_string("\r\n");
 	app_uart_put_string("MB Firmware: ");
-	app_uart_put_string(gitVersionStr);
+	app_uart_put_string(gitVersionLongStr);
+#ifdef DEBUG
+	app_uart_put_string(" (Debug)");
+#elif defined(RELEASE)
+	app_uart_put_string(" (Release)");
+#else
+	app_uart_put_string(" (Unknown)");
+#endif
 	app_uart_put_string("\r\n");
 	app_uart_put_string("DB Firmware: ");
 	app_uart_put_string(db_gitVersionStr);
 	app_uart_put_string("\r\n");
 	app_uart_put_string("\r\n");
+}
+
+void cmdBootloader(const char *args) {
+	app_uart_put_string("Starting bootloader...\r\n");
+	nrf_delay_ms(250);
+
+	/* Set the MSb in the general purpose retention register in order to
+	 * instruct the bootloader to attempt to download a new image instead
+	 * of rebooting back into the application code.  */
+	sd_power_gpregret_set(0x80);
+	sd_nvic_SystemReset();
 }
 
 void cmdPWMSet(const char *args) {
@@ -1096,7 +1120,7 @@ void cmdChangePlane(const char *args) {
 		if ((nArgs >= 5) && (params[2] > 0)) {
 			accelCurrent_mA = params[2];
 		} else {
-			accelTime_ms = 0;
+			accelCurrent_mA = 0;
 		}
 
 		if ((nArgs >= 6) && (params[3] > 0)) {

@@ -410,7 +410,14 @@ int main(void) {
     app_uart_put_string("\r\n");
     app_uart_put_string("\r\n");
     app_uart_put_string("MBlocks-MB ");
-    app_uart_put_string(gitVersionStr);
+    app_uart_put_string(gitVersionLongStr);
+#ifdef DEBUG
+	app_uart_put_string(" (Debug)");
+#elif defined(RELEASE)
+	app_uart_put_string(" (Release)");
+#else
+	app_uart_put_string(" (Unknown)");
+#endif
     app_uart_put_string("\r\n");
 
     strSize = sizeof(str);

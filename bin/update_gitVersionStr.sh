@@ -36,7 +36,8 @@ fi
 # pushd and popd to /dev/null to suppress their output.
 pushd . >> /dev/null
 cd $gitDir
-gitVersionStr=$(git describe --tags --long --dirty 2>/dev/null)
+gitVersionStr=$(git describe --tags 2>/dev/null)
+gitVersionLongStr=$(git describe --tags --long --dirty 2>/dev/null)
 success=$?
 popd >> /dev/null
 
@@ -46,7 +47,10 @@ if [ $success == 0 ]; then
 	majorVersionStr=$(echo $gitVersionStr | sed -e 's/[^0-9]*\([0-9]*\).*/\1/')
 	minorVersionStr=$(echo $gitVersionStr | sed -e 's/[^0-9]*[0-9]*\.\([0-9]*\).*/\1/')
 	
-	sed -e 's/\$GIT_VERSION_STR\$/'$gitVersionStr'/g' -e 's/\$MAJOR_VERSION_STR\$/'$majorVersionStr'/g' -e 's/\$MINOR_VERSION_STR\$/'$minorVersionStr'/g' < $1 > $2
+	sed -e 's/\$GIT_VERSION_STR\$/'$gitVersionStr'/g' \
+		-e 's/\$GIT_VERSION_LONG_STR\$/'$gitVersionLongStr'/g' \
+		-e 's/\$MAJOR_VERSION_STR\$/'$majorVersionStr'/g' \
+		-e 's/\$MINOR_VERSION_STR\$/'$minorVersionStr'/g' < $1 > $2
 else
 	echo "Directory ${gitDir}/ is not a valid git repository"
 	exit 4
