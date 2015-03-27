@@ -15,6 +15,16 @@
 
 #define BLDC_EBRAKE_COMPLETE_STOP_TIME_MS 1000
 
+#define BLDC_RSENSE_MILLIOHMS	10
+#define BLDC_ISENSE_GAIN		10
+
+/* Resistors used in divider which sets maximum controller IC current */
+#define BLDC_R30				10000
+//#define BLDC_R29				1000
+#define BLDC_R29				2000
+
+#define BLDC_ACCEL_CURRENT_MAX_MA	((((3300 * BLDC_R29) / (BLDC_R30 + BLDC_R29)) * 1000) / (BLDC_RSENSE_MILLIOHMS * BLDC_ISENSE_GAIN))
+
 bool bldc_init(void);
 void bldc_deinit(void);
 

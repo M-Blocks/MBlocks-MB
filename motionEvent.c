@@ -62,6 +62,10 @@ static uint16_t inertialActuationSpeed_rpm;
 static uint16_t inertialActuationBrakeCurrent_mA;
 static uint16_t inertialActuationBrakeTime_ms;
 static bool inertialActuationReverse;
+static bool inertialActuationEBrake;
+static bool inertialActuationAccel;
+static uint16_t inertialActuationEBrakeAccelStartDelay_ms;
+static bool inertialActuationAccelReverse;
 
 static void accelPlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size);
 static void accelBrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size);
@@ -751,11 +755,16 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 
 bool motionEvent_startInertialActuation(uint16_t bldcSpeed_rpm,
 			uint16_t brakeCurrent_mA, uint16_t brakeTime_ms, bool reverse,
+			bool eBrake, bool accel, uint16_t eBrakeAccelStartDelay_ms, bool accelReverse,
 			app_sched_event_handler_t motionEventHandler) {
 	inertialActuationSpeed_rpm = bldcSpeed_rpm;
 	inertialActuationBrakeCurrent_mA = brakeCurrent_mA;
 	inertialActuationBrakeTime_ms = brakeTime_ms;
 	inertialActuationReverse = reverse;
+	inertialActuationEBrake = eBrake;
+	inertialActuationAccel = accel;
+	inertialActuationEBrakeAccelStartDelay_ms = eBrakeAccelStartDelay_ms;
+	inertialActuationAccelReverse = accelReverse;
 
 	eventHandler = motionEventHandler;
 
@@ -775,6 +784,7 @@ void inertialActuationPrimitiveHandler(void *p_event_data, uint16_t event_size) 
 
 	switch(motionPrimitive) {
 	case MOTION_PRIMITIVE_BLDC_STABLE:
+	case MOTION_PRIMITIVE_BLDC_TIMEOUT:
 		if (inertialActuationReverse) {
 			coilCurrentStep.current_mA = -inertialActuationBrakeCurrent_mA;
 		} else {
@@ -784,6 +794,7 @@ void inertialActuationPrimitiveHandler(void *p_event_data, uint16_t event_size) 
 		bldc_setSpeed(0, false, 0, NULL);
 		mechbrake_actuate(1, &coilCurrentStep, inertialActuationPrimitiveHandler);
 		break;
+#if (0)
 	case MOTION_PRIMITIVE_BLDC_TIMEOUT:
 		bldc_setSpeed(0, false, 0, NULL);
 		if (eventHandler != NULL) {
@@ -792,7 +803,33 @@ void inertialActuationPrimitiveHandler(void *p_event_data, uint16_t event_size) 
 			APP_ERROR_CHECK(err_code);
 		}
 		break;
+#endif
 	case MOTION_PRIMITIVE_MECHBRAKE_SUCCESS:
+		if (inertialActuationEBrakeAccelStartDelay_ms > 0) {
+			motionEvent_delay(inertialActuationEBrakeAccelStartDelay_ms, inertialActuationPrimitiveHandler);
+		} else if (inertialActuationEBrake) {
+			bldc_setSpeed(0, false, 500,  inertialActuationPrimitiveHandler);
+		} else if (inertialActuationAccel) {
+			bldc_setAccel(BLDC_ACCEL_CURRENT_MAX_MA, 500, inertialActuationAccelReverse, inertialActuationPrimitiveHandler);
+		} else if (eventHandler != NULL) {
+			motionEvent = MOTION_EVENT_INERTIAL_ACTUATION_COMPLETE;
+			err_code = app_sched_event_put(&motionEvent, sizeof(motionEvent), eventHandler);
+			APP_ERROR_CHECK(err_code);
+		}
+		break;
+	case MOTION_PRIMITIVE_TIMER_EXPIRED:
+		if (inertialActuationEBrake) {
+			bldc_setSpeed(0, false, 500,  inertialActuationPrimitiveHandler);
+		} else if (inertialActuationAccel) {
+			bldc_setAccel(BLDC_ACCEL_CURRENT_MAX_MA, 500, inertialActuationAccelReverse, inertialActuationPrimitiveHandler);
+		} else if (eventHandler != NULL) {
+			motionEvent = MOTION_EVENT_INERTIAL_ACTUATION_COMPLETE;
+			err_code = app_sched_event_put(&motionEvent, sizeof(motionEvent), eventHandler);
+			APP_ERROR_CHECK(err_code);
+		}
+		break;
+	case MOTION_PRIMITIVE_BLDC_COASTING:
+	case MOTION_PRIMITIVE_BLDC_ACCEL_COMPLETE:
 		if (eventHandler != NULL) {
 			motionEvent = MOTION_EVENT_INERTIAL_ACTUATION_COMPLETE;
 			err_code = app_sched_event_put(&motionEvent, sizeof(motionEvent), eventHandler);

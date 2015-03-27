@@ -1146,25 +1146,54 @@ void cmdChangePlane(const char *args) {
 }
 
 void cmdInertialActuation(const char *args) {
-	char str[3];
+	int nArg;
+	char dirStr[3];
+	char eBrakeAccelStr[3];
+	char accelReverseStr[3];
 	unsigned int bldcSpeed_rpm, brakeCurrent_mA, brakeTime_ms;
+	unsigned int eBrakeAccelStartDelay_ms = 0;
 	bool reverse;
+	bool eBrake, accel;
+	bool accelReverse = false;
 
-	if (sscanf(args, "%1s %u %u %u", str, &bldcSpeed_rpm, &brakeCurrent_mA,
-			&brakeTime_ms) != 4) {
+	if ((nArg = sscanf(args, "%1s %u %u %u %1s %u %1s", dirStr, &bldcSpeed_rpm,
+			&brakeCurrent_mA, &brakeTime_ms,
+			eBrakeAccelStr, &eBrakeAccelStartDelay_ms, accelReverseStr)) < 4) {
 		return;
 	}
 
-	if (str[0] == 'f') {
+	if (dirStr[0] == 'f') {
 		reverse = false;
-	} else if (str[0] == 'r') {
+	} else if (dirStr[0] == 'r') {
 		reverse = true;
 	} else {
 		return;
 	}
 
+	if (nArg >= 6) {
+		if (eBrakeAccelStr[0] == 'e') {
+			eBrake = true;
+			accel = false;
+		} else if (eBrakeAccelStr[0] == 'a') {
+			eBrake = false;
+			accel = true;
+
+			if ((nArg == 7) && (accelReverseStr[0] == 'r')) {
+				accelReverse = true;
+			} else {
+				accelReverse = false;
+			}
+		} else {
+			eBrake = false;
+			accel = false;
+		}
+	} else {
+		eBrake = false;
+		accel = false;
+	}
+
 	if (motionEvent_startInertialActuation(bldcSpeed_rpm, brakeCurrent_mA,
-			brakeTime_ms, reverse, cmdMotionEventHandler)) {
+			brakeTime_ms, reverse, eBrake, accel, eBrakeAccelStartDelay_ms, accelReverse, cmdMotionEventHandler)) {
 		app_uart_put_string("Starting inertial actuation...\r\n");
 	}
 }

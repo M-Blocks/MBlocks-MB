@@ -26,16 +26,6 @@
 
 #define BLDC_DEBUG			0
 
-#define RSENSE_MILLIOHMS	10
-#define ISENSE_GAIN			10
-
-/* Resistors used in divider which sets maximum controller IC current */
-#define R30					10000
-//#define R29				1000
-#define R29					2000
-
-#define ACCEL_CURRENT_MAX_MA	((((3300 * R29) / (R30 + R29)) * 1000) / (RSENSE_MILLIOHMS * ISENSE_GAIN))
-
 /* Number of points used in the variance calculation that determines whether
  * the motor has reached a steady state speed. */
 #define STABLILITY_SAMPLE_SIZE	20
@@ -375,12 +365,12 @@ bool bldc_setMaxCurrent_mA(uint16_t iLimit_mA) {
 
 	/* Calculate the voltage that we want at the A4960's REF pin.  See page 18
 	 * of the A4960 datasheet for an explanation. */
-	vref_mV = (iLimit_mA * ISENSE_GAIN * RSENSE_MILLIOHMS) / 1000;
+	vref_mV = (iLimit_mA * BLDC_ISENSE_GAIN * BLDC_RSENSE_MILLIOHMS) / 1000;
 
 	/* We resistor-divide and low-pass filter a PWM output to generate a DC
 	 * level at the REF pin.  Here we back-calculate the DC voltage that we'd
 	 * want to apply to the input of the resistor divider. */
-	bldciref_mV = ((R30 + R29) * vref_mV) / R29;
+	bldciref_mV = ((BLDC_R30 + BLDC_R29) * vref_mV) / BLDC_R29;
 
 	/* From the desired DC voltage at the input of the resistor divider, we
 	 * calculate the necessary on period knowing the total period of the
@@ -496,8 +486,8 @@ bool bldc_setAccel(uint16_t accel_mA, uint16_t time_ms, bool reverse,
 		time_ms = 1000;
 	}
 
-	if (accel_mA > ACCEL_CURRENT_MAX_MA) {
-		accel_mA = ACCEL_CURRENT_MAX_MA;
+	if (accel_mA > BLDC_ACCEL_CURRENT_MAX_MA) {
+		accel_mA = BLDC_ACCEL_CURRENT_MAX_MA;
 	}
 
 	eventHandler = bldcEventHandler;

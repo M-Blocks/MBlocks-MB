@@ -18,7 +18,7 @@
 					<folderInfo id="0.479527954." name="/" resourcePath="">
 						<toolChain id="org.eclipse.cdt.build.core.prefbase.toolchain.1726429732" name="No ToolChain" resourceTypeBasedDiscovery="false" superClass="org.eclipse.cdt.build.core.prefbase.toolchain">
 							<targetPlatform id="org.eclipse.cdt.build.core.prefbase.toolchain.1726429732.1662042520" name=""/>
-							<builder arguments="debug" autoBuildTarget="debug" buildPath="${workspace_loc:/MBlocks-MB/gcc}" command="make" enableAutoBuild="false" id="org.eclipse.cdt.build.core.settings.default.builder.1445968801" incrementalBuildTarget="debug" keepEnvironmentInBuildfile="false" managedBuildOn="false" name="Gnu Make Builder" superClass="org.eclipse.cdt.build.core.settings.default.builder"/>
+							<builder arguments="" autoBuildTarget="debug" buildPath="${workspace_loc:/MBlocks-MB/Debug_S310_xxaa}" command="make" enableAutoBuild="false" id="org.eclipse.cdt.build.core.settings.default.builder.1445968801" incrementalBuildTarget="" keepEnvironmentInBuildfile="false" managedBuildOn="false" name="Gnu Make Builder" superClass="org.eclipse.cdt.build.core.settings.default.builder"/>
 							<tool id="org.eclipse.cdt.build.core.settings.holder.libs.610645739" name="holder for library settings" superClass="org.eclipse.cdt.build.core.settings.holder.libs"/>
 							<tool id="org.eclipse.cdt.build.core.settings.holder.1367984109" name="Assembly" superClass="org.eclipse.cdt.build.core.settings.holder">
 								<option id="org.eclipse.cdt.build.core.settings.holder.symbols.819075249" name="Symbols" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
@@ -43,13 +43,13 @@
 							<tool id="org.eclipse.cdt.build.core.settings.holder.1864511664" name="GNU C" superClass="org.eclipse.cdt.build.core.settings.holder">
 								<option id="org.eclipse.cdt.build.core.settings.holder.incpaths.532485751" name="Include Paths" superClass="org.eclipse.cdt.build.core.settings.holder.incpaths" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nrf51_sdk_v5_2_0_39364/nrf51422/Include}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nrf51_sdk_v5_2_0_39364/nrf51422/Include/ble}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nrf51_sdk_v5_2_0_39364/nrf51422/Include/app_common}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nrf51_sdk_v5_2_0_39364/nrf51422/Include/gcc}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nrf51_sdk_v5_2_0_39364/nrf51422/Include/sd_common}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;C:\Program Files (x86)\GNU Tools ARM Embedded\4.7 2013q1\arm-none-eabi\include&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;C:\Program Files (x86)\GNU Tools ARM Embedded\4.7 2013q1\lib\gcc\arm-none-eabi\4.7.3\include&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;C:\Program Files (x86)\GNU Tools ARM Embedded\4.9 2015q1\arm-none-eabi\include&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;C:\Program Files (x86)\GNU Tools ARM Embedded\4.9 2015q1\lib\gcc\arm-none-eabi\4.9.3\include&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nrf51_sdk_v6_1_0_b2ec2e6/nrf51422/Include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nrf51_sdk_v6_1_0_b2ec2e6/nrf51422/Include/ble}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nrf51_sdk_v6_1_0_b2ec2e6/nrf51422/Include/app_common}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nrf51_sdk_v6_1_0_b2ec2e6/nrf51422/Include/gcc}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nrf51_sdk_v6_1_0_b2ec2e6/nrf51422/Include/sd_common}&quot;"/>
 								</option>
 								<option id="org.eclipse.cdt.build.core.settings.holder.symbols.1633499216" name="Symbols" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__INLINE=__attribute__((always_inline))"/>
@@ -84,7 +84,7 @@
 					<folderInfo id="0.479527954.1696565527." name="/" resourcePath="">
 						<toolChain id="org.eclipse.cdt.build.core.prefbase.toolchain.550965024" name="No ToolChain" resourceTypeBasedDiscovery="false" superClass="org.eclipse.cdt.build.core.prefbase.toolchain">
 							<targetPlatform id="org.eclipse.cdt.build.core.prefbase.toolchain.550965024.1740865701" name=""/>
-							<builder arguments="" autoBuildTarget="debug" buildPath="${workspace_loc:/MBlocks-MB/Release_S310_xxaa}" command="make" enableAutoBuild="false" id="org.eclipse.cdt.build.core.settings.default.builder.512943174" incrementalBuildTarget="debug" keepEnvironmentInBuildfile="false" managedBuildOn="false" name="Gnu Make Builder" superClass="org.eclipse.cdt.build.core.settings.default.builder"/>
+							<builder autoBuildTarget="debug" buildPath="${workspace_loc:/MBlocks-MB/Release_S310_xxaa}" command="make" enableAutoBuild="false" enabledIncrementalBuild="true" id="org.eclipse.cdt.build.core.settings.default.builder.512943174" incrementalBuildTarget="" keepEnvironmentInBuildfile="false" managedBuildOn="false" name="Gnu Make Builder" superClass="org.eclipse.cdt.build.core.settings.default.builder"/>
 							<tool id="org.eclipse.cdt.build.core.settings.holder.libs.748162891" name="holder for library settings" superClass="org.eclipse.cdt.build.core.settings.holder.libs"/>
 							<tool id="org.eclipse.cdt.build.core.settings.holder.414905963" name="Assembly" superClass="org.eclipse.cdt.build.core.settings.holder">
 								<option id="org.eclipse.cdt.build.core.settings.holder.symbols.294606560" name="Symbols" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
@@ -109,13 +109,13 @@
 							<tool id="org.eclipse.cdt.build.core.settings.holder.662873048" name="GNU C" superClass="org.eclipse.cdt.build.core.settings.holder">
 								<option id="org.eclipse.cdt.build.core.settings.holder.incpaths.1691602833" name="Include Paths" superClass="org.eclipse.cdt.build.core.settings.holder.incpaths" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nrf51_sdk_v5_2_0_39364/nrf51422/Include}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nrf51_sdk_v5_2_0_39364/nrf51422/Include/ble}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nrf51_sdk_v5_2_0_39364/nrf51422/Include/app_common}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nrf51_sdk_v5_2_0_39364/nrf51422/Include/gcc}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nrf51_sdk_v5_2_0_39364/nrf51422/Include/sd_common}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;C:\Program Files (x86)\GNU Tools ARM Embedded\4.7 2013q1\arm-none-eabi\include&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;C:\Program Files (x86)\GNU Tools ARM Embedded\4.7 2013q1\lib\gcc\arm-none-eabi\4.7.3\include&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;C:\Program Files (x86)\GNU Tools ARM Embedded\4.9 2015q1\arm-none-eabi\include&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;C:\Program Files (x86)\GNU Tools ARM Embedded\4.9 2015q1\lib\gcc\arm-none-eabi\4.9.3\include&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nrf51_sdk_v6_1_0_b2ec2e6/nrf51422/Include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nrf51_sdk_v6_1_0_b2ec2e6/nrf51422/Include/ble}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nrf51_sdk_v6_1_0_b2ec2e6/nrf51422/Include/app_common}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nrf51_sdk_v6_1_0_b2ec2e6/nrf51422/Include/gcc}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/MBlocks-MB/nrf51_sdk_v6_1_0_b2ec2e6/Include/sd_common}&quot;"/>
 								</option>
 								<option id="org.eclipse.cdt.build.core.settings.holder.symbols.1019033656" name="Symbols" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__INLINE=__attribute__((always_inline))"/>
@@ -139,16 +139,16 @@
 	</storageModule>
 	<storageModule moduleId="org.eclipse.cdt.core.LanguageSettingsProviders"/>
 	<storageModule moduleId="refreshScope" versionNumber="2">
-		<configuration configurationName="Default">
-			<resource resourceType="PROJECT" workspacePath="/nRFCode"/>
-		</configuration>
-		<configuration configurationName="Release">
-			<resource resourceType="PROJECT" workspacePath="/MBlocks-MB"/>
-		</configuration>
 		<configuration configurationName="Debug 2.1">
 			<resource resourceType="PROJECT" workspacePath="/MBlocks-MB"/>
 		</configuration>
+		<configuration configurationName="Default">
+			<resource resourceType="PROJECT" workspacePath="/nRFCode"/>
+		</configuration>
 		<configuration configurationName="Debug"/>
+		<configuration configurationName="Release">
+			<resource resourceType="PROJECT" workspacePath="/MBlocks-MB"/>
+		</configuration>
 		<configuration configurationName="Debug 2.0"/>
 	</storageModule>
 	<storageModule moduleId="org.eclipse.cdt.internal.ui.text.commentOwnerProjectMappings"/>
@@ -158,6 +158,9 @@
 			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
 		</scannerConfigBuildInfo>
 		<scannerConfigBuildInfo instanceId="0.479527954.449554566">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
+		</scannerConfigBuildInfo>
+		<scannerConfigBuildInfo instanceId="0.479527954.1696565527">
 			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
 		</scannerConfigBuildInfo>
 	</storageModule>
