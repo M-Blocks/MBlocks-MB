@@ -32,7 +32,7 @@
 <booleanAttribute key="org.eclipse.cdt.dsf.gdb.UPDATE_THREADLIST_ON_SUSPEND" value="false"/>
 <intAttribute key="org.eclipse.cdt.launch.ATTR_BUILD_BEFORE_LAUNCH_ATTR" value="2"/>
 <stringAttribute key="org.eclipse.cdt.launch.COREFILE_PATH" value=""/>
-<stringAttribute key="org.eclipse.cdt.launch.PROGRAM_NAME" value="X:\Documents\InertialCubes\Firmware\Mainboard\MBlocks-MB\gcc\_build\MBlocks-MB_s310_xxaa.out"/>
+<stringAttribute key="org.eclipse.cdt.launch.PROGRAM_NAME" value="X:\Documents\InertialCubes\Firmware\Mainboard\MBlocks-MB\Debug_S310_xxaa\_build\MBlocks-MB_Release_S310_xxaa.out"/>
 <stringAttribute key="org.eclipse.cdt.launch.PROJECT_ATTR" value="MBlocks-MB"/>
 <booleanAttribute key="org.eclipse.cdt.launch.PROJECT_BUILD_CONFIG_AUTO_ATTR" value="false"/>
 <stringAttribute key="org.eclipse.cdt.launch.PROJECT_BUILD_CONFIG_ID_ATTR" value="0.479527954"/>

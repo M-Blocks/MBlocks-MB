@@ -49,7 +49,7 @@ static bool twi_master_write(uint8_t *data, uint8_t data_length, bool issue_stop
             // Do nothing.
         }
 
-        if (timeout == 0 || NRF_TWI1->EVENTS_ERROR != 0)
+        if (timeout == 0)
         {
           // Recover the peripheral as indicated by PAN 56: "TWI: TWI module lock-up." found at 
           // Product Anomaly Notification document found at 
@@ -65,27 +65,54 @@ static bool twi_master_write(uint8_t *data, uint8_t data_length, bool issue_stop
 
           return false;
         }
+
+        /* We sent a byte, so decrement the counter */
+        data_length--;
+
+        /* Clear the TXDSENT event */
         NRF_TWI1->EVENTS_TXDSENT = 0;
-        if (--data_length == 0)
-        {
+
+        /* If the slave NACK'd, we will not send any additional bytes */
+        if (NRF_TWI1->EVENTS_ERROR != 0) {
+        	/* Clear the address and data NACK flags */
+        	NRF_TWI1->ERRORSRC = TWI_ERRORSRC_ANACK_Clear << TWI_ERRORSRC_ANACK_Pos;
+        	NRF_TWI1->ERRORSRC = TWI_ERRORSRC_DNACK_Clear << TWI_ERRORSRC_DNACK_Pos;
+        	/* Clear the error event flag */
+        	NRF_TWI1->EVENTS_ERROR = 0;
+        	/* Break, instead of return, so that we'll still send a stop
+        	 * condition. */
+        	break;
+        }
+
+        /* Check whether we've sent all bytes... */
+        if (data_length == 0) {
             break;
         }
 
+        /* If not, send the next */
         NRF_TWI1->TXD = *data++;
     }
     /** @snippet [TWI HW master write] */            
     
-    if (issue_stop_condition) 
-    { 
+    if (issue_stop_condition) {
         NRF_TWI1->EVENTS_STOPPED = 0; 
         NRF_TWI1->TASKS_STOP     = 1; 
         /* Wait until stop sequence is sent */ 
-        while(NRF_TWI1->EVENTS_STOPPED == 0) 
-        { 
-            // Do nothing.
-        } 
+        timeout = MAX_TIMEOUT_LOOPS;
+        while((NRF_TWI1->EVENTS_STOPPED == 0) && (--timeout));
+        /* Now that the stop condition has been sent, clear the STOPPED
+         * event flag. */
+        NRF_TWI1->EVENTS_STOPPED = 0;
     }
-    return true;
+
+    /* We only return success to the caller if the number bytes sent before we
+     * received a NACK matches the number bytes the caller instructed us to
+     * transmit. */
+    if (data_length == 0) {
+    	return true;
+    }
+
+    return false;
 }
 
 
@@ -144,29 +171,62 @@ static bool twi_master_read(uint8_t *data, uint8_t data_length, bool issue_stop_
     {
         while(NRF_TWI1->EVENTS_RXDREADY == 0 && NRF_TWI1->EVENTS_ERROR == 0 && (--timeout))
         {    
-            // Do nothing.
+            /* Do nothing while waiting for the RXDREADY event (meaning that a
+        	 * new byte is available). */
         }
         NRF_TWI1->EVENTS_RXDREADY = 0;
 
         //if (timeout == 0 || NRF_TWI1->EVENTS_ERROR != 0)
-        if (timeout == 0 && (NRF_TWI1->EVENTS_ERROR == 0))
-        {
-          // Recover the peripheral as indicated by PAN 56: "TWI: TWI module lock-up." found at 
-          // Product Anomaly Notification document found at 
-          // https://www.nordicsemi.com/eng/Products/Bluetooth-R-low-energy/nRF51822/#Downloads
-          NRF_TWI1->EVENTS_ERROR = 0;
-          NRF_TWI1->ENABLE       = TWI_ENABLE_ENABLE_Disabled << TWI_ENABLE_ENABLE_Pos; 
-          NRF_TWI1->POWER        = 0; 
-          nrf_delay_us(5); 
-          NRF_TWI1->POWER        = 1; 
-          NRF_TWI1->ENABLE       = TWI_ENABLE_ENABLE_Enabled << TWI_ENABLE_ENABLE_Pos;
+        if (timeout == 0) {
+			// Recover the peripheral as indicated by PAN 56: "TWI: TWI module lock-up." found at
+			// Product Anomaly Notification document found at
+			// https://www.nordicsemi.com/eng/Products/Bluetooth-R-low-energy/nRF51822/#Downloads
+			NRF_TWI1 ->EVENTS_ERROR = 0;
+			NRF_TWI1 ->ENABLE = TWI_ENABLE_ENABLE_Disabled << TWI_ENABLE_ENABLE_Pos;
+			NRF_TWI1 ->POWER = 0;
+			nrf_delay_us(5);
+			NRF_TWI1 ->POWER = 1;
+			NRF_TWI1 ->ENABLE = TWI_ENABLE_ENABLE_Enabled << TWI_ENABLE_ENABLE_Pos;
 
-          (void)twi_master_init();          
+			(void)twi_master_init();
           
-          return false;
+			return false;
         } else if (NRF_TWI1->EVENTS_ERROR != 0) {
-        	NRF_TWI1->ERRORSRC = (TWI_ERRORSRC_ANACK_Clear << TWI_ERRORSRC_ANACK_Pos) | (TWI_ERRORSRC_DNACK_Clear << TWI_ERRORSRC_DNACK_Pos);
+        	/* If we detected an error (which as far as the NRF is concerned,
+        	 * means that the master received a NACK in place of an ACK, we
+        	 * abort the transaction.  Since we (the master) are currently
+        	 * reading from the slave, the only possible NACK is the NACK the
+        	 * slaves would send (tacitly) in response to non-matching
+        	 * addresses.  If no slave ACKs the address we sent, we will not
+        	 * attempt to read additional bytes. */
+
+        	/* First, clear the address and data NACK flags */
+        	NRF_TWI1->ERRORSRC = (TWI_ERRORSRC_ANACK_Clear << TWI_ERRORSRC_ANACK_Pos);
+        	NRF_TWI1->ERRORSRC = (TWI_ERRORSRC_DNACK_Clear << TWI_ERRORSRC_DNACK_Pos);
+        	/* Clear the error event flag */
         	NRF_TWI1->EVENTS_ERROR = 0;
+
+        	/* Issue a stop condition if requested by the caller */
+            if (issue_stop_condition) {
+                NRF_TWI1->EVENTS_STOPPED = 0;
+                NRF_TWI1->TASKS_STOP     = 1;
+                /* Wait until stop sequence is sent */
+                timeout = MAX_TIMEOUT_LOOPS;
+                while((NRF_TWI1->EVENTS_STOPPED == 0) && (--timeout));
+                /* Clear the STOPPED event flag */
+                NRF_TWI1->EVENTS_STOPPED = 0;
+            }
+
+            /* Disable the PPI channel used to trigger the suspend or stop
+             * task at every byte boundary. */
+            if (softdevice_enabled) {
+            	err_code = sd_ppi_channel_enable_clr(TWI_MASTER_PPI_CHEN_MASK);
+            	APP_ERROR_CHECK(err_code);
+            } else {
+            	NRF_PPI->CHENCLR = TWI_MASTER_PPI_CHEN_MASK;
+            }
+
+            return false;
         }
 
         *data++ = NRF_TWI1->RXD;

@@ -17,7 +17,7 @@ SOFTDEVICE_HEXFILE = ../s310_nrf51422_1.0.0/s310_nrf51422_1.0.0_softdevice.hex
 BOOTLOADER_HEXFILE = ../bootloader/bootloader_gcc_s310_bootloader_xxaa.hex
 
 ## C Source Files
-C_SOURCE_FILES += main.c gitversion.c global.c uart.c db.c adc.c power.c util.c pwm.c freqcntr.c spi.c bldc.c a4960.c spi_master.c sma.c led.c mechbrake.c cmdline.c commands.c motionEvent.c
+C_SOURCE_FILES += main.c gitversion.c global.c uart.c db.c fb.c adc.c power.c util.c pwm.c freqcntr.c spi.c bldc.c a4960.c spi_master.c sma.c led.c mechbrake.c cmdline.c commands.c motionEvent.c
 C_SOURCE_FILES += twi_hw_master.c
 C_SOURCE_FILES += mpu6050.c imu.c
 C_SOURCE_FILES += bleApp.c ble_sps.c ble_vns.c fifo.c 
@@ -34,7 +34,7 @@ C_SOURCE_FILES += ble_debug_assert_handler.c ble_error_log.c ble_flash.c
 
 ## C Flags
 
-CFLAGS += -DDEBUG -g3 -O0
+CFLAGS += -DDEBUG -g3 -O1
 CFLAGS += -DBLE_DEBUG=0
 CFLAGS += -DENABLE_BLE_COMMANDS=1
 CFLAGS += -DHARDWARE_VERSION=2

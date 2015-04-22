@@ -55,6 +55,7 @@
 #include "gitversion.h"
 #include "uart.h"
 #include "db.h"
+#include "fb.h"
 #include "adc.h"
 #include "pwm.h"
 #include "freqcntr.h"
@@ -485,11 +486,13 @@ int main(void) {
             }
         }
 
-        /* Three seconds after reboot, we put the daughterboard to sleep. */
+        /* Three seconds after reboot, we put the daughterboard and faceboards
+         * to sleep. */
         if (dbAwakeAfterBoot && (app_timer_cnt_get(&currentTime_rtcTicks) == NRF_SUCCESS) &&
         		(currentTime_rtcTicks * USEC_PER_APP_TIMER_TICK >= 3000000)) {
         	db_sleep(true);
         	dbAwakeAfterBoot = false;
+        	fb_sleep(0, true);
         }
 
         main_powerManage();
@@ -528,6 +531,8 @@ void main_powerManage() {
 		/* Turn on all LEDs on the mainboard and the daughterboard for 1 second
 		 * as an indication that the M-Blocks has exited sleep. */
 		db_setLEDs(true, true, true);
+		fb_setTopLEDs(0, true, true, true);
+		fb_setBottomLEDs(0, true, true, true);
 
 		nrf_gpio_pin_set(LED_RED_PIN_NO);
 		nrf_gpio_pin_set(LED_GREEN_PIN_NO);
@@ -537,7 +542,14 @@ void main_powerManage() {
 		/* Turn off all of the LEDs.  The led_init() function will handle this
 		 * on the mainboard. */
 		db_setLEDs(false, false, false);
+		fb_setTopLEDs(0, false, false, false);
+		fb_setBottomLEDs(0, false, false, false);
+
+		/* Sleep the daughterboard and the faceboards */
 		db_sleep(true);
+		fb_sleep(0, true);
+
+
 		led_init();
 
 		uart_init();
@@ -590,6 +602,9 @@ void main_powerManage() {
 			power_setVBATSWState(VBATSW_SUPERUSER, false);
 			/* Ensure that the daughterboard is in sleep mode */
 			db_sleep(true);
+
+			/* Put all faceboards to sleep, too */
+			fb_sleep(0, true);
 
 			/* Terminate the BLE connection, if one exists */
 			if (m_sps.conn_handle != BLE_CONN_HANDLE_INVALID) {

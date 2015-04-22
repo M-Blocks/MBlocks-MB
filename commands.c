@@ -26,6 +26,7 @@
 #include "adc.h"
 #include "power.h"
 #include "db.h"
+#include "fb.h"
 #include "bldc.h"
 #include "sma.h"
 #include "freqcntr.h"
@@ -73,6 +74,18 @@ static void cmdLED(const char *args);
 static void cmdDBReset(const char *args);
 static void cmdDBSleep(const char *args);
 static void cmdDBTemp(const char *args);
+/* Faceboard commands */
+static void cmdFBRGBLED(const char *args);
+static void cmdFBLight(const char *args);
+static void cmdFBIRManualLEDs(const char *args);
+static void cmdFBTx(const char *args);
+static void cmdFBTxCount(const char *args);
+static void cmdFBTxLEDs(const char *args);
+static void cmdFBRx(const char *args);
+static void cmdFBRxCount(const char *args);
+static void cmdFBRxFlush(const char *args);
+static void cmdFBRxEnable(const char *args);
+static void cmdFBSleep(const char *args);
 /* IMU commands */
 static void cmdIMUWrite(const char *args);
 static void cmdIMURead(const char *args);
@@ -130,6 +143,18 @@ static const char cmdLEDStr[] = "led";
 static const char cmdDBResetStr[] = "dbreset";
 static const char cmdDBSleepStr[] = "dbsleep";
 static const char cmdDBTempStr[] = "dbtemp";
+/* Faceboard commands */
+static const char cmdFBRGBLEDStr[] = "fbrgbled";
+static const char cmdFBLightStr[] = "fblight";
+static const char cmdFBIRManualLEDsStr[] = "fbirled";
+static const char cmdFBTxStr[] = "fbtx";
+static const char cmdFBTxCountStr[] = "fbtxcount";
+static const char cmdFBTxLEDsStr[] = "fbtxled";
+static const char cmdFBRxStr[] = "fbrx";
+static const char cmdFBRxCountStr[] = "fbrxcount";
+static const char cmdFBRxFlushStr[] = "fbrxflush";
+static const char cmdFBRxEnableStr[] = "fbrxen";
+static const char cmdFBSleepStr[] = "fbsleep";
 /* IMU commands */
 static const char cmdIMUWriteStr[] = "imuwrite";
 static const char cmdIMUReadStr[] = "imuread";
@@ -190,6 +215,18 @@ static cmdFcnPair_t cmdTable[] = {
 		{cmdDBResetStr, cmdDBReset},
 		{cmdDBSleepStr, cmdDBSleep},
 		{cmdDBTempStr, cmdDBTemp},
+		/* Faceboard commands */
+		{cmdFBRGBLEDStr, cmdFBRGBLED},
+		{cmdFBLightStr, cmdFBLight},
+		{cmdFBIRManualLEDsStr, cmdFBIRManualLEDs},
+		{cmdFBTxStr, cmdFBTx},
+		{cmdFBTxCountStr, cmdFBTxCount},
+		{cmdFBTxLEDsStr, cmdFBTxLEDs},
+		{cmdFBRxStr, cmdFBRx},
+		{cmdFBRxCountStr, cmdFBRxCount},
+		{cmdFBRxFlushStr, cmdFBRxFlush},
+		{cmdFBRxEnableStr, cmdFBRxEnable},
+		{cmdFBSleepStr, cmdFBSleep},
 		/* IMU commands */
 		{cmdIMUWriteStr, cmdIMUWrite},
 		{cmdIMUReadStr, cmdIMURead},
@@ -225,12 +262,21 @@ void commands_init() {
 
 void cmdVersion(const char *args) {
 	char db_gitVersionStr[64];
+	char fb_gitVersionStr[6][64];
+	uint8_t faceNum;
 
 	if (!db_getVersion(db_gitVersionStr, sizeof(db_gitVersionStr))) {
 		strcpy(db_gitVersionStr, "<unavailable>");
 	}
 
+	for (faceNum = 1; faceNum <= 6; faceNum++) {
+		if (!fb_getVersion(faceNum, fb_gitVersionStr[faceNum-1], 64)) {
+			strcpy(fb_gitVersionStr[faceNum-1], "<unavailable>");
+		}
+	}
+
 	app_uart_put_string("\r\n");
+
 	app_uart_put_string("MB Firmware: ");
 	app_uart_put_string(gitVersionLongStr);
 #ifdef DEBUG
@@ -241,8 +287,35 @@ void cmdVersion(const char *args) {
 	app_uart_put_string(" (Unknown)");
 #endif
 	app_uart_put_string("\r\n");
+
 	app_uart_put_string("DB Firmware: ");
 	app_uart_put_string(db_gitVersionStr);
+	app_uart_put_string("\r\n");
+
+	app_uart_put_string("Face 1 Firmware: ");
+	app_uart_put_string(fb_gitVersionStr[0]);
+	app_uart_put_string("\r\n");
+
+	app_uart_put_string("Face 2 Firmware: ");
+	app_uart_put_string(fb_gitVersionStr[1]);
+	app_uart_put_string("\r\n");
+
+	app_uart_put_string("Face 3 Firmware: ");
+	app_uart_put_string(fb_gitVersionStr[2]);
+	app_uart_put_string("\r\n");
+
+	app_uart_put_string("Face 4 Firmware: ");
+	app_uart_put_string(fb_gitVersionStr[3]);
+	app_uart_put_string("\r\n");
+
+	app_uart_put_string("Face 5 Firmware: ");
+	app_uart_put_string(fb_gitVersionStr[4]);
+	app_uart_put_string("\r\n");
+
+	app_uart_put_string("Face 6 Firmware: ");
+	app_uart_put_string(fb_gitVersionStr[5]);
+	app_uart_put_string("\r\n");
+
 	app_uart_put_string("\r\n");
 	app_uart_put_string("\r\n");
 }
@@ -827,7 +900,7 @@ void cmdLED(const char *args) {
 /**************************/
 void cmdDBReset(const char *args) {
 	db_reset();
-	app_uart_put_string("Daughterboard reset\r\n");
+	app_uart_put_string("Daughterboard and faceboards reset\r\n");
 }
 
 void cmdDBSleep(const char *args) {
@@ -872,6 +945,496 @@ void cmdDBTemp(const char *args) {
 
 	db_sleep(true);
 }
+
+/**********************/
+/* Faceboard Commands */
+/**********************/
+
+void cmdFBRGBLED(const char *args) {
+	int nArgs;
+	char topBottomStr[3];
+	char rgbStr[4];
+	unsigned int faces[6];
+	bool red, green, blue;
+	bool top, bottom;
+	uint8_t faceCount;
+	uint8_t i;
+
+	/* We expect the command to take a least 3 arguments:
+	 *  1) a string composed of the characters 'r', 'g', or 'b' (in any order) with a length of 1-3 characters
+	 *  2) a string composed of the characters 't' and 'b' (with either first) with a length of 1-2 characters
+	 *  3) a numeric list of faces (e.g. "2 3 6")
+	 */
+	if ((nArgs = sscanf(args, "%3s %2s %u %u %u %u %u %u", rgbStr, topBottomStr, &faces[0], &faces[1], &faces[2], &faces[3], &faces[4], &faces[5])) < 3) {
+		return;
+	}
+
+	if ((strchr(rgbStr, 'r') != NULL) || (strchr(rgbStr, 'R') != NULL)) {
+		red = true;
+	} else {
+		red = false;
+	}
+
+	if ((strchr(rgbStr, 'g') != NULL) || (strchr(rgbStr, 'G') != NULL)) {
+		green = true;
+	} else {
+		green = false;
+	}
+
+	if ((strchr(rgbStr, 'b') != NULL) || (strchr(rgbStr, 'B') != NULL)) {
+		blue = true;
+	} else {
+		blue = false;
+	}
+
+	if ((strchr(topBottomStr, 't') != NULL) || (strchr(topBottomStr, 'T') != NULL)) {
+		top = true;
+	} else {
+		top = false;
+	}
+
+	if ((strchr(topBottomStr, 'b') != NULL) || (strchr(topBottomStr, 'B') != NULL)) {
+		bottom = true;
+	} else {
+		bottom = false;
+	}
+
+	/* Return if neither the top of bottom LEDs are specified */
+	if (!bottom && !top) {
+		return;
+	}
+
+	/* The number of faces in the list is the total number of arguments minus
+	 * the 'rgb' and 'tb' arugments. */
+	faceCount = nArgs - 2;
+
+	/* Return without doing anything if we find an invalid face listed */
+	for (i = 0; i < faceCount; i++) {
+		if ((faces[i] < 1) || (faces[i] > 6)) {
+			return;
+		}
+	}
+
+	if (top) {
+		for (i = 0; i < faceCount; i++) {
+			fb_setTopLEDs(faces[i], red, green, blue);
+		}
+	}
+
+	if (bottom) {
+		for (i = 0; i < faceCount; i++) {
+			fb_setBottomLEDs(faces[i], red, green, blue);
+		}
+	}
+
+	app_uart_put_string("Faceboard LEDs set\r\n");
+
+	return;
+}
+
+void cmdFBLight(const char *args) {
+	unsigned int faceNum;
+	int16_t ambientLight;
+	char str[100];
+
+	if (sscanf(args, "%u", &faceNum) != 1) {
+		return;
+	}
+
+	if ((faceNum < 1) || (faceNum > 6)) {
+		return;
+	}
+
+	ambientLight = fb_getAmbientLight(faceNum);
+	if (ambientLight >= 0) {
+		snprintf(str, sizeof(str), "Faceboard %u ambient light: %d\r\n", faceNum, ambientLight);
+	} else {
+		snprintf(str, sizeof(str), "Faceboard %u ambient light: <error>\r\n", faceNum);
+	}
+
+	app_uart_put_string(str);
+}
+
+void cmdFBIRManualLEDs(const char *args) {
+	int nArgs;
+	unsigned int faceNum;
+	unsigned int leds[4];
+	bool ledsOn[4];
+	int i;
+	bool first;
+	char ledsStr[16];
+	char str[100];
+
+
+	if ((nArgs = sscanf(args, "%u %u %u %u %u", &faceNum, &leds[0], &leds[1], &leds[2], &leds[3])) < 1) {
+		return;
+	}
+
+	if (faceNum > 6) {
+		return;
+	}
+
+	ledsOn[0] = ledsOn[1] = ledsOn[2] = ledsOn[3] = false;
+	for (i = 0; i < nArgs - 1; i++) {
+		if ((1 <= leds[i]) && (leds[i] <= 4 )) {
+			ledsOn[leds[i]-1] = true;
+		} else {
+			/* Return if we encounter an invalid LED number */
+			return;
+		}
+	}
+
+	ledsStr[0] = '\0';
+	first = true;
+	if (ledsOn[0]) {
+		strcat(ledsStr, "1");
+		first = false;
+	}
+
+	if (ledsOn[1]) {
+		if (!first) {
+			if (!ledsOn[2] && !ledsOn[3]) {
+				strcat(ledsStr, " and ");
+			} else {
+				strcat(ledsStr, ", ");
+			}
+		}
+		strcat(ledsStr, "2");
+		first = false;
+	}
+
+	if (ledsOn[2]) {
+		if (!first) {
+			if (!ledsOn[3]) {
+				strcat(ledsStr, " and ");
+			} else {
+				strcat(ledsStr, ", ");
+			}
+		}
+		strcat(ledsStr, "3");
+		first = false;
+	}
+
+	if (ledsOn[3]) {
+		if (!first) {
+			strcat(ledsStr, " and ");
+		}
+		strcat(ledsStr, "4");
+		first = false;
+	}
+
+	if (fb_setIRManualLEDs(faceNum, ledsOn[0], ledsOn[1], ledsOn[2], ledsOn[3])) {
+		if (!ledsOn[0] && !ledsOn[1] && !ledsOn[2] && !ledsOn[3]) {
+			if (faceNum == 0) {
+				snprintf(str, sizeof(str), "Turned off all IR LEDs on all faceboards\r\n");
+			} else {
+				snprintf(str, sizeof(str), "Turned off all IR LEDs on faceboard %u\r\n", faceNum);
+			}
+		} else {
+			if (faceNum == 0) {
+				snprintf(str, sizeof(str), "Turned on IR LED(s) %s (only) on all faceboards\r\n", ledsStr);
+			} else {
+				snprintf(str, sizeof(str), "Turned on IR LED(s) %s (only) on faceboard %u\r\n", ledsStr, faceNum);
+			}
+		}
+	} else {
+		snprintf(str, sizeof(str), "Failed to turn IR LED(s) on/off\r\n");
+	}
+
+
+	app_uart_put_string(str);
+}
+
+void cmdFBTx(const char *args) {
+	unsigned int faceNum;
+	unsigned int numBytes;
+	char txData[256];
+	char str[100];
+
+	if (sscanf(args, "%u %255s", &faceNum, txData) != 2) {
+		return;
+	}
+
+	if ((faceNum < 1) || (faceNum > 6)) {
+		return;
+	}
+
+	numBytes = strlen(txData);
+
+	if (fb_sendToTxBuffer(faceNum, numBytes, (uint8_t *)txData)) {
+		snprintf(str, sizeof(str), "Wrote %u bytes to IR transmit buffer on faceboard %u\r\n", numBytes, faceNum);
+	} else {
+		snprintf(str, sizeof(str), "Failed to write to IR transmit buffer on faceboard %u\r\n", faceNum);
+	}
+
+	app_uart_put_string(str);
+}
+
+void cmdFBTxCount(const char *args) {
+	unsigned int faceNum;
+	uint8_t count;
+	char str[100];
+
+
+	if (sscanf(args, "%u", &faceNum) != 1) {
+		return;
+	}
+
+	if ((faceNum < 1) || (faceNum > 6)) {
+		return;
+	}
+
+	if (fb_getTxBufferAvailableCount(faceNum, &count)) {
+		snprintf(str, sizeof(str), "Faceboard %u IR transmit buffer bytes available: %u\r\n", faceNum, count);
+	} else {
+		snprintf(str, sizeof(str), "Failed to get IR transmit buffer bytes available count from faceboard %u\r\n", faceNum);
+	}
+
+	app_uart_put_string(str);
+}
+
+void cmdFBTxLEDs(const char *args) {
+	int nArgs;
+	unsigned int faceNum;
+	unsigned int leds[4];
+	bool ledsOn[4];
+	int i;
+	bool first;
+	char ledsStr[16];
+	char str[100];
+
+
+	if ((nArgs = sscanf(args, "%u %u %u %u %u", &faceNum, &leds[0], &leds[1], &leds[2], &leds[3])) < 1) {
+		return;
+	}
+
+	if (faceNum > 6) {
+		return;
+	}
+
+	ledsOn[0] = ledsOn[1] = ledsOn[2] = ledsOn[3] = false;
+	for (i = 0; i < nArgs - 1; i++) {
+		if ((1 <= leds[i]) && (leds[i] <= 4 )) {
+			ledsOn[leds[i]-1] = true;
+		} else {
+			/* Return if we encounter an invalid LED number */
+			return;
+		}
+	}
+
+	ledsStr[0] = '\0';
+	first = true;
+	if (ledsOn[0]) {
+		strcat(ledsStr, "1");
+		first = false;
+	}
+
+	if (ledsOn[1]) {
+		if (!first) {
+			if (!ledsOn[2] && !ledsOn[3]) {
+				strcat(ledsStr, " and ");
+			} else {
+				strcat(ledsStr, ", ");
+			}
+		}
+		strcat(ledsStr, "2");
+		first = false;
+	}
+
+	if (ledsOn[2]) {
+		if (!first) {
+			if (!ledsOn[3]) {
+				strcat(ledsStr, " and ");
+			} else {
+				strcat(ledsStr, ", ");
+			}
+		}
+		strcat(ledsStr, "3");
+		first = false;
+	}
+
+	if (ledsOn[3]) {
+		if (!first) {
+			strcat(ledsStr, " and ");
+		}
+		strcat(ledsStr, "4");
+		first = false;
+	}
+
+	if (fb_setIRTxLEDs(faceNum, ledsOn[0], ledsOn[1], ledsOn[2], ledsOn[3])) {
+		if (!ledsOn[0] && !ledsOn[1] && !ledsOn[2] && !ledsOn[3]) {
+			if (faceNum == 0) {
+				snprintf(str, sizeof(str), "Disabled all IR transmit LEDs on all faceboards\r\n");
+			} else {
+				snprintf(str, sizeof(str), "Disabled all IR transmit LEDs on faceboard %u\r\n", faceNum);
+			}
+		} else {
+			if (faceNum == 0) {
+				snprintf(str, sizeof(str), "Enabled IR transmit LED(s) %s (only) on all faceboards\r\n", ledsStr);
+			} else {
+				snprintf(str, sizeof(str), "Enabled IR transmit LED(s) %s (only) on faceboard %u\r\n", ledsStr, faceNum);
+			}
+		}
+	} else {
+		snprintf(str, sizeof(str), "Failed to enable/disable IR transmit LED(s)\r\n");
+	}
+
+
+	app_uart_put_string(str);
+}
+
+void cmdFBRx(const char *args) {
+	unsigned int faceNum;
+	unsigned int numBytes;
+	uint8_t rxData[256];
+	char str[100];
+
+
+	if (sscanf(args, "%u %u", &faceNum, &numBytes) != 2) {
+		return;
+	}
+
+	if ((faceNum < 1) || (faceNum > 6)) {
+		return;
+	}
+
+	if (numBytes == 0) {
+		return;
+	}
+
+	if (numBytes > sizeof(rxData) - 1) {
+		numBytes = sizeof(rxData) - 1;
+	}
+
+	rxData[0] = '\0';
+	if (fb_receiveFromRxBuffer(faceNum, numBytes, rxData)) {
+		rxData[numBytes] = '\0';
+		snprintf(str, sizeof(str), "Read %u bytes from IR receive buffer on faceboard %u:\r\n", numBytes, faceNum);
+		app_uart_put_string(str);
+		app_uart_put_string((char *)rxData);
+		app_uart_put_string("\r\n");
+	} else {
+		snprintf(str, sizeof(str), "Failed to read IR receive buffer on faceboard %u\r\n", faceNum);
+		app_uart_put_string(str);
+	}
+}
+
+void cmdFBRxCount(const char *args) {
+	unsigned int faceNum;
+	uint8_t count;
+	char str[100];
+
+
+	if (sscanf(args, "%u", &faceNum) != 1) {
+		return;
+	}
+
+	if ((faceNum < 1) || (faceNum > 6)) {
+		return;
+	}
+
+	if (fb_getRxBufferConsumedCount(faceNum, &count)) {
+		snprintf(str, sizeof(str), "Faceboard %u IR receive buffer bytes consumed: %u\r\n", faceNum, count);
+	} else {
+		snprintf(str, sizeof(str), "Failed to get IR receive buffer bytes consumed count from faceboard %u\r\n", faceNum);
+	}
+
+	app_uart_put_string(str);
+}
+
+void cmdFBRxFlush(const char *args) {
+	unsigned int faceNum = 0;
+	char str[100];
+
+	/* Without any argument, faceNum will retain its default value of 0 so that
+	 * the command will apply to all Faceboards. */
+	sscanf(args, "%u", &faceNum);
+
+	if (faceNum > 6) {
+		return;
+	}
+
+	if (fb_flushRxBuffer(faceNum)) {
+		if (faceNum == 0) {
+			snprintf(str, sizeof(str), "Flushed receive IR receive buffers on all faceboards\r\n");
+		} else {
+			snprintf(str, sizeof(str), "Flushed receive IR receive buffer on faceboard %u\r\n", faceNum);
+		}
+	} else {
+		snprintf(str, sizeof(str), "Failed to flush IR receive buffer(s) on faceboard(s)\r\n");
+	}
+
+	app_uart_put_string(str);
+}
+
+void cmdFBRxEnable(const char *args) {
+	int nArgs;
+	unsigned int faceNum;
+	unsigned int enable;
+	bool enabled;
+	char str[100];
+
+	if ((nArgs = sscanf(args, "%u %u", &faceNum, &enable)) < 1) {
+		return;
+	}
+
+	if (faceNum > 6) {
+		return;
+	}
+
+	if ((nArgs == 2) && (enable == 1)) {
+		if (fb_setRxEnable(faceNum, true)) {
+			if (faceNum == 0) {
+				snprintf(str, sizeof(str), "IR receiver and ambient light sensor enabled on all faceboards\r\n");
+			} else {
+				snprintf(str, sizeof(str), "IR receiver and ambient light sensor enabled on faceboard %u\r\n", faceNum);
+			}
+		} else {
+			snprintf(str, sizeof(str), "Failed to enable IR receiver and ambient light sensor on faceboard(s)\r\n");
+		}
+	} else if ((nArgs == 2) && (enable == 0)) {
+		if (fb_setRxEnable(faceNum, false)) {
+			if (faceNum == 0) {
+				snprintf(str, sizeof(str), "IR receiver and ambient light sensor disabled on all faceboards\r\n");
+			} else {
+				snprintf(str, sizeof(str), "IR receiver and ambient light sensor disabled on faceboard %u\r\n", faceNum);
+			}
+		} else {
+			snprintf(str, sizeof(str), "Failed to disable IR receiver and ambient light sensor on faceboard(s)\r\n");
+		}
+	} else if ((nArgs == 1) && (faceNum != 0) && fb_getRxEnable(faceNum, &enabled)) {
+		if (enabled) {
+			snprintf(str, sizeof(str), "IR receiver and ambient light sensor are enabled on faceboard %u\r\n", faceNum);
+		} else {
+			snprintf(str, sizeof(str), "IR receiver and ambient light sensor are disabled on faceboard %u\r\n", faceNum);
+		}
+	} else {
+
+	}
+
+	app_uart_put_string(str);
+}
+
+void cmdFBSleep(const char *args) {
+	unsigned int faceNum = 0;
+	char str[100];
+
+	sscanf(args, "%u", &faceNum);
+
+	if (faceNum > 6) {
+		return;
+	}
+
+	fb_sleep(faceNum, true);
+
+	if (faceNum == 0) {
+		app_uart_put_string("All faceboards put to sleep\r\n");
+	} else {
+		snprintf(str, sizeof(str), "Faceboard %u put to sleep\r\n", faceNum);
+		app_uart_put_string(str);
+	}
+}
+
 
 /****************/
 /* IMU commands */
