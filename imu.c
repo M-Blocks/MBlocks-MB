@@ -244,21 +244,26 @@ const vectorFloat_t frameAlignmentVectorsFloat[3] = {
 		{0.707107f, 0.707107f, 0.0f},
 };
 
-static bool imuInitialized = false;
-static bool dmpInitialized = false;
+static bool imuInitialized[2] = {false, false};
+static bool dmpInitialized[2] = {false, false};
 
 static bool imu_writeDMPConfigurationSet(const uint8_t *data, uint16_t dataSize);
 
-bool imu_init(uint8_t address) {
+static void imu_setIMUInitialized(bool initialized);
+static bool imu_getIMUInitialized(void);
+
+static void imu_setDMPInitialized(bool initialized);
+static bool imu_getDMPInitialized(void);
+
+
+bool imu_init() {
 	bool success = true;
 	uint8_t whoAmI;
-
-	mpu6050_setAddress(address);
 
 	twi_master_init();
 
 	success &= mpu6050_getWhoAmI(&whoAmI);
-	if (!success || (whoAmI != (address >> 1))) {
+	if (!success || (whoAmI != (mpu6050_getAddress() >> 1))) {
 		return false;
 	}
 
@@ -268,15 +273,15 @@ bool imu_init(uint8_t address) {
 	success &= mpu6050_reset();
 
 	/* The device reset requires that we re-initialize the DMP */
-	dmpInitialized = false;
+	imu_setDMPInitialized(false);
 
 	/* Disable all interrupts */
 	success &= mpu6050_writeReg(MPU6050_INT_ENABLE_REG_ADDR, 0x00);
 
 	if (success) {
-		imuInitialized = true;
+		imu_setIMUInitialized(true);
 	} else {
-		imuInitialized = false;
+		imu_setIMUInitialized(false);
 	}
 
 	twi_master_deinit();
@@ -294,7 +299,7 @@ bool imu_initDMP() {
 	uint8_t intStatus;
 	bool success = true;
 
-	if (!imuInitialized) {
+	if (!imu_getIMUInitialized()) {
 		return false;
 	}
 
@@ -353,7 +358,7 @@ bool imu_initDMP() {
 	/* Disable I2C master mode */
 	success &= mpu6050_clearBits(MPU6050_USER_CTRL_REG_ADDR, (1<<MPU6050_I2C_MST_EN_POSN));
 	/* Set slave 0 address to own address */
-	success &= mpu6050_writeReg(MPU6050_I2C_SLV0_ADDR_REG_ADDR, MPU6050_I2C_ADDR);
+	success &= mpu6050_writeReg(MPU6050_I2C_SLV0_ADDR_REG_ADDR, mpu6050_getAddress());
 	/* Reset I2C master */
 	success &= mpu6050_resetI2CMaster();
 #if (ORIGINAL_DMP_CODE == 1)
@@ -522,9 +527,9 @@ bool imu_initDMP() {
 #endif
 
 	if (success) {
-		dmpInitialized = true;
+		imu_setDMPInitialized(true);
 	} else {
-		dmpInitialized = false;
+		imu_setDMPInitialized(false);
 	}
 
 	twi_master_deinit();
@@ -536,7 +541,7 @@ bool imu_enableMotionDetection(bool enable) {
 	uint8_t data;
 	bool success = true;
 
-	if (!imuInitialized) {
+	if (!imu_getIMUInitialized()) {
 		return false;
 	}
 
@@ -602,7 +607,7 @@ bool imu_enableMotionDetection(bool enable) {
 bool imu_enableDMP() {
 	bool success = true;
 
-	if (!(imuInitialized && dmpInitialized)) {
+	if (!(imu_getIMUInitialized() && imu_getDMPInitialized())) {
 		return false;
 	}
 
@@ -642,7 +647,7 @@ bool imu_enableSleepMode() {
 	uint8_t data;
 	bool success = true;
 
-	if (!imuInitialized) {
+	if (!imu_getIMUInitialized()) {
 		return false;
 	}
 
@@ -683,7 +688,7 @@ bool imu_checkForMotion(bool *motionDetected) {
 	uint8_t data;
 	bool success;
 
-	if (!imuInitialized) {
+	if (!imu_getIMUInitialized()) {
 		return false;
 	}
 
@@ -707,7 +712,7 @@ bool imu_getLatestFIFOPacket(uint8_t *packet) {
 	uint8_t intStatus;
 
 
-	if (!(imuInitialized && dmpInitialized)) {
+	if (!(imu_getIMUInitialized() && imu_getDMPInitialized())) {
 		return false;
 	}
 
@@ -1034,3 +1039,39 @@ bool imu_writeDMPConfigurationSet(const uint8_t *data, uint16_t dataSize) {
     return success;
 }
 
+
+void imu_setIMUInitialized(bool initialized) {
+	if (mpu6050_getAddress() == MPU6050_I2C_ADDR_CENTRAL) {
+		imuInitialized[0] = initialized;
+	} else if (mpu6050_getAddress() == MPU6050_I2C_ADDR_FACE) {
+		imuInitialized[1] = initialized;
+	}
+}
+
+bool imu_getIMUInitialized() {
+	if (mpu6050_getAddress() == MPU6050_I2C_ADDR_CENTRAL) {
+		return imuInitialized[0];
+	} else if (mpu6050_getAddress() == MPU6050_I2C_ADDR_FACE) {
+		return imuInitialized[1];
+	} else {
+		return false;
+	}
+}
+
+void imu_setDMPInitialized(bool initialized) {
+	if (mpu6050_getAddress() == MPU6050_I2C_ADDR_CENTRAL) {
+		dmpInitialized[0] = initialized;
+	} else if (mpu6050_getAddress() == MPU6050_I2C_ADDR_FACE) {
+		dmpInitialized[1] = initialized;
+	}
+}
+
+bool imu_getDMPInitialized() {
+	if (mpu6050_getAddress() == MPU6050_I2C_ADDR_CENTRAL) {
+		return dmpInitialized[0];
+	} else if (mpu6050_getAddress() == MPU6050_I2C_ADDR_FACE) {
+		return dmpInitialized[1];
+	} else {
+		return false;
+	}
+}

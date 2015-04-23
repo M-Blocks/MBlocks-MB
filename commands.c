@@ -19,6 +19,7 @@
 #include "app_uart.h"
 
 #include "util.h"
+#include "global.h"
 #include "gitversion.h"
 #include "main.h"
 #include "twi_master.h"
@@ -87,6 +88,7 @@ static void cmdFBRxFlush(const char *args);
 static void cmdFBRxEnable(const char *args);
 static void cmdFBSleep(const char *args);
 /* IMU commands */
+static void cmdIMUSelect(const char *args);
 static void cmdIMUWrite(const char *args);
 static void cmdIMURead(const char *args);
 static void cmdIMUMotion(const char *args);
@@ -156,6 +158,7 @@ static const char cmdFBRxFlushStr[] = "fbrxflush";
 static const char cmdFBRxEnableStr[] = "fbrxen";
 static const char cmdFBSleepStr[] = "fbsleep";
 /* IMU commands */
+static const char cmdIMUSelectStr[] = "imuselect";
 static const char cmdIMUWriteStr[] = "imuwrite";
 static const char cmdIMUReadStr[] = "imuread";
 static const char cmdIMUMotionStr[] = "imumotion";
@@ -228,6 +231,7 @@ static cmdFcnPair_t cmdTable[] = {
 		{cmdFBRxEnableStr, cmdFBRxEnable},
 		{cmdFBSleepStr, cmdFBSleep},
 		/* IMU commands */
+		{cmdIMUSelectStr, cmdIMUSelect},
 		{cmdIMUWriteStr, cmdIMUWrite},
 		{cmdIMUReadStr, cmdIMURead},
 		{cmdIMUMotionStr, cmdIMUMotion},
@@ -1440,6 +1444,25 @@ void cmdFBSleep(const char *args) {
 /* IMU commands */
 /****************/
 
+void cmdIMUSelect(const char *args) {
+	int nArgs;
+	char imuStr[2];
+	char str[100];
+
+	nArgs = sscanf(args, "%1s", imuStr);
+
+	if (nArgs == 1) {
+		if ((imuStr[0] == 'c') || (imuStr[0] == 'C')) {
+			mpu6050_setAddress(MPU6050_I2C_ADDR_CENTRAL);
+		} else if ((imuStr[0] == 'f') || (imuStr[0] == 'F')) {
+			mpu6050_setAddress(MPU6050_I2C_ADDR_FACE);
+		}
+	}
+
+	snprintf(str, sizeof(str), "Active IMU: %s\r\n", mpu6050_getName());
+	app_uart_put_string(str);
+}
+
 void cmdIMUWrite(const char *args) {
 	unsigned int addr, data;
 	char str[64];
@@ -1452,11 +1475,12 @@ void cmdIMUWrite(const char *args) {
 	twi_master_init();
 
 	if (mpu6050_writeReg((uint8_t) addr, (uint8_t) data)) {
-		snprintf(str, sizeof(str), "Wrote 0x%02X to IMU register at 0x%02X\r\n",
-				(uint8_t) data, (uint8_t) addr);
+		snprintf(str, sizeof(str), "Wrote 0x%02X to %s IMU register at 0x%02X\r\n",
+				(uint8_t) data, mpu6050_getName(), (uint8_t) addr);
 		app_uart_put_string(str);
 	} else {
-		app_uart_put_string("Write to IMU register failed\r\n");
+		snprintf(str, sizeof(str), "Write to %s IMU register failed\r\n", mpu6050_getName());
+		app_uart_put_string(str);
 	}
 
 	twi_master_deinit();
@@ -1465,7 +1489,7 @@ void cmdIMUWrite(const char *args) {
 void cmdIMURead(const char *args) {
 	unsigned int addr;
 	uint8_t data;
-	char str[64];
+	char str[100];
 
 	if ((sscanf(args, "%x", &addr) != 1) || (addr > 0xFF)) {
 		return;
@@ -1475,11 +1499,12 @@ void cmdIMURead(const char *args) {
 
 	if (mpu6050_readReg((uint8_t)addr, &data)) {
 		snprintf(str, sizeof(str),
-				"Read 0x%02X from IMU register at 0x%02X\r\n", data,
-				(uint8_t) addr);
+				"Read 0x%02X from %s IMU register at 0x%02X\r\n",
+				data, mpu6050_getName(), (uint8_t) addr);
 		app_uart_put_string(str);
 	} else {
-		app_uart_put_string("Read from IMU register failed\r\n");
+		snprintf(str, sizeof(str), "Read from %s IMU register failed\r\n", mpu6050_getName());
+		app_uart_put_string(str);
 	}
 
 	twi_master_deinit();
@@ -1487,37 +1512,42 @@ void cmdIMURead(const char *args) {
 
 void cmdIMUMotion(const char *args) {
 	bool motionDetected;
+	char str[100];
 
 	if (imu_checkForMotion(&motionDetected) && motionDetected) {
-		app_uart_put_string("Motion detected\r\n");
+		snprintf(str, sizeof(str), "Motion detected by %s IMU\r\n", mpu6050_getName());
+		app_uart_put_string(str);
 	} else {
-		app_uart_put_string("Motion not detected\r\n");
+		snprintf(str, sizeof(str), "Motion not detected by %s IMU\r\n", mpu6050_getName());
+		app_uart_put_string(str);
 	}
 }
 
 void cmdIMUQuaternion(const char *args) {
-	char str[64];
+	char str[100];
 	quaternion16_t q16;
 
 	if (!imu_getUnitQuaternion16(&q16)) {
-		app_uart_put_string("Failed to read quaternion data from IMU\r\n");
+		snprintf(str, sizeof(str), "Failed to read quaternion data from %s IMU\r\n", mpu6050_getName());
+		app_uart_put_string(str);
 		return;
 	}
 
-	snprintf(str, sizeof(str), "Rotation: [%d %d %d %d]\r\n", q16.w, q16.x, q16.y, q16.z);
+	snprintf(str, sizeof(str), "Rotation of %s IMU: [%d %d %d %d]\r\n", mpu6050_getName(), q16.w, q16.x, q16.y, q16.z);
 	app_uart_put_string(str);
 }
 
 void cmdIMUGravity(const char *args) {
-	char str[128];
+	char str[200];
 	vector16_t v16;
 
 	if (!imu_getGravity16(&v16)) {
-		app_uart_put_string("Failed to read gravity data from IMU\r\n");
+		snprintf(str, sizeof(str), "Failed to read gravity vector from %s IMU\r\n", mpu6050_getName());
+		app_uart_put_string(str);
 		return;
 	}
 
-	snprintf(str, sizeof(str), "Gravity: [%d %d %d]\r\n", v16.x, v16.y, v16.z);
+	snprintf(str, sizeof(str), "Gravity vector (int) of %s IMU: [%d %d %d]\r\n", mpu6050_getName(), v16.x, v16.y, v16.z);
 	app_uart_put_string(str);
 
 #if (1)
@@ -1529,13 +1559,14 @@ void cmdIMUGravity(const char *args) {
 		return;
 	}
 
-	snprintf(str, sizeof(str), "Gravity (float): [%f %f %f]\r\n", gravity.x, gravity.y, gravity.z);
+	snprintf(str, sizeof(str), "Gravity vector (float) of %s IMU: [%f %f %f]\r\n", mpu6050_getName(), gravity.x, gravity.y, gravity.z);
 	app_uart_put_string(str);
 
 	for (i=0; i<3; i++) {
 		angleDiff = fabs(imu_getVectorFloatAngle(&gravity, &frameAlignmentVectorsFloat[i]));
 
-		snprintf(str, sizeof(str), "Angle between gravity vector and [%f %f %f]: %f degrees\r\n",
+		snprintf(str, sizeof(str), "Angle between gravity vector (%s IMU) and [%f %f %f]: %f degrees\r\n",
+				mpu6050_getName(),
 				frameAlignmentVectorsFloat[i].x, frameAlignmentVectorsFloat[i].y, frameAlignmentVectorsFloat[i].z,
 				angleDiff);
 		app_uart_put_string(str);
@@ -1548,11 +1579,12 @@ void cmdIMUGyros(const char *args) {
 	vector16_t v16;
 
 	if (!imu_getGyros16(&v16)) {
-		app_uart_put_string("Failed to read gyroscope data from IMU\r\n");
+		snprintf(str, sizeof(str), "Failed to read gyroscope data from %s IMU\r\n", mpu6050_getName());
+		app_uart_put_string(str);
 		return;
 	}
 
-	snprintf(str, sizeof(str), "Gyros: [%d %d %d]\r\n", v16.x, v16.y, v16.z);
+	snprintf(str, sizeof(str), "Gyros (%s IMU): [%d %d %d]\r\n", mpu6050_getName(), v16.x, v16.y, v16.z);
 	app_uart_put_string(str);
 }
 

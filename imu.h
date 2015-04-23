@@ -43,7 +43,7 @@ typedef struct {
 
 extern const vectorFloat_t frameAlignmentVectorsFloat[3];
 
-bool imu_init(uint8_t address);
+bool imu_init();
 bool imu_initDMP(void);
 
 bool imu_enableMotionDetection(bool enable);

@@ -367,7 +367,10 @@
 #define MPU6050_DMP_MEMORY_BANK_SIZE			256
 #define MPU6050_DMP_MEMORY_CHUNK_SIZE			16
 
-void mpu6050_setAddress(uint8_t address);
+bool mpu6050_setAddress(uint8_t address);
+uint8_t mpu6050_getAddress(void);
+const char *mpu6050_getName(void);
+
 bool mpu6050_writeReg(uint8_t addr, uint8_t data);
 bool mpu6050_readReg(uint8_t addr, uint8_t *data);
 bool mpu6050_writeBytes(uint8_t *addrData, uint8_t nBytes);

@@ -65,6 +65,7 @@
 #include "bldc.h"
 #include "a4960.h"
 #include "sma.h"
+#include "mpu6050.h"
 #include "imu.h"
 #include "power.h"
 #include "led.h"
@@ -360,7 +361,8 @@ int main(void) {
 	char str[64];
 	uint8_t strSize;
 	uint16_t bootCurrent_mA;
-	bool mpu6050Initialized, dmpInitialized;
+	bool mpu6050Initialized_central, dmpInitialized_central;
+	bool mpu6050Initialized_face, dmpInitialized_face;
 	bool dbAwakeAfterBoot;
 	bool ledsOnAfterBoot;
 	uint32_t currentTime_rtcTicks;
@@ -382,9 +384,17 @@ int main(void) {
      * initialization, and if too many timers expire, and too many events are
      * added to the scheduler's queue, the queue will overflow and the nRF will
      * reset. */
-    twi_master_init();
-    mpu6050Initialized = imu_init(MPU6050_I2C_ADDR);
-    dmpInitialized = imu_initDMP();
+    //twi_master_init();
+
+	mpu6050_setAddress(MPU6050_I2C_ADDR_FACE);
+	mpu6050Initialized_face = imu_init();
+	dmpInitialized_face = imu_initDMP();
+
+	mpu6050_setAddress(MPU6050_I2C_ADDR_CENTRAL);
+	mpu6050Initialized_central = imu_init();
+	dmpInitialized_central = imu_initDMP();
+
+
 
     led_init();
     pwm_init();
@@ -423,11 +433,11 @@ int main(void) {
 
     strSize = sizeof(str);
     if (db_getVersion(str, strSize)) {
-    	app_uart_put_string("DB: OK (");
+    	app_uart_put_string("Daughterboard: OK (");
     	app_uart_put_string(str);
     	app_uart_put_string(")\r\n");
     } else {
-    	app_uart_put_string("DB: Fail\r\n");
+    	app_uart_put_string("Daughterboard: Fail\r\n");
     }
 
     if (bldc_init()) {
@@ -436,16 +446,82 @@ int main(void) {
     	app_uart_put_string("A4960: Fail\r\n");
     }
 
-	if (mpu6050Initialized) {
-    	app_uart_put_string("MPU-6050: OK\r\n");
+	if (mpu6050Initialized_central) {
+    	app_uart_put_string("MPU-6050 (central actuator): OK\r\n");
     } else {
-    	app_uart_put_string("MPU-6050: Fail\r\n");
+    	app_uart_put_string("MPU-6050 (central actuator): Fail\r\n");
     }
 
-    if (dmpInitialized) {
-    	app_uart_put_string("DMP: OK\r\n");
+    if (dmpInitialized_central) {
+    	app_uart_put_string("DMP (central actuator): OK\r\n");
     } else {
-    	app_uart_put_string("DMP: Fail\r\n");
+    	app_uart_put_string("DMP (central actuator): Fail\r\n");
+    }
+
+	if (mpu6050Initialized_face) {
+    	app_uart_put_string("MPU-6050 (faceboard 1): OK\r\n");
+    } else {
+    	app_uart_put_string("MPU-6050 (faceboard 1): Fail\r\n");
+    }
+
+    if (dmpInitialized_face) {
+    	app_uart_put_string("DMP (faceboard 1): OK\r\n");
+    } else {
+    	app_uart_put_string("DMP (faceboard 1): Fail\r\n");
+    }
+
+    strSize = sizeof(str);
+    if (fb_getVersion(1, str, strSize)) {
+    	app_uart_put_string("Faceboard 1: OK (");
+    	app_uart_put_string(str);
+    	app_uart_put_string(")\r\n");
+    } else {
+    	app_uart_put_string("Faceboard 1: Fail\r\n");
+    }
+
+    strSize = sizeof(str);
+    if (fb_getVersion(2, str, strSize)) {
+    	app_uart_put_string("Faceboard 2: OK (");
+    	app_uart_put_string(str);
+    	app_uart_put_string(")\r\n");
+    } else {
+    	app_uart_put_string("Faceboard 2: Fail\r\n");
+    }
+
+    strSize = sizeof(str);
+    if (fb_getVersion(3, str, strSize)) {
+    	app_uart_put_string("Faceboard 3: OK (");
+    	app_uart_put_string(str);
+    	app_uart_put_string(")\r\n");
+    } else {
+    	app_uart_put_string("Faceboard 3: Fail\r\n");
+    }
+
+    strSize = sizeof(str);
+    if (fb_getVersion(4, str, strSize)) {
+    	app_uart_put_string("Faceboard 4: OK (");
+    	app_uart_put_string(str);
+    	app_uart_put_string(")\r\n");
+    } else {
+    	app_uart_put_string("Faceboard 4: Fail\r\n");
+    }
+
+    strSize = sizeof(str);
+    if (fb_getVersion(5, str, strSize)) {
+    	app_uart_put_string("Faceboard 5: OK (");
+    	app_uart_put_string(str);
+    	app_uart_put_string(")\r\n");
+    } else {
+    	app_uart_put_string("Faceboard 5: Fail\r\n");
+    }
+
+    strSize = sizeof(str);
+    if (fb_getVersion(6, str, strSize)) {
+    	app_uart_put_string("Faceboard 6: OK (");
+    	app_uart_put_string(str);
+    	app_uart_put_string(")\r\n");
+    } else {
+    	app_uart_put_string("Faceboard 6: Fail\r\n");
     }
 
     bootCurrent_mA = power_getChargeCurrent_mA();
@@ -457,6 +533,10 @@ int main(void) {
     app_uart_put_string(str);
     app_uart_put_string("\r\n");
 
+    mpu6050_setAddress(MPU6050_I2C_ADDR_FACE);
+    imu_enableDMP();
+
+    mpu6050_setAddress(MPU6050_I2C_ADDR_CENTRAL);
     imu_enableDMP();
 
     // Enter main loop
@@ -563,6 +643,11 @@ void main_powerManage() {
 			APP_ERROR_CHECK(err_code);
 		}
 
+		mpu6050_setAddress(MPU6050_I2C_ADDR_CENTRAL);
+		imu_enableSleepMode();
+		imu_enableDMP();
+
+		mpu6050_setAddress(MPU6050_I2C_ADDR_FACE);
 		imu_enableSleepMode();
 		imu_enableDMP();
 
@@ -618,8 +703,13 @@ void main_powerManage() {
 			/* Disable the DMP by placing the IMU into sleep mode and then
 			 * enable low-power motion detection.  We'll use motion to
 			 * wake-up from sleep. */
+			mpu6050_setAddress(MPU6050_I2C_ADDR_CENTRAL);
 			imu_enableSleepMode();
 			imu_enableMotionDetection(true);
+
+			mpu6050_setAddress(MPU6050_I2C_ADDR_FACE);
+			imu_enableSleepMode();
+			imu_enableMotionDetection(false);
 
 			/* Start the timer which we'll use to check whether the IMU has
 			 * sensed motion. */
@@ -663,6 +753,7 @@ void main_motionCheckTimerHandler(void *context) {
 		nrf_delay_ms(25);
 	}
 
+	mpu6050_setAddress(MPU6050_I2C_ADDR_CENTRAL);
 	if (imu_checkForMotion(&newMotionDetected) && newMotionDetected) {
 		motionDetected = true;
 	}

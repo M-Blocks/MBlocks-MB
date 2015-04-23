@@ -14,6 +14,7 @@
 #include "app_timer.h"
 
 #include "global.h"
+#include "mpu6050.h"
 #include "sma.h"
 #include "mechbrake.h"
 #include "bldc.h"
@@ -116,6 +117,8 @@ bool motionEvent_startAccelPlaneChange(uint16_t accelCurrent_mA, uint16_t accelT
 
 	eventHandler = motionEventHandler;
 
+	mpu6050_setAddress(MPU6050_I2C_ADDR_CENTRAL);
+
 	sma_retract(accelPlaneChangeSMAHoldTime_ms, accelPlaneChangePrimitiveHandler);
 
 	return true;
@@ -161,6 +164,8 @@ bool motionEvent_startAccelBrakePlaneChange(uint16_t accelCurrent_mA, uint16_t a
 	accelBrakePlaneChangeReverse = reverse;
 
 	eventHandler = motionEventHandler;
+
+	mpu6050_setAddress(MPU6050_I2C_ADDR_CENTRAL);
 
 	sma_retract(3000, accelBrakePlaneChangePrimitiveHandler);
 
@@ -218,6 +223,8 @@ bool motionEvent_startEBrakePlaneChange(uint16_t bldcSpeed_rpm, uint16_t ebrakeT
 	ebrakePlaneChangeReverse = reverse;
 
 	eventHandler = motionEventHandler;
+
+	mpu6050_setAddress(MPU6050_I2C_ADDR_CENTRAL);
 
 	motionPrimitive = MOTION_PRIMITIVE_START_SEQUENCE;
 	err_code = app_sched_event_put(&motionPrimitive, sizeof(motionPrimitive), ebrakePlaneChangePrimitiveHandler);
@@ -767,6 +774,9 @@ bool motionEvent_startInertialActuation(uint16_t bldcSpeed_rpm,
 	inertialActuationAccelReverse = accelReverse;
 
 	eventHandler = motionEventHandler;
+
+	/* Use the IMU on the central actuator */
+	mpu6050_setAddress(MPU6050_I2C_ADDR_CENTRAL);
 
 	bldc_setSpeed(inertialActuationSpeed_rpm, inertialActuationReverse, 0,
 			inertialActuationPrimitiveHandler);

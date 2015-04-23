@@ -10,12 +10,32 @@
 #include <string.h>
 
 #include "twi_master.h"
+#include "global.h"
 #include "mpu6050.h"
 
-static uint8_t mpu6050Address;
+static uint8_t mpu6050Address = MPU6050_I2C_ADDR_CENTRAL;
 
-void mpu6050_setAddress(uint8_t address) {
+bool mpu6050_setAddress(uint8_t address) {
+	if ((address != MPU6050_I2C_ADDR_CENTRAL) && (address != MPU6050_I2C_ADDR_FACE)) {
+		return false;
+	}
+
 	mpu6050Address = address;
+	return true;
+}
+
+uint8_t mpu6050_getAddress() {
+	return mpu6050Address;
+}
+
+const char *mpu6050_getName() {
+	if (mpu6050Address == MPU6050_I2C_ADDR_CENTRAL) {
+		return "central";
+	} else if (mpu6050Address == MPU6050_I2C_ADDR_FACE) {
+		return "face 1";
+	} else {
+		return "unknown";
+	}
 }
 
 bool mpu6050_writeReg(uint8_t addr, uint8_t data) {
