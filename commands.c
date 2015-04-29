@@ -89,6 +89,7 @@ static void cmdFBRxEnable(const char *args);
 static void cmdFBSleep(const char *args);
 /* IMU commands */
 static void cmdIMUSelect(const char *args);
+static void cmdIMUInit(const char *args);
 static void cmdIMUWrite(const char *args);
 static void cmdIMURead(const char *args);
 static void cmdIMUMotion(const char *args);
@@ -159,6 +160,7 @@ static const char cmdFBRxEnableStr[] = "fbrxen";
 static const char cmdFBSleepStr[] = "fbsleep";
 /* IMU commands */
 static const char cmdIMUSelectStr[] = "imuselect";
+static const char cmdIMUInitStr[] = "imuinit";
 static const char cmdIMUWriteStr[] = "imuwrite";
 static const char cmdIMUReadStr[] = "imuread";
 static const char cmdIMUMotionStr[] = "imumotion";
@@ -232,6 +234,7 @@ static cmdFcnPair_t cmdTable[] = {
 		{cmdFBSleepStr, cmdFBSleep},
 		/* IMU commands */
 		{cmdIMUSelectStr, cmdIMUSelect},
+		{cmdIMUInitStr, cmdIMUInit},
 		{cmdIMUWriteStr, cmdIMUWrite},
 		{cmdIMUReadStr, cmdIMURead},
 		{cmdIMUMotionStr, cmdIMUMotion},
@@ -1461,6 +1464,30 @@ void cmdIMUSelect(const char *args) {
 
 	snprintf(str, sizeof(str), "Active IMU: %s\r\n", mpu6050_getName());
 	app_uart_put_string(str);
+}
+
+void cmdIMUInit(const char *args) {
+	bool mpu6050Initialized;
+	bool dmpInitialized;
+	char str[100];
+
+	snprintf(str, sizeof(str), "Re-initializing %s IMU...\r\n", mpu6050_getName());
+	app_uart_put_string(str);
+
+	mpu6050Initialized = imu_init();
+	dmpInitialized = imu_initDMP();
+
+	if (mpu6050Initialized) {
+		app_uart_put_string("  MPU-6050: OK\r\n");
+    } else {
+    	app_uart_put_string("  MPU-6050: Fail\r\n");
+    }
+
+    if (dmpInitialized) {
+    	app_uart_put_string("  DMP: OK\r\n");
+    } else {
+    	app_uart_put_string("  DMP: Fail\r\n");
+    }
 }
 
 void cmdIMUWrite(const char *args) {
