@@ -54,6 +54,7 @@ static uint16_t ebrakePlaneChangeBLDCSpeed_rpm;
 static uint16_t ebrakePlaneChangeEBrakeTime_ms;
 static int16_t ebrakePlaneChangeBLDCSpeedChange_rpm;
 static int16_t ebrakePlaneChangeEBrakeTimeChange_ms;
+static uint16_t ebrakePlaneChangeEBrakeHoldTime_ms;
 static uint16_t ebrakePlaneChangePostBrakeAccelCurrent_mA;
 static uint16_t ebrakePlaneChangePostBrakeAccelTime_ms;
 static bool ebrakePlaneChangeReverse;
@@ -206,7 +207,8 @@ void accelBrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_si
 
 bool motionEvent_startEBrakePlaneChange(uint16_t bldcSpeed_rpm, uint16_t ebrakeTime_ms,
 		uint16_t postBrakeAccelCurrent_ma, uint16_t postBrakeAccelTime_ms,
-		bool reverse, app_sched_event_handler_t motionEventHandler) {
+		uint16_t holdTime_ms, bool reverse, 
+		app_sched_event_handler_t motionEventHandler) {
 	uint32_t err_code;
 	motionPrimitive_t motionPrimitive;
 
@@ -219,6 +221,9 @@ bool motionEvent_startEBrakePlaneChange(uint16_t bldcSpeed_rpm, uint16_t ebrakeT
 
 	ebrakePlaneChangeBLDCSpeedChange_rpm = 0;
 	ebrakePlaneChangeEBrakeTimeChange_ms = 0;
+
+	// to handle hold time
+	ebrakePlaneChangeEBrakeHoldTime_ms = holdTime_ms;
 
 	ebrakePlaneChangeReverse = reverse;
 
@@ -315,7 +320,8 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 		 * central actuator to stop rotating and stabilize before we check
 		 * whether the central actuator has rotated into the correct position. */
 		app_uart_put_debug("Waiting for central actuator to stabilize\r\n", DEBUG_MOTION_EVENTS);
-		motionEvent_delay(250, ebrakePlaneChangePrimitiveHandler);
+		motionEvent_delay(ebrakePlaneChangeEBrakeHoldTime_ms, ebrakePlaneChangePrimitiveHandler);
+		// need to wait longer here: e.g. 1000ms
 		break;
 	case MOTION_PRIMITIVE_TIMER_EXPIRED:
 		/* Check for angular acceleration.  If negligible, the central actuator
@@ -579,7 +585,7 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 		if ((ebrakePlaneChangePostBrakeAccelCurrent_mA == 0) || (ebrakePlaneChangePostBrakeAccelTime_ms == 0)) {
 			app_uart_put_debug("Post-e-brake acceleration time or current is set to 0, skipping acceleration\r\n", DEBUG_MOTION_EVENTS);
 			app_uart_put_debug("Waiting for central actuator to stabilize\r\n", DEBUG_MOTION_EVENTS);
-			motionEvent_delay(1000, ebrakePlaneChangePrimitiveHandler);
+			motionEvent_delay(ebrakePlaneChangeEBrakeHoldTime_ms, ebrakePlaneChangePrimitiveHandler);
 			break;
 		}
 
@@ -598,7 +604,7 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 		 * whether the central actuator has rotated into the correct position.
 		 */
 		app_uart_put_debug("Waiting for central actuator to stabilize\r\n", DEBUG_MOTION_EVENTS);
-		motionEvent_delay(1000, ebrakePlaneChangePrimitiveHandler);
+		motionEvent_delay(ebrakePlaneChangeEBrakeHoldTime_ms, ebrakePlaneChangePrimitiveHandler);
 		break;
 	case MOTION_PRIMITIVE_TIMER_EXPIRED:
 		/* Check for angular acceleration.  If negligible, the central actuator

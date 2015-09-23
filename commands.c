@@ -1714,9 +1714,10 @@ void cmdChangePlane(const char *args) {
 	uint16_t accelCurrent_mA, accelTime_ms;
 	uint16_t speed_rpm, ebrakeTime_ms;
 	uint16_t coastTime_ms;
+	uint16_t holdTime_ms;
 	bool reverse;
 
-	if ((nArgs = sscanf(args, "%1s %1s %d %d %d %d", modeStr, dirStr, &params[0], &params[1], &params[2], &params[3])) < 4) {
+	if ((nArgs = sscanf(args, "%1s %1s %d %d %d %d %d", modeStr, dirStr, &params[0], &params[1], &params[2], &params[3], &params[4])) < 4) {
 		return;
 	}
 
@@ -1740,26 +1741,32 @@ void cmdChangePlane(const char *args) {
 		ebrakeTime_ms = params[1];
 
 		if ((nArgs >= 5) && (params[2] > 0)) {
-			accelCurrent_mA = params[2];
+			holdTime_ms = params[2];
+		} else {
+			holdTime_ms = 250;
+		}
+
+		if ((nArgs >= 6) && (params[3] > 0)) {
+			accelCurrent_mA = params[3];
 		} else {
 			accelCurrent_mA = 0;
 		}
 
-		if ((nArgs >= 6) && (params[3] > 0)) {
-			accelTime_ms = params[3];
+		if ((nArgs >= 7) && (params[4] > 0)) {
+			accelTime_ms = params[4];
 		} else {
 			accelTime_ms = 0;
 		}
 
-		if (motionEvent_startEBrakePlaneChange(speed_rpm, ebrakeTime_ms, accelCurrent_mA, accelTime_ms, reverse,
+		if (motionEvent_startEBrakePlaneChange(speed_rpm, ebrakeTime_ms, accelCurrent_mA, accelTime_ms, holdTime_ms, reverse,
 				cmdMotionEventHandler)) {
 			app_uart_put_string("Starting e-brake based plane change...\r\n");
 		}
-	} else if ((modeStr[0] == 'm') && (nArgs == 6) && (params[0] > 0) && (params[1] > 0) && (params[2] > 0) && (params[3] > 0)) {
+	} else if ((modeStr[0] == 'm') && (nArgs == 6) && (params[0] > 0) && (params[1] > 0) && (params[3] > 0) && (params[4] > 0)) {
 		accelCurrent_mA = params[0];
 		accelTime_ms = params[1];
-		coastTime_ms = params[2];
-		ebrakeTime_ms = params[3];
+		coastTime_ms = params[3];
+		ebrakeTime_ms = params[4];
 		if (motionEvent_startAccelBrakePlaneChange(accelCurrent_mA, accelTime_ms, coastTime_ms, ebrakeTime_ms,
 				reverse, cmdMotionEventHandler)) {
 			app_uart_put_string("Starting mixed accel/e-brake based plane change...\r\n");
