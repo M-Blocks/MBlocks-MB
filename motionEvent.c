@@ -624,10 +624,10 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 				app_uart_put_debug("Failed to determine whether flywheel and frame are aligned\r\n", DEBUG_MOTION_EVENTS);
 				app_uart_put_debug("Extending SMA pin\r\n", DEBUG_MOTION_EVENTS);
 				sma_extend(ebrakePlaneChangePrimitiveHandler);
-			} else if (flywheelFrameAligned && !flywheelFrameAlignedInitial) {
+			} else if (flywheelFrameAligned && !flywheelFrameAlignedInitial && !(alignmentAxisIndex == alignmentAxisIndexDesired)) {
 				app_uart_put_debug("Previously unaligned central actuator is now aligned with a frame axis\r\n", DEBUG_MOTION_EVENTS);
 				app_uart_put_debug("Extending SMA pin\r\n", DEBUG_MOTION_EVENTS);
-				success = true;
+				success = false;
 				sma_extend(ebrakePlaneChangePrimitiveHandler);
 			} else if (flywheelFrameAligned && (alignmentAxisIndex == alignmentAxisIndexDesired)) {
 				app_uart_put_debug("Central actuator is aligned with desired frame axis\r\n", DEBUG_MOTION_EVENTS);
