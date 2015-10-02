@@ -336,11 +336,9 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 			gravityNew.x, gravityNew.y, gravityNew.z);
 		app_uart_put_debug(str, DEBUG_MOTION_EVENTS);
 
-		if (!(abs(gravityNew.x - gravityCurrent.x) < 0.0001 &&
-			  abs(gravityNew.y - gravityCurrent.y) < 0.0001 &&
-			  abs(gravityNew.z - gravityCurrent.z) < 0.0001)) {
-			motionEvent_delay(50, ebrakePlaneChangePrimitiveHandler);
-		}
+		if (fabs(gravityNew.x - gravityCurrent.x) < 0.0001 &&
+			fabs(gravityNew.y - gravityCurrent.y) < 0.0001 &&
+			fabs(gravityNew.z - gravityCurrent.z) < 0.0001) {
 
 		// imu_getGyrosFloat(&gyrosRates);
 		// gyroMag = imu_getVectorFloatMagnitude(&gyrosRates);
@@ -455,14 +453,13 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 				success = false;
 				sma_extend(ebrakePlaneChangePrimitiveHandler);
 			}
-		// } else  {
-		// 	/* If the central actuator is still spinning, we delay for longer
-		// 	 * knowing that the central actuator will eventually come to
-		// 	 * rest.*/
-		// 	snprintf(str, sizeof(str), "Central actuator is still rotating (gyroscope magnitude: %f)\r\n", gyroMag);
-		// 	app_uart_put_debug(str, DEBUG_MOTION_EVENTS);
-		// 	motionEvent_delay(250, ebrakePlaneChangePrimitiveHandler);
-		// }
+		} else  {
+			/* If the central actuator is still spinning, we delay for longer
+			 * knowing that the central actuator will eventually come to
+			 * rest.*/
+			app_uart_put_debug("Central actuator is still rotating", DEBUG_MOTION_EVENTS);
+			motionEvent_delay(250, ebrakePlaneChangePrimitiveHandler);
+		}
 		break;
 	case MOTION_PRIMITIVE_SMA_EXTENDED:
 		app_uart_put_debug("SMA pin is fully extended\r\n", DEBUG_MOTION_EVENTS);
