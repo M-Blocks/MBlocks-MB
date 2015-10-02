@@ -382,9 +382,8 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 		motionEvent_delay(ebrakePlaneChangeEBrakeHoldTime_ms, ebrakePlaneChangePrimitiveHandler);
 		break;
 	case MOTION_PRIMITIVE_TIMER_EXPIRED:
-		/* Check for angular acceleration.  If negligible, the central actuator
-		 * has come to stop, so we then verify whether the actuator is aligned
-		 * with one of the cube's faces. */
+		/* Check that the accelerometer readings have stabilized. */
+		imu_getGravityFloat(&gravityNew);
 		if (fabs(gravityNew.x - gravityCurrent.x) < 0.01 &&
 			fabs(gravityNew.y - gravityCurrent.y) < 0.01 &&
 			fabs(gravityNew.z - gravityCurrent.z) < 0.01) {	
@@ -509,7 +508,6 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 				sma_extend(ebrakePlaneChangePrimitiveHandler);
 			}
 		} else  {	
-			imu_getGravityFloat(&gravityNew);
 			snprintf(str, sizeof(str), "Previous accelerometer readings: [%f %f %f]\r\n", 
 				gravityCurrent.x, gravityCurrent.y, gravityCurrent.z);
 			app_uart_put_debug(str, DEBUG_MOTION_EVENTS);
