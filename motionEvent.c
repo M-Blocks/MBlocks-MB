@@ -336,6 +336,9 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 				break;
 			} else {
 				app_uart_put_debug("Bringing flywheel up to speed did not bump central actuator into the desired position\r\n", DEBUG_MOTION_EVENTS);
+				app_uart_put_debug("Extending SMA pin\r\n", DEBUG_MOTION_EVENTS);
+				sma_extend(ebrakePlaneChangePrimitiveHandler);
+				break;
 			}
 		}
 
@@ -384,13 +387,26 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 	case MOTION_PRIMITIVE_TIMER_EXPIRED:
 		/* Check that the accelerometer readings have stabilized. */
 		imu_getGravityFloat(&gravityNew);
-		if (fabs(gravityNew.x - gravityCurrent.x) < 0.01 &&
-			fabs(gravityNew.y - gravityCurrent.y) < 0.01 &&
-			fabs(gravityNew.z - gravityCurrent.z) < 0.01) {	
+		if (fabs(gravityNew.x - gravityCurrent.x) < 0.02 &&
+			fabs(gravityNew.y - gravityCurrent.y) < 0.02 &&
+			fabs(gravityNew.z - gravityCurrent.z) < 0.02) {	
 			/* Central actuator is not moving, so we read the gravity vector
 			 * from the IMU and check whether it is 1) aligned with one of the
 			 * cube's faces, and 2) aligned with a the correct face. */
 			app_uart_put_debug("Central actuator has stabilized\r\n", DEBUG_MOTION_EVENTS);
+			
+			/* Check for success */
+			success = false;
+			if (!motionEvent_getFlywheelFrameAligned(&flywheelFrameAligned, &alignmentAxisIndex)) {
+				app_uart_put_debug("Failed to determine whether flywheel and frame are aligned\r\n", DEBUG_MOTION_EVENTS);
+			} else if (flywheelFrameAligned && (alignmentAxisIndex == alignmentAxisIndexDesired)) {
+				success = true;
+			} else if (!flywheelFrameAligned && sma_getHoldTimeRemaining_ms() > 500) {
+				app_uart_put_debug("Flywheel not aligned with any axis. Accelerating flywheel.\r\n", DEBUG_MOTION_EVENTS);
+				bldc_setSpeed(ebrakePlaneChangeBLDCSpeed_rpm, ebrakePlaneChangeReverse, 0, ebrakePlaneChangePrimitiveHandler);
+				break;
+			}
+
 			app_uart_put_debug("Extending SMA pin\r\n", DEBUG_MOTION_EVENTS);
 			sma_extend(ebrakePlaneChangePrimitiveHandler);
 		} else  {	
@@ -418,14 +434,6 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 
 		/* Stop the flywheel in case it is still spinning */
 		bldc_setSpeed(0, false, 0, NULL);
-
-		/* Check for success */
-		success = false;
-		if (!motionEvent_getFlywheelFrameAligned(&flywheelFrameAligned, &alignmentAxisIndex)) {
-			app_uart_put_debug("Failed to determine whether flywheel and frame are aligned\r\n", DEBUG_MOTION_EVENTS);
-		} else if (flywheelFrameAligned && (alignmentAxisIndex == alignmentAxisIndexDesired)) {
-			success = true;
-		}
 
 		if (eventHandler != NULL) {
 			if (success) {
