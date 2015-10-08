@@ -59,10 +59,6 @@ static uint16_t ebrakePlaneChangePostBrakeAccelCurrent_mA;
 static uint16_t ebrakePlaneChangePostBrakeAccelTime_ms;
 static bool ebrakePlaneChangeReverse;
 
-/* These module-level variables will be used to check for actuator movement */
-static vectorFloat_t gravityCurrent;
-static vectorFloat_t gravityNew;
-
 /* These module variables must be set when performing a simple inertial actuation */
 static uint16_t inertialActuationSpeed_rpm;
 static uint16_t inertialActuationBrakeCurrent_mA;
@@ -261,6 +257,9 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 	static unsigned int alignmentAxisIndexInitial, alignmentAxisIndexDesired;
 	static bool success = false;
 
+	static vectorFloat_t gravityCurrent;
+	static vectorFloat_t gravityNew;
+
 	motionPrimitive = *(motionPrimitive_t *)p_event_data;
 
 	switch(motionPrimitive) {
@@ -426,7 +425,7 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 			 * knowing that the central actuator will eventually come to
 			 * rest.*/
 			app_uart_put_debug("Central actuator is still rotating\r\n", DEBUG_MOTION_EVENTS);
-			motionEvent_delay(250, ebrakePlaneChangePrimitiveHandler);
+			motionEvent_delay(50, ebrakePlaneChangePrimitiveHandler);
 		}
 		break;
 	case MOTION_PRIMITIVE_SMA_EXTENDED:
@@ -440,6 +439,10 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 				motionEvent = MOTION_EVENT_PLANE_CHANGE_SUCCESS;
 			} else {
 				motionEvent = MOTION_EVENT_PLANE_CHANGE_FAILURE;
+
+				// app_uart_put_debug("Plane changed failed. Trying again\r\n", DEBUG_MOTION_EVENTS);
+				// bldc_setSpeed(ebrakePlaneChangeBLDCSpeed_rpm, ebrakePlaneChangeReverse, 0, ebrakePlaneChangePrimitiveHandler);
+				// break;
 			}
 			err_code = app_sched_event_put(&motionEvent, sizeof(motionEvent), eventHandler);
 			APP_ERROR_CHECK(err_code);
