@@ -69,6 +69,12 @@ static bool inertialActuationAccel;
 static uint16_t inertialActuationEBrakeAccelStartDelay_ms;
 static bool inertialActuationAccelReverse;
 
+/* These module-level variables must be set when performing a brake tap */
+static uint16_t ebrakeTapBLDCSpeed_rpm;
+static uint16_t ebrakeTapEBrakeTime_ms;
+static bool ebrakeTapReverse;
+
+static void ebrakeTapPrimitiveHandler(void *p_event_data, uint16_t event_size);
 static void accelPlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size);
 static void accelBrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size);
 static void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size);
@@ -247,9 +253,6 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 	unsigned int alignmentAxisIndex;
 	bool reverseAcceleration;
 	float gyroMag;
-
-	unsigned int i;
-	float axisAngles[3];
 
 	char str[128];
 
@@ -581,4 +584,51 @@ bool motionEvent_getFlywheelFrameAligned(bool *flywheelFrameAligned, unsigned in
 #endif
 
 	return true;
+}
+
+bool motionEvent_startEBrakeTap(uint16_t speed_rpm, bool reverse, uint16_t brakeTime_ms,
+		app_sched_event_handler_t motionEventHandler) {
+	uint32_t err_code;
+	motionPrimitive_t motionPrimitive;
+
+	eventHandler = motionEventHandler;
+	
+	ebrakeTapBLDCSpeed_rpm = speed_rpm;
+	ebrakeTapEBrakeTime_ms = brakeTime_ms;
+	ebrakeTapReverse = reverse;
+
+	motionPrimitive = MOTION_PRIMITIVE_START_SEQUENCE;
+	err_code = app_sched_event_put(&motionPrimitive, sizeof(motionPrimitive), ebrakeTapPrimitiveHandler);
+	APP_ERROR_CHECK(err_code);
+
+	return true;
+}
+
+void ebrakeTapPrimitiveHandler(void *p_event_data, uint16_t event_size) {
+	motionPrimitive_t motionPrimitive;
+	motionPrimitive = *(motionPrimitive_t *)p_event_data;
+
+	static int count = 0;
+
+	switch(motionPrimitive) {
+	case MOTION_PRIMITIVE_START_SEQUENCE:
+		bldc_setSpeed(ebrakeTapBLDCSpeed_rpm, ebrakeTapReverse, ebrakeTapEBrakeTime_ms, ebrakeTapPrimitiveHandler);
+		break;
+
+	case MOTION_PRIMITIVE_BLDC_STABLE:
+		// tap break once
+		bldc_setSpeed(0, false, 10, ebrakeTapPrimitiveHandler);
+		break;
+
+	case MOTION_PRIMITIVE_BLDC_COASTING:
+		// tap break two more times
+		if (count > 2) 
+			break;
+
+		count++;
+		bldc_setSpeed(0, false, 10, ebrakeTapPrimitiveHandler);
+		break;
+	default:
+		break;
+	}
 }

@@ -104,6 +104,7 @@ static void cmdBLEAdv(const char *args);
 /* Motion commands */
 static void cmdChangePlane(const char *args);
 static void cmdInertialActuation(const char *args);
+static void cmdTapBreak(const char *args);
 /* */
 static void cmdJump(const char *args);
 static void cmdJumpR(const char *args);
@@ -111,6 +112,8 @@ static void cmdSeq(const char *args);
 static void cmdProg(const char *args);
 static void cmdDelay(const char *args);
 static void cmdWobble(const char *args);
+/* Complex commands */
+static void cmdLightTracker(const char *args);
 
 // These string are what the command line processes looking for the user to
 // type on the serial terminal.
@@ -176,6 +179,7 @@ static const char cmdEmptyStr[] = "";
 /* Motion commands */
 static const char cmdChangePlaneStr[] = "cp";
 static const char cmdInertialActuationStr[] = "ia";
+static const char cmdTapBreakStr[] = "tb";
 /* */
 static const char cmdJumpStr[] = "jump";
 static const char cmdJumpRStr[] = "jumpr";
@@ -183,6 +187,8 @@ static const char cmdSeqStr[] = "seq";
 static const char cmdProgStr[] = "prog";
 static const char cmdDelayStr[] = "delay";
 static const char cmdWobbleStr[] = "wobble";
+/* Complext commands */
+static const char cmdLightTrackerStr[] = "ltrack";
 
 // This table correlates the command strings above to the actual functions that
 // are called when the user types the command into the terminal and presses
@@ -249,6 +255,7 @@ static cmdFcnPair_t cmdTable[] = {
 		/* Motion commands */
 		{cmdChangePlaneStr, cmdChangePlane },
 		{cmdInertialActuationStr, cmdInertialActuation },
+		{cmdTapBreakStr, cmdTapBreak},
 		/* */
 		{cmdJumpStr, cmdJump},
 		{cmdJumpRStr, cmdJumpR},
@@ -256,12 +263,15 @@ static cmdFcnPair_t cmdTable[] = {
 		{cmdProgStr, cmdProg},
 		{cmdDelayStr, cmdDelay},
 		{cmdWobbleStr,	cmdWobble},
+		/* Complex commands */
+		{cmdLightTrackerStr, cmdLightTracker},
 // Always end the command table with an emptry string and null pointer
 		{ cmdEmptyStr, NULL } };
 
 /* Callbacks for printing status info after command completion */
 static void cmdMotionPrimitiveHandler(void *p_event_data, uint16_t event_size);
 static void cmdMotionEventHandler(void *p_event_data, uint16_t event_size);
+static void cmdLightTrackerEventHandler(void *p_event_data, uint16_t event_size);
 
 void commands_init() {
 	cmdline_loadCmds(cmdTable);
@@ -1827,6 +1837,21 @@ void cmdInertialActuation(const char *args) {
 	}
 }
 
+void cmdTapBreak(const char *args) {
+	int nArg;
+	char dirStr[3];
+	unsigned int bldcSpeed_rpm, brakeTime_ms;
+	bool reverse;
+
+	if ((narg = sscanf(args, "%1s %u %u", dirStr, &bldcSpeed_rpm, &brakeTime_ms)) < 3) {
+		return;
+	}
+
+	if (motionEvent_startEBrakeTap(bldcSpeed_rpm, brakeTime_ms, reverse)) {
+		app_uart_put_string("Starting e-brake tap");
+	}
+}
+
 /* */
 
 void cmdJump(const char *args) {
@@ -1982,6 +2007,135 @@ void cmdWobble(const char *args) {
 	}
 }
 
+/*********************/
+/*  Complex Commands */
+/*********************/
+
+static const enum Face {
+	FORWARD = 3,
+	BACKWARD,
+	TOP,
+	BOTTOM,
+	LEFT,
+	RIGHT
+};
+
+static const int alignment[12][9] = {
+	{1, 1, 0, 6, 5, 2, 4, 1, 3},
+	{1, -1, 0, 2, 4, 5, 6, 1, 3},
+	{-1, -1, 0, 5, 6, 4, 2, 1, 3},
+	{-1, 1, 0, 4, 2, 6, 5, 1, 3},
+	{1, 1, 0, 3, 1, 5, 6, 2, 4},
+	{1, -1, 0, 5, 6, 1, 3, 2, 4},
+	{-1, -1, 0, 1, 3, 6, 5, 2, 4},
+	{-1, 1, 0, 6, 5, 3, 1, 2, 4},
+	{1, 1, 0, 4, 2, 1, 3, 5, 6},
+	{1, -1, 0, 1, 3, 2, 4, 5, 6},
+	{-1, -1, 0, 2, 4, 3, 1, 5, 6},
+	{-1, 1, 0, 3, 1, 4, 2, 5, 6}
+};
+
+void cmdLightTrackerPrimitive(bool read, const char *args) {
+	char str[200];
+
+	static unsigned int bldcSpeed_rpm_f, brakeCurrent_mA_f, brakeTime_ms_f;
+	static unsigned int bldcSpeed_rpm_r, brakeCurrent_mA_r, brakeTime_ms_r;
+	static unsigned int threshold;
+
+	if (read && (sscanf(args, "%u %u %u %u %u %u %u",
+			&bldcSpeed_rpm_f, &brakeCurrent_mA_f, &brakeTime_ms_f,
+			&bldcSpeed_rpm_r, &brakeCurrent_mA_r, &brakeTime_ms_r,
+			&threshold)) < 7) {
+		return;
+	}
+
+	vectorFloat_t vf;
+	if (!imu_getGravityFloat(&vf)) {
+		snprintf(str, sizeof(str), "Failed to read gravity vector from %s IMU\r\n", mpu6050_getName());
+		app_uart_put_string(str);
+		return;
+	}
+
+	int config = -1;
+	double EPS = 0.01;
+	int LIGHTEPS = 5;
+	for (int i = 0; i < 12; i++) {
+		int16_t ambientLightBottom = fb_getAmbientLight(alignment[i][BOTTOM]);
+		double cross = sqrt(2) - (alignment[i][0] * vf.x + alignment[i][1] * vf.y + alignment[i][2] * vf.z);
+
+		if (cross < EPS && ambientLightBottom < LIGHTEPS) {
+			config = i;
+			break;
+		}
+	}
+
+	/* Check to see if we're in a valid configuration */
+	if (config == -1) {
+		app_uart_put_string("Failed to find configuration of the cube. Trying to change plane.\r\n");
+		if (motionEvent_startEBrakePlaneChange(5000, 50, 0, 0, 250, false,
+				cmdLightTrackerEventHandler)) {
+			app_uart_put_string("Starting e-brake based plane change...\r\n");			
+		}
+		return;
+	}
+
+	/* Find strongest light signal */
+	int max_signal = 0;
+	int best_face = -1;
+	for (int i = 1; i <= 6; i++) {
+		// exclude top and bottom faces since we deal with 2D motion
+		if (alignment[config][TOP] == i || alignment[config][BOTTOM] == i)
+			continue;
+
+		int16_t ambientLight = fb_getAmbientLight(i);
+		// if ambient light reading is 0, then we are connected and done
+		if (ambientLight < LIGHTEPS) {
+			app_uart_put_string("Connected to aggregate.\r\n");
+			return;
+		}
+
+		if (ambientLight > max_signal) {
+			max_signal = ambientLight;
+			best_face = i;
+		}
+	}
+
+	if (max_signal < threshold) {
+		app_uart_put_string("Maximum signal is below allowed threshold.\r\n");
+		return;
+	}
+	/* Move cube forward or backward if possible */
+	if (alignment[config][FORWARD] == best_face) {
+		if (motionEvent_startInertialActuation(bldcSpeed_rpm_f, brakeCurrent_mA_f,
+			brakeTime_ms_f, false, false, false, 0, false,
+			cmdLightTrackerEventHandler)) {
+			app_uart_put_string("Starting inertial actuation forward...\r\n");
+		}
+	}
+	else if (alignment[config][BACKWARD] == best_face) {
+		if (motionEvent_startInertialActuation(bldcSpeed_rpm_r, brakeCurrent_mA_r,
+			brakeTime_ms_r, true, false, false, 0, false, 
+			cmdLightTrackerEventHandler)) {
+			app_uart_put_string("Starting inertial actuation backward...\r\n");
+		}
+	}
+	/* Change plane to orient flywheel towards the right direction */
+	else {
+		bool reverse = false;
+		if (alignment[config][0] == alignment[config][1]) {
+			reverse = true;
+		}
+		if (motionEvent_startEBrakePlaneChange(5000, 50, 0, 0, 250, reverse,
+				cmdLightTrackerEventHandler)) {
+			app_uart_put_string("Starting e-brake based plane change...\r\n");
+		}
+	}
+}
+
+void cmdLightTracker(const char *args) {
+	cmdLightTrackerPrimitive(true, args);
+}
+
 /*************/
 /* Callbacks */
 /*************/
@@ -2054,4 +2208,30 @@ void cmdMotionEventHandler(void *p_event_data, uint16_t event_size) {
 	default:
 		app_uart_put_string("Motion event not recognized\r\n");
 	}
+}
+
+void cmdLightTrackerEventHandler(void *p_event_data, uint16_t event_size) {
+	motionEvent_t motionEvent;
+
+	motionEvent = *(motionEvent_t *) p_event_data;
+
+	switch (motionEvent) {
+	case MOTION_EVENT_PLANE_CHANGE_SUCCESS:
+		app_uart_put_string("Successfully changed planes\r\n");
+		break;
+	case MOTION_EVENT_PLANE_CHANGE_FAILURE:
+		app_uart_put_string("Failed to change planes\r\n");
+		break;
+	case MOTION_EVENT_INERTIAL_ACTUATION_COMPLETE:
+		app_uart_put_string("Inertial actuation complete\r\n");
+		break;
+	case MOTION_EVENT_INERTIAL_ACTUATION_FAILURE:
+		app_uart_put_string("Inertial actuation failure\r\n");
+		break;
+	default:
+		app_uart_put_string("Motion event not recognized\r\n");
+	}
+
+	delay_ms(300);
+	cmdLightTrackerPrimitive(false, "");
 }
