@@ -586,13 +586,10 @@ bool motionEvent_getFlywheelFrameAligned(bool *flywheelFrameAligned, unsigned in
 	return true;
 }
 
-bool motionEvent_startEBrakeTap(uint16_t speed_rpm, bool reverse, uint16_t brakeTime_ms,
-		app_sched_event_handler_t motionEventHandler) {
+bool motionEvent_startEBrakeTap(uint16_t speed_rpm, bool reverse, uint16_t brakeTime_ms) {
 	uint32_t err_code;
 	motionPrimitive_t motionPrimitive;
 
-	eventHandler = motionEventHandler;
-	
 	ebrakeTapBLDCSpeed_rpm = speed_rpm;
 	ebrakeTapEBrakeTime_ms = brakeTime_ms;
 	ebrakeTapReverse = reverse;

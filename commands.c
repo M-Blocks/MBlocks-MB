@@ -1843,7 +1843,7 @@ void cmdTapBreak(const char *args) {
 	unsigned int bldcSpeed_rpm, brakeTime_ms;
 	bool reverse;
 
-	if ((narg = sscanf(args, "%1s %u %u", dirStr, &bldcSpeed_rpm, &brakeTime_ms)) < 3) {
+	if ((nArg = sscanf(args, "%1s %u %u", dirStr, &bldcSpeed_rpm, &brakeTime_ms)) < 3) {
 		return;
 	}
 
