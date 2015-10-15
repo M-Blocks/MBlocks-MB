@@ -609,23 +609,39 @@ void ebrakeTapPrimitiveHandler(void *p_event_data, uint16_t event_size) {
 
 	switch(motionPrimitive) {
 	case MOTION_PRIMITIVE_START_SEQUENCE:
+		if (sma_getState() != SMA_STATE_HOLDING) {
+			app_uart_put_debug("Retracting SMA pin\r\n", DEBUG_MOTION_EVENTS);
+			sma_retract(ebrakePlaneChangeSMAHoldTime_ms, ebrakePlaneChangePrimitiveHandler);
+			break;
+		}
+
+	case MOTION_PRIMITIVE_SMA_RETRACTED:
 		bldc_setSpeed(ebrakeTapBLDCSpeed_rpm, ebrakeTapReverse, ebrakeTapEBrakeTime_ms, ebrakeTapPrimitiveHandler);
 		break;
 
 	case MOTION_PRIMITIVE_BLDC_STABLE:
 		// tap break once
+		app_uart_put_debug("Tapping break.\r\n", DEBUG_MOTION_EVENTS);
 		bldc_setSpeed(0, false, 10, ebrakeTapPrimitiveHandler);
 		break;
 
 	case MOTION_PRIMITIVE_BLDC_COASTING:
 		// tap break two more times
-		if (count > 2) 
+		if (count > 2) {
+			app_uart_put_debug("Break tapped 3 times. Extending SMA pin.\r\n", DEBUG_MOTION_EVENTS);
+			sma_extend(ebrakeTapPrimitiveHandler);
 			break;
+		}
 
 		count++;
+		app_uart_put_debug("Tapping break.\r\n", DEBUG_MOTION_EVENTS);
 		bldc_setSpeed(0, false, 10, ebrakeTapPrimitiveHandler);
 		break;
+	case MOTION_PRIMITIVE_SMA_EXTENDED:
+		app_uart_put_debug("SMA fully extended.\r\n", DEBUG_MOTION_EVENTS);
 	default:
 		break;
 	}
+
+	app_uart_put_debug("Break tap complete.\r\n", DEBUG_MOTION_EVENTS);
 }

@@ -104,7 +104,7 @@ static void cmdBLEAdv(const char *args);
 /* Motion commands */
 static void cmdChangePlane(const char *args);
 static void cmdInertialActuation(const char *args);
-static void cmdTapBreak(const char *args);
+static void cmdTapBrake(const char *args);
 /* */
 static void cmdJump(const char *args);
 static void cmdJumpR(const char *args);
@@ -179,7 +179,7 @@ static const char cmdEmptyStr[] = "";
 /* Motion commands */
 static const char cmdChangePlaneStr[] = "cp";
 static const char cmdInertialActuationStr[] = "ia";
-static const char cmdTapBreakStr[] = "tb";
+static const char cmdTapBrakeStr[] = "tb";
 /* */
 static const char cmdJumpStr[] = "jump";
 static const char cmdJumpRStr[] = "jumpr";
@@ -255,7 +255,7 @@ static cmdFcnPair_t cmdTable[] = {
 		/* Motion commands */
 		{cmdChangePlaneStr, cmdChangePlane },
 		{cmdInertialActuationStr, cmdInertialActuation },
-		{cmdTapBreakStr, cmdTapBreak},
+		{cmdTapBrakeStr, cmdTapBrake},
 		/* */
 		{cmdJumpStr, cmdJump},
 		{cmdJumpRStr, cmdJumpR},
@@ -1837,7 +1837,7 @@ void cmdInertialActuation(const char *args) {
 	}
 }
 
-void cmdTapBreak(const char *args) {
+void cmdTapBrake(const char *args) {
 	int nArg;
 	char dirStr[3];
 	unsigned int bldcSpeed_rpm, brakeTime_ms;
@@ -1848,7 +1848,7 @@ void cmdTapBreak(const char *args) {
 	}
 
 	if (motionEvent_startEBrakeTap(bldcSpeed_rpm, brakeTime_ms, reverse)) {
-		app_uart_put_string("Starting e-brake tap");
+		app_uart_put_string("Starting e-brake tap.\r\n");
 	}
 }
 
