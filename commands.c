@@ -1843,11 +1843,11 @@ void cmdTapBrake(const char *args) {
 	unsigned int bldcSpeed_rpm, brakeTime_ms;
 	bool reverse;
 
-	if ((nArg = sscanf(args, "%1s %u %u", dirStr, &bldcSpeed_rpm, &brakeTime_ms)) < 3) {
+	if ((nArg = sscanf(args, "%1s %u", dirStr, &bldcSpeed_rpm)) < 2) {
 		return;
 	}
 
-	if (motionEvent_startEBrakeTap(bldcSpeed_rpm, brakeTime_ms, reverse)) {
+	if (motionEvent_startEBrakeTap(bldcSpeed_rpm, reverse)) {
 		app_uart_put_string("Starting e-brake tap.\r\n");
 	}
 }

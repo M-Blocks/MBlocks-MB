@@ -39,7 +39,7 @@ bool motionEvent_startAccelPlaneChange(uint16_t accelCurrent_mA, uint16_t accelT
 bool motionEvent_startAccelBrakePlaneChange(uint16_t accelCurrent_mA, uint16_t accelTime_ms, uint16_t coastTime_ms, uint16_t brakeTime_ms, bool reverse, app_sched_event_handler_t motionEventHandler);
 bool motionEvent_startEBrakePlaneChange(uint16_t bldcSpeed_rpm, uint16_t ebrakeTime_ms, uint16_t postBrakeAccelCurrent_ma, uint16_t postBrakeAccelTime_ms, uint16_t holdTime_ms, bool reverse, app_sched_event_handler_t motionEventHandler);
 bool motionEvent_startInertialActuation(uint16_t bldcSpeed_rpm, uint16_t brakeCurrent_mA, uint16_t brakeTime_ms, bool reverse, bool eBrake, bool accel, uint16_t eBrakeAccelStartDelay_ms, bool accelReverse, app_sched_event_handler_t motionEventHandler);
-bool motionEvent_startEBrakeTap(uint16_t speed_rpm, bool reverse, uint16_t brakeTime_ms);
+bool motionEvent_startEBrakeTap(uint16_t speed_rpm, bool reverse);
 
 bool motionEvent_getFlywheelFrameAligned(bool *flywheelFrameAligned, unsigned int *axisIndex);
 

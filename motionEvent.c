@@ -71,7 +71,6 @@ static bool inertialActuationAccelReverse;
 
 /* These module-level variables must be set when performing a brake tap */
 static uint16_t ebrakeTapBLDCSpeed_rpm;
-static uint16_t ebrakeTapEBrakeTime_ms;
 static bool ebrakeTapReverse;
 
 static void ebrakeTapPrimitiveHandler(void *p_event_data, uint16_t event_size);
@@ -586,12 +585,11 @@ bool motionEvent_getFlywheelFrameAligned(bool *flywheelFrameAligned, unsigned in
 	return true;
 }
 
-bool motionEvent_startEBrakeTap(uint16_t speed_rpm, bool reverse, uint16_t brakeTime_ms) {
+bool motionEvent_startEBrakeTap(uint16_t speed_rpm, bool reverse) {
 	uint32_t err_code;
 	motionPrimitive_t motionPrimitive;
 
 	ebrakeTapBLDCSpeed_rpm = speed_rpm;
-	ebrakeTapEBrakeTime_ms = brakeTime_ms;
 	ebrakeTapReverse = reverse;
 
 	motionPrimitive = MOTION_PRIMITIVE_START_SEQUENCE;
@@ -606,9 +604,11 @@ void ebrakeTapPrimitiveHandler(void *p_event_data, uint16_t event_size) {
 	motionPrimitive = *(motionPrimitive_t *)p_event_data;
 
 	static int count = 0;
+	static int brakeTime = 5;
 
 	switch(motionPrimitive) {
 	case MOTION_PRIMITIVE_START_SEQUENCE:
+		count = 0;
 		if (sma_getState() != SMA_STATE_HOLDING) {
 			app_uart_put_debug("Retracting SMA pin\r\n", DEBUG_MOTION_EVENTS);
 			sma_retract(4000, ebrakeTapPrimitiveHandler);
@@ -616,13 +616,13 @@ void ebrakeTapPrimitiveHandler(void *p_event_data, uint16_t event_size) {
 		}
 
 	case MOTION_PRIMITIVE_SMA_RETRACTED:
-		bldc_setSpeed(ebrakeTapBLDCSpeed_rpm, ebrakeTapReverse, ebrakeTapEBrakeTime_ms, ebrakeTapPrimitiveHandler);
+		bldc_setSpeed(ebrakeTapBLDCSpeed_rpm, ebrakeTapReverse, 0, ebrakeTapPrimitiveHandler);
 		break;
 
 	case MOTION_PRIMITIVE_BLDC_STABLE:
 		// tap break once
 		app_uart_put_debug("Tapping break.\r\n", DEBUG_MOTION_EVENTS);
-		bldc_setSpeed(0, false, 10, ebrakeTapPrimitiveHandler);
+		bldc_setSpeed(0, false, brakeTime, ebrakeTapPrimitiveHandler);
 		break;
 
 	case MOTION_PRIMITIVE_BLDC_COASTING:
@@ -635,7 +635,7 @@ void ebrakeTapPrimitiveHandler(void *p_event_data, uint16_t event_size) {
 
 		count++;
 		app_uart_put_debug("Tapping break.\r\n", DEBUG_MOTION_EVENTS);
-		bldc_setSpeed(0, false, 10, ebrakeTapPrimitiveHandler);
+		bldc_setSpeed(0, false, brakeTime, ebrakeTapPrimitiveHandler);
 		break;
 	case MOTION_PRIMITIVE_SMA_EXTENDED:
 		app_uart_put_debug("SMA fully extended.\r\n", DEBUG_MOTION_EVENTS);
