@@ -611,7 +611,7 @@ void ebrakeTapPrimitiveHandler(void *p_event_data, uint16_t event_size) {
 	case MOTION_PRIMITIVE_START_SEQUENCE:
 		if (sma_getState() != SMA_STATE_HOLDING) {
 			app_uart_put_debug("Retracting SMA pin\r\n", DEBUG_MOTION_EVENTS);
-			sma_retract(ebrakePlaneChangeSMAHoldTime_ms, ebrakePlaneChangePrimitiveHandler);
+			sma_retract(4000, ebrakeTapPrimitiveHandler);
 			break;
 		}
 
@@ -639,9 +639,8 @@ void ebrakeTapPrimitiveHandler(void *p_event_data, uint16_t event_size) {
 		break;
 	case MOTION_PRIMITIVE_SMA_EXTENDED:
 		app_uart_put_debug("SMA fully extended.\r\n", DEBUG_MOTION_EVENTS);
+		app_uart_put_debug("Break tap complete.\r\n", DEBUG_MOTION_EVENTS);
 	default:
 		break;
 	}
-
-	app_uart_put_debug("Break tap complete.\r\n", DEBUG_MOTION_EVENTS);
 }
