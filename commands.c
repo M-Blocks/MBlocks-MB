@@ -1724,10 +1724,9 @@ void cmdChangePlane(const char *args) {
 	uint16_t accelCurrent_mA, accelTime_ms;
 	uint16_t speed_rpm, ebrakeTime_ms;
 	uint16_t coastTime_ms;
-	uint16_t holdTime_ms;
 	bool reverse;
 
-	if ((nArgs = sscanf(args, "%1s %1s %d %d %d %d %d", modeStr, dirStr, &params[0], &params[1], &params[2], &params[3], &params[4])) < 4) {
+	if ((nArgs = sscanf(args, "%1s %1s %d %d %d %d", modeStr, dirStr, &params[0], &params[1], &params[2], &params[3])) < 4) {
 		return;
 	}
 
@@ -1751,32 +1750,26 @@ void cmdChangePlane(const char *args) {
 		ebrakeTime_ms = params[1];
 
 		if ((nArgs >= 5) && (params[2] > 0)) {
-			holdTime_ms = params[2];
-		} else {
-			holdTime_ms = 250;
-		}
-
-		if ((nArgs >= 6) && (params[3] > 0)) {
-			accelCurrent_mA = params[3];
+			accelCurrent_mA = params[2];
 		} else {
 			accelCurrent_mA = 0;
 		}
 
-		if ((nArgs >= 7) && (params[4] > 0)) {
-			accelTime_ms = params[4];
+		if ((nArgs >= 6) && (params[3] > 0)) {
+			accelTime_ms = params[3];
 		} else {
 			accelTime_ms = 0;
 		}
 
-		if (motionEvent_startEBrakePlaneChange(speed_rpm, ebrakeTime_ms, accelCurrent_mA, accelTime_ms, holdTime_ms, reverse,
+		if (motionEvent_startEBrakePlaneChange(speed_rpm, ebrakeTime_ms, accelCurrent_mA, accelTime_ms, reverse,
 				cmdMotionEventHandler)) {
 			app_uart_put_string("Starting e-brake based plane change...\r\n");
 		}
-	} else if ((modeStr[0] == 'm') && (nArgs == 6) && (params[0] > 0) && (params[1] > 0) && (params[3] > 0) && (params[4] > 0)) {
+	} else if ((modeStr[0] == 'm') && (nArgs == 6) && (params[0] > 0) && (params[1] > 0) && (params[2] > 0) && (params[3] > 0)) {
 		accelCurrent_mA = params[0];
 		accelTime_ms = params[1];
-		coastTime_ms = params[3];
-		ebrakeTime_ms = params[4];
+		coastTime_ms = params[2];
+		ebrakeTime_ms = params[3];
 		if (motionEvent_startAccelBrakePlaneChange(accelCurrent_mA, accelTime_ms, coastTime_ms, ebrakeTime_ms,
 				reverse, cmdMotionEventHandler)) {
 			app_uart_put_string("Starting mixed accel/e-brake based plane change...\r\n");
@@ -1840,10 +1833,18 @@ void cmdInertialActuation(const char *args) {
 void cmdTapBrake(const char *args) {
 	int nArg;
 	char dirStr[3];
-	unsigned int bldcSpeed_rpm, brakeTime_ms;
+	unsigned int bldcSpeed_rpm;
 	bool reverse;
 
 	if ((nArg = sscanf(args, "%1s %u", dirStr, &bldcSpeed_rpm)) < 2) {
+		return;
+	}
+
+	if (dirStr[0] == 'f') {
+		reverse = false;
+	} else if (dirStr[0] == 'r') {
+		reverse = true;
+	} else {
 		return;
 	}
 
@@ -2072,7 +2073,7 @@ void cmdLightTrackerPrimitive(bool read, const char *args) {
 	/* Check to see if we're in a valid configuration */
 	if (config == -1) {
 		app_uart_put_string("Failed to find configuration of the cube. Trying to change plane.\r\n");
-		if (motionEvent_startEBrakePlaneChange(5000, 50, 0, 0, 250, false,
+		if (motionEvent_startEBrakePlaneChange(5000, 50, 0, 0, false,
 				cmdLightTrackerEventHandler)) {
 			app_uart_put_string("Starting e-brake based plane change...\r\n");			
 		}
@@ -2125,7 +2126,7 @@ void cmdLightTrackerPrimitive(bool read, const char *args) {
 		if (alignment[config][0] == alignment[config][1]) {
 			reverse = true;
 		}
-		if (motionEvent_startEBrakePlaneChange(5000, 50, 0, 0, 250, reverse,
+		if (motionEvent_startEBrakePlaneChange(5000, 50, 0, 0, reverse,
 				cmdLightTrackerEventHandler)) {
 			app_uart_put_string("Starting e-brake based plane change...\r\n");
 		}
