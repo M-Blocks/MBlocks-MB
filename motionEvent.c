@@ -252,6 +252,7 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 	float gyroMag;
 
 	char str[128];
+	float axisAngles[3];
 
 	static bool tapBreak = false;
 	static int tapCount = 0;
@@ -400,9 +401,51 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 				break;
 			} else if (!flywheelFrameAligned && sma_getHoldTimeRemaining_ms() > 1000) {
 				// TODO: figure out which direction is best
-				app_uart_put_debug("Flywheel not aligned with any axis.\r\n", DEBUG_MOTION_EVENTS);
+				app_uart_put_debug("Central actuator is not aligned with any frame axis\r\n", DEBUG_MOTION_EVENTS);
+				vectorFloat_t gravity;
+				bool upsideDown = false;
+
+				imu_getGravityFloat(&gravity);
+				for (int i = 0; i < 3; i++) {
+					axisAngles[i] = imu_getVectorFloatAngle(&gravity, &frameAlignmentVectorsFloat[i]);
+					if (axisAngles[i] > 120.0f) {
+						upsideDown = true;
+					}
+				}
+				if (upsideDown) {
+					for (int i = 0; i < 3; i++) {
+						axisAngles[i] = 180.0f - axisAngles[i];
+					}
+				}
+
+				unsigned int alignmentAxisIndexPrecedingDesired = ((alignmentAxisIndexDesired + 3) - 1) % 3;
+				unsigned int alignmentAxisIndexFollowingDesired = (alignmentAxisIndexDesired + 1) % 3;
+
+				snprintf(str, sizeof(str), "Angle to axis (%u) preceding desired axis (%u): %f degrees\r\n",
+						alignmentAxisIndexPrecedingDesired, alignmentAxisIndexDesired,
+						axisAngles[alignmentAxisIndexPrecedingDesired]);
+				app_uart_put_debug(str, DEBUG_MOTION_EVENTS);
+
+				snprintf(str, sizeof(str), "Angle to axis (%u) following desired axis (%u): %f degrees\r\n",
+						alignmentAxisIndexFollowingDesired, alignmentAxisIndexDesired,
+						axisAngles[alignmentAxisIndexFollowingDesired]);
+				app_uart_put_debug(str, DEBUG_MOTION_EVENTS);
+
+				bool reverseSpeed;
+				if (axisAngles[alignmentAxisIndexPrecedingDesired] <= axisAngles[alignmentAxisIndexFollowingDesired]) {
+					/* If the central actuator is closer to the frame axis in
+					 * the reverse direction, we need to move the actuator
+					 * 'forward', which means that we must accelerate in
+					 * reverse. */
+					reverseSpeed = true;
+					app_uart_put_debug("Central actuator closer to preceding axis, need to move central actuator forward\r\n", DEBUG_MOTION_EVENTS);
+				} else {
+					reverseSpeed = false;
+					app_uart_put_debug("Central actuator closer to following axis, need to move central actuator in reverse\r\n", DEBUG_MOTION_EVENTS);
+				}
+
 				app_uart_put_debug("Trying to accelerate flywheel.\r\n", DEBUG_MOTION_EVENTS);
-				bldc_setSpeed(ebrakeTapSpeed_rpm, ebrakePlaneChangeReverse, 0, ebrakePlaneChangePrimitiveHandler);
+				bldc_setSpeed(ebrakeTapSpeed_rpm, reverseSpeed, 0, ebrakePlaneChangePrimitiveHandler);
 				break;
 			}
 
