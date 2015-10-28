@@ -113,13 +113,6 @@ static void cmdBLEAdv(const char *args);
 static void cmdChangePlane(const char *args);
 static void cmdInertialActuation(const char *args);
 static void cmdTapBrake(const char *args);
-/* */
-static void cmdJump(const char *args);
-static void cmdJumpR(const char *args);
-static void cmdSeq(const char *args);
-static void cmdProg(const char *args);
-static void cmdDelay(const char *args);
-static void cmdWobble(const char *args);
 /* Complex commands */
 static void cmdLightTracker(const char *args);
 
@@ -194,15 +187,11 @@ static const char cmdEmptyStr[] = "";
 static const char cmdChangePlaneStr[] = "cp";
 static const char cmdInertialActuationStr[] = "ia";
 static const char cmdTapBrakeStr[] = "tb";
-/* */
-static const char cmdJumpStr[] = "jump";
-static const char cmdJumpRStr[] = "jumpr";
-static const char cmdSeqStr[] = "seq";
-static const char cmdProgStr[] = "prog";
-static const char cmdDelayStr[] = "delay";
-static const char cmdWobbleStr[] = "wobble";
 /* Complext commands */
 static const char cmdLightTrackerStr[] = "ltrack";
+
+// Other global variables
+static int msgCnt = 0;
 
 // This table correlates the command strings above to the actual functions that
 // are called when the user types the command into the terminal and presses
@@ -276,13 +265,6 @@ static cmdFcnPair_t cmdTable[] = {
 		{cmdChangePlaneStr, cmdChangePlane },
 		{cmdInertialActuationStr, cmdInertialActuation },
 		{cmdTapBrakeStr, cmdTapBrake},
-		/* */
-		{cmdJumpStr, cmdJump},
-		{cmdJumpRStr, cmdJumpR},
-		{cmdSeqStr, cmdSeq},
-		{cmdProgStr, cmdProg},
-		{cmdDelayStr, cmdDelay},
-		{cmdWobbleStr,	cmdWobble},
 		/* Complex commands */
 		{cmdLightTrackerStr, cmdLightTracker},
 // Always end the command table with an emptry string and null pointer
@@ -1940,161 +1922,6 @@ void cmdTapBrake(const char *args) {
 
 	if (motionEvent_startEBrakeTap(bldcSpeed_rpm, reverse)) {
 		app_uart_put_string("Starting e-brake tap.\r\n");
-	}
-}
-
-/* */
-
-void cmdJump(const char *args) {
-	int nArgs;
-	unsigned int speed;
-	//unsigned int time;
-
-	nArgs = sscanf(args, "%u", &speed);
-
-	char temp[50];
-	snprintf(temp, sizeof(temp), "Speed: %u \r\n", speed);
-	app_uart_put_string(temp);
-	//snprintf(temp, sizeof(temp), "Time: %u \r\n", time);
-	//app_uart_put_string(temp);
-
-	if (nArgs == -1) {
-		app_uart_put_string("no args");
-		//with no arguments, set a default speed and delay
-		cmdLine_execCmd("bldcspeed f 5000");
-		delay_ms(4000);
-		cmdLine_execCmd("brake cw 4000 300");
-		delay_ms(1000);
-		cmdLine_execCmd("bldcstop");
-	} else {
-		app_uart_put_string("yes args");
-		char str[50];
-		snprintf(str, sizeof(str), "bldcspeed f %u", speed);
-		cmdLine_execCmd(str);
-		delay_ms(4000);
-		cmdLine_execCmd("brake cw 4000 300");
-		delay_ms(1000);
-		cmdLine_execCmd("bldcstop");
-	}
-}
-
-void cmdJumpR(const char *args) {
-	int nArgs;
-	unsigned int speed;
-	//unsigned int time;
-
-	nArgs = sscanf(args, "%u", &speed);
-
-	char temp[50];
-	snprintf(temp, sizeof(temp), "Speed: %u \r\n", speed);
-	app_uart_put_string(temp);
-	//snprintf(temp, sizeof(temp), "Time: %u \r\n", time);
-	//app_uart_put_string(temp);
-
-	if (nArgs == -1) {
-		app_uart_put_string("no args");
-		//with no arguments, set a default speed and delay
-		cmdLine_execCmd("bldcspeed r 5000");
-		delay_ms(4000);
-		cmdLine_execCmd("brake ccw 4000 300");
-		delay_ms(1000);
-		cmdLine_execCmd("bldcstop");
-	} else {
-		app_uart_put_string("yes args");
-		char str[50];
-		snprintf(str, sizeof(str), "bldcspeed r %u", speed);
-		cmdLine_execCmd(str);
-		delay_ms(4000);
-		cmdLine_execCmd("brake ccw 4000 300");
-		delay_ms(1000);
-		cmdLine_execCmd("bldcstop");
-	}
-}
-
-void cmdSeq(const char *args) {
-	int nArgs;
-	unsigned int repeat;
-	unsigned int speed;
-	//unsigned int time;
-	char str[50] = "";
-
-	nArgs = sscanf(args, "%u %u", &speed, &repeat);
-
-	if (nArgs == -1) {
-		//with no arguments, set a default speed and delay
-		repeat = 2;
-	} else {
-		snprintf(str, sizeof(str), "%u", speed);
-	}
-
-	for (int i = 0; i < repeat; ++i) {
-		cmdJump(str);
-		delay_ms(300);
-	}
-}
-
-void cmdProg(const char *args) {
-	//allows the user to send a sequence of commands, including delays, to be executed
-	//commands must be separated by semicolons
-
-	char str[MAX_CMDSTR_LEN];
-
-	strncpy(str, args, sizeof(str) - 1);
-	str[sizeof(str) - 1] = '\0';
-
-	app_uart_put_string("Started executing program.\r\n");
-
-	char *token;
-	token = strtok(str, ";");
-
-	while (token != NULL ) {
-		if (token[0] == ' ')
-			token++;
-		if (cmdLine_execCmd(token))
-			app_uart_put_string("Executed command.\r\n");
-		else
-			app_uart_put_string("Failed to execute command.\r\n");
-		token = strtok(NULL, ";");
-	}
-
-	app_uart_put_string("Requested program completed.\r\n");
-}
-
-void cmdDelay(const char *args) {
-	int nArgs;
-	unsigned int time;
-
-	nArgs = sscanf(args, "%u", &time);
-
-	if (nArgs == -1) {
-		app_uart_put_string("Default delay, 500 ms\r\n");
-		delay_ms(500);
-	} else {
-		char temp[50];
-		snprintf(temp, sizeof(temp), "Delay: %u \r\n", time);
-		app_uart_put_string(temp);
-		delay_ms(time);
-	}
-}
-
-void cmdWobble(const char *args) {
-	int nArgs;
-	unsigned int repeat = 2;
-	unsigned int speed;
-	//unsigned int time;
-	char str[50] = "";
-
-	nArgs = sscanf(args, "%u %u", &speed, &repeat);
-
-	if (nArgs != -1) {
-		snprintf(str, sizeof(str), "%u", speed);
-	}
-
-	for (int i = 0; i < repeat; ++i) {
-		cmdJump(str);
-		delay_ms(300);
-		cmdJumpR(str);
-		delay_ms(300);
 	}
 }
 
