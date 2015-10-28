@@ -1954,16 +1954,17 @@ static const int alignment[12][9] = {
 };
 
 void cmdLightTrackerPrimitive(bool read, const char *args) {
-	char str[200];
+	char str[100];
 
+	static unsigned int type;
 	static unsigned int bldcSpeed_rpm_f, brakeCurrent_mA_f, brakeTime_ms_f;
 	static unsigned int bldcSpeed_rpm_r, brakeCurrent_mA_r, brakeTime_ms_r;
 	static unsigned int threshold;
 
-	if (read && (sscanf(args, "%u %u %u %u %u %u %u",
+	if (read && (sscanf(args, "%u %u %u %u %u %u %u %u", &type,
 			&bldcSpeed_rpm_f, &brakeCurrent_mA_f, &brakeTime_ms_f,
 			&bldcSpeed_rpm_r, &brakeCurrent_mA_r, &brakeTime_ms_r,
-			&threshold)) < 7) {
+			&threshold)) < 8) {
 		return;
 	}
 
@@ -1978,12 +1979,16 @@ void cmdLightTrackerPrimitive(bool read, const char *args) {
 	double EPS = 0.01;
 	int LIGHTEPS = 5;
 	for (int i = 0; i < 12; i++) {
-		int16_t ambientLightBottom = fb_getAmbientLight(alignment[i][BOTTOM]);
-		double cross = sqrt(2) - (alignment[i][0] * vf.x + alignment[i][1] * vf.y + alignment[i][2] * vf.z);
+		if (fb_setRxEnable(alignment[i][BOTTOM], true)) {
+			int16_t ambientLightBottom = fb_getAmbientLight(alignment[i][BOTTOM]);
+			fb_setRxEnable(alignment[i][BOTTOM], false);
+			
+			double cross = sqrt(2) - (alignment[i][0] * vf.x + alignment[i][1] * vf.y + alignment[i][2] * vf.z);
 
-		if (cross < EPS && ambientLightBottom < LIGHTEPS) {
-			config = i;
-			break;
+			if (cross < EPS && ambientLightBottom < LIGHTEPS) {
+				config = i;
+				break;
+			}
 		}
 	}
 
@@ -1996,8 +2001,12 @@ void cmdLightTrackerPrimitive(bool read, const char *args) {
 		}
 		return;
 	}
+	snprintf(str, sizeof(str), "Found configuration. TOP: %u; LEFT: %u; FORWARD: %u\r\n", 
+		alignment[config][TOP], alignment[config][LEFT], alignment[config][FORWARD]);
+	app_uart_put_string(str);
 
 	/* Find strongest light signal */
+	fb_setRxEnable(0, true);
 	int max_signal = 0;
 	int best_face = -1;
 	for (int i = 1; i <= 6; i++) {
@@ -2017,8 +2026,9 @@ void cmdLightTrackerPrimitive(bool read, const char *args) {
 			best_face = i;
 		}
 	}
+	fb_setRxEnable(0, false);
 
-	if (max_signal < threshold) {
+	if (type == 1 && max_signal < threshold) {
 		app_uart_put_string("Maximum signal is below allowed threshold.\r\n");
 		return;
 	}
@@ -2043,10 +2053,10 @@ void cmdLightTrackerPrimitive(bool read, const char *args) {
 		if (alignment[config][0] == alignment[config][1]) {
 			reverse = true;
 		}
-		if (motionEvent_startEBrakePlaneChange(5000, 50, 0, 0, reverse,
-				cmdLightTrackerEventHandler)) {
-			app_uart_put_string("Starting e-brake based plane change...\r\n");
-		}
+		// if (motionEvent_startEBrakePlaneChange(5000, 50, 0, 0, reverse,
+		// 		cmdLightTrackerEventHandler)) {
+		// 	app_uart_put_string("Starting e-brake based plane change...\r\n");
+		// }
 	}
 }
 
