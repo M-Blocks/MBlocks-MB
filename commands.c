@@ -5,6 +5,7 @@
  *      Author: kwgilpin
  */
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -40,6 +41,7 @@
 #include "ble_sps.h"
 #include "led.h"
 #include "commands.h"
+#include "message.h"
 
 extern ble_sps_t m_sps;
 
@@ -80,6 +82,7 @@ static void cmdFBRGBLED(const char *args);
 static void cmdFBLight(const char *args);
 static void cmdFBIRManualLEDs(const char *args);
 static void cmdFBTx(const char *args);
+static void cmdFBMsgTx(const char *args);
 static void cmdFBTxCount(const char *args);
 static void cmdFBTxLEDs(const char *args);
 static void cmdFBRx(const char *args);
@@ -87,6 +90,11 @@ static void cmdFBRxCount(const char *args);
 static void cmdFBRxFlush(const char *args);
 static void cmdFBRxEnable(const char *args);
 static void cmdFBSleep(const char *args);
+/* Message commands */
+static void cmdMsgSend(const char *args);
+static void cmdMsgSendCmd(const char *args);
+static void cmdMsgBdcast(const char *args);
+static void cmdMsgBdcastCmd(const char *args);
 /* IMU commands */
 static void cmdIMUSelect(const char *args);
 static void cmdIMUInit(const char *args);
@@ -154,6 +162,7 @@ static const char cmdFBRGBLEDStr[] = "fbrgbled";
 static const char cmdFBLightStr[] = "fblight";
 static const char cmdFBIRManualLEDsStr[] = "fbirled";
 static const char cmdFBTxStr[] = "fbtx";
+static const char cmdFBMsgTxStr[] = "fbtxmsg";
 static const char cmdFBTxCountStr[] = "fbtxcount";
 static const char cmdFBTxLEDsStr[] = "fbtxled";
 static const char cmdFBRxStr[] = "fbrx";
@@ -161,6 +170,11 @@ static const char cmdFBRxCountStr[] = "fbrxcount";
 static const char cmdFBRxFlushStr[] = "fbrxflush";
 static const char cmdFBRxEnableStr[] = "fbrxen";
 static const char cmdFBSleepStr[] = "fbsleep";
+/* Message commands */
+static const char cmdMsgSendStr[] = "msgsnd";
+static const char cmdMsgSendCmdStr[] = "msgsndcmd";
+static const char cmdMsgBdcastStr[] = "msgbdcst";
+static const char cmdMsgBdcastCmdStr[] = "msgbdcstcmd";
 /* IMU commands */
 static const char cmdIMUSelectStr[] = "imuselect";
 static const char cmdIMUInitStr[] = "imuinit";
@@ -231,6 +245,7 @@ static cmdFcnPair_t cmdTable[] = {
 		{cmdFBLightStr, cmdFBLight},
 		{cmdFBIRManualLEDsStr, cmdFBIRManualLEDs},
 		{cmdFBTxStr, cmdFBTx},
+		{cmdFBMsgTxStr, cmdFBMsgTx},
 		{cmdFBTxCountStr, cmdFBTxCount},
 		{cmdFBTxLEDsStr, cmdFBTxLEDs},
 		{cmdFBRxStr, cmdFBRx},
@@ -238,6 +253,11 @@ static cmdFcnPair_t cmdTable[] = {
 		{cmdFBRxFlushStr, cmdFBRxFlush},
 		{cmdFBRxEnableStr, cmdFBRxEnable},
 		{cmdFBSleepStr, cmdFBSleep},
+		/* Message commands */
+		{cmdMsgSendStr, cmdMsgSend},
+		{cmdMsgSendCmdStr, cmdMsgSendCmd},
+		{cmdMsgBdcastStr, cmdMsgBdcast},
+		{cmdMsgBdcastCmdStr, cmdMsgBdcastCmd},
 		/* IMU commands */
 		{cmdIMUSelectStr, cmdIMUSelect},
 		{cmdIMUInitStr, cmdIMUInit},
@@ -1187,6 +1207,32 @@ void cmdFBTx(const char *args) {
 	app_uart_put_string(str);
 }
 
+void cmdFBMsgTx(const char *args) {
+	unsigned int faceNum;
+	unsigned int flashPostTx;
+	unsigned int numBytes;
+	char txData[256];
+	char str[100];
+
+	if (sscanf(args, "%u %u %255s", &faceNum, &flashPostTx, txData) != 2) {
+		return;
+	}
+
+	if ((faceNum < 1) || (faceNum > 6)) {
+		return;
+	}
+
+	numBytes = strlen(txData);
+
+	if (fb_sendMsgToTxBuffer(faceNum, numBytes, flashPostTx, (uint8_t *)txData)) {
+		snprintf(str, sizeof(str), "Sent %u bytes on faceboard %u\r\n", numBytes, faceNum);
+	} else {
+		snprintf(str, sizeof(str), "Failed to write to IR transmit buffer on faceboard %u\r\n", faceNum);
+	}
+
+	app_uart_put_string(str);
+}
+
 void cmdFBTxCount(const char *args) {
 	unsigned int faceNum;
 	uint8_t count;
@@ -1452,6 +1498,50 @@ void cmdFBSleep(const char *args) {
 	}
 }
 
+/******************/
+/* Comms commands */
+/******************/
+void cmdMsgSend(const char *args) {
+	int nArgs;
+	char destID[18];
+	char msg[128];
+	if ((nArgs = sscanf(args, "%17s %[^\n]", destID, msg)) != 2) {
+		return;
+	}
+
+	prepare_message_send("SEND", msgCnt++, destID, msg);
+}
+
+void cmdMsgSendCmd(const char *args) {
+	int nArgs;
+	char destID[18];
+	char cmd[128];
+	if ((nArgs = sscanf(args, "%17s %[^\n]", destID, cmd)) != 2) {
+		return;
+	}
+
+	prepare_message_send("SENDCMD", msgCnt++, destID, cmd);
+}
+
+void cmdMsgBdcast(const char *args) {
+	int nArgs;
+	char msg[128];
+	if ((nArgs = sscanf(args, "%[^\n]", msg)) != 1) {
+		return;
+	}
+
+	prepare_message_bdcast("BDCAST", msgCnt++, msg);
+}
+
+void cmdMsgBdcastCmd(const char *args) {
+	int nArgs;
+	char cmd[128];
+	if ((nArgs = sscanf(args, "%[^\n]", cmd)) != 1) {
+		return;
+	}
+
+	prepare_message_bdcast("BDCASTCMD", msgCnt++, cmd);
+}
 
 /****************/
 /* IMU commands */
