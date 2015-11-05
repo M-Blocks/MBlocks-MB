@@ -1063,6 +1063,14 @@ void cmdFBLight(const char *args) {
 		return;
 	}
 
+	bool enabled;
+	if (fb_getRxEnable(faceNum, &enabled)) {
+		if (!enabled) {
+			fb_setRxEnable(faceNum, true);
+			delay_ms(50);
+		}
+	}
+
 	ambientLight = fb_getAmbientLight(faceNum);
 	if (ambientLight >= 0) {
 		snprintf(str, sizeof(str), "Faceboard %u ambient light: %d\r\n", faceNum, ambientLight);
@@ -1071,6 +1079,7 @@ void cmdFBLight(const char *args) {
 	}
 
 	app_uart_put_string(str);
+	fb_setRxEnable(faceNum, false);
 }
 
 void cmdFBIRManualLEDs(const char *args) {
