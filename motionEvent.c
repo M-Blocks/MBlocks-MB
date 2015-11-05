@@ -20,6 +20,7 @@
 #include "bldc.h"
 #include "imu.h"
 #include "util.h"
+#include "fb.h"
 #include "motionEvent.h"
 
 #define DEBUG_MOTION_EVENTS			1
@@ -68,15 +69,16 @@ static bool inertialActuationAccel;
 static uint16_t inertialActuationEBrakeAccelStartDelay_ms;
 static bool inertialActuationAccelReverse;
 
-/* These module-level variables must be set when performing a brake tap */
-static uint16_t ebrakeTapBLDCSpeed_rpm;
-static bool ebrakeTapReverse;
+/* These module-level variables must be set to track a light source */
+static bool lt_type;
+static unsigned int lt_bldcSpeed_rpm_f, lt_brakeCurrent_mA_f, lt_brakeTime_ms_f;
+static unsigned int lt_bldcSpeed_rpm_r, lt_brakeCurrent_mA_r, lt_brakeTime_ms_r;
+static unsigned int lt_threshold;
 
 /* These module-level variables are used to check for actuator stabilization */
 static vectorFloat_t gravityCurrent;
 static vectorFloat_t gravityNew;
 
-static void ebrakeTapPrimitiveHandler(void *p_event_data, uint16_t event_size);
 static void accelPlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size);
 static void accelBrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size);
 static void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size);
@@ -256,12 +258,11 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 
 	static bool tapBreak = false;
 	static int tapCount = 0;
-	static int ebrakeTapSpeed_rpm = 3000;
-	static int ebrakeTapBrake_ms = 5;
+	int ebrakeTapSpeed_rpm = 3000;
+	int ebrakeTapBrake_ms = 5;
 
 	static bool flywheelFrameAlignedInitial;
 	static unsigned int alignmentAxisIndexInitial, alignmentAxisIndexDesired;
-	static bool success = false;
 
 	motionPrimitive = *(motionPrimitive_t *)p_event_data;
 
@@ -336,7 +337,6 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 			} else if (flywheelFrameAligned && (alignmentAxisIndex == alignmentAxisIndexDesired)) {
 				app_uart_put_debug("Bringing flywheel up to speed accidently aligned central actuator with desired frame axis\r\n", DEBUG_MOTION_EVENTS);
 				app_uart_put_debug("Extending SMA pin\r\n", DEBUG_MOTION_EVENTS);
-				success = true;
 				sma_extend(ebrakePlaneChangePrimitiveHandler);
 				break;
 			} else {
@@ -477,7 +477,7 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 		/* Stop the flywheel in case it is still spinning */
 		bldc_setSpeed(0, false, 0, NULL);
 
-		success = false;
+		bool success = false;
 		if (!motionEvent_getFlywheelFrameAligned(&flywheelFrameAligned, &alignmentAxisIndex)) {
 			app_uart_put_debug("Failed to determine whether flywheel is aligned.\r\n", DEBUG_MOTION_EVENTS);
 		} else if (flywheelFrameAligned && (alignmentAxisIndex == alignmentAxisIndexDesired)) {
@@ -629,62 +629,159 @@ bool motionEvent_getFlywheelFrameAligned(bool *flywheelFrameAligned, unsigned in
 	return true;
 }
 
-bool motionEvent_startEBrakeTap(uint16_t speed_rpm, bool reverse) {
-	uint32_t err_code;
-	motionPrimitive_t motionPrimitive;
+// TODO
+static const enum Face {
+	FORWARD = 3,
+	BACKWARD,
+	TOP,
+	BOTTOM,
+	LEFT,
+	RIGHT
+};
 
-	ebrakeTapBLDCSpeed_rpm = speed_rpm;
-	ebrakeTapReverse = reverse;
+static const int alignment[12][9] = {
+	{1, 1, 0, 6, 5, 2, 4, 1, 3},
+	{1, -1, 0, 2, 4, 5, 6, 1, 3},
+	{-1, -1, 0, 5, 6, 4, 2, 1, 3},
+	{-1, 1, 0, 4, 2, 6, 5, 1, 3},
+	{1, 1, 0, 3, 1, 5, 6, 2, 4},
+	{1, -1, 0, 5, 6, 1, 3, 2, 4},
+	{-1, -1, 0, 1, 3, 6, 5, 2, 4},
+	{-1, 1, 0, 6, 5, 3, 1, 2, 4},
+	{1, 1, 0, 4, 2, 1, 3, 5, 6},
+	{1, -1, 0, 1, 3, 2, 4, 5, 6},
+	{-1, -1, 0, 2, 4, 3, 1, 5, 6},
+	{-1, 1, 0, 3, 1, 4, 2, 5, 6}
+};
 
-	motionPrimitive = MOTION_PRIMITIVE_START_SEQUENCE;
-	err_code = app_sched_event_put(&motionPrimitive, sizeof(motionPrimitive), ebrakeTapPrimitiveHandler);
-	APP_ERROR_CHECK(err_code);
+void lightTrackerPrimitiveHandler(void *p_event_data, uint16_t event_size) {
+	char str[100];
 
-	return true;
-}
-
-void ebrakeTapPrimitiveHandler(void *p_event_data, uint16_t event_size) {
-	motionPrimitive_t motionPrimitive;
-	motionPrimitive = *(motionPrimitive_t *)p_event_data;
-
-	static int count = 0;
-	static int brakeTime = 5;
-
-	switch(motionPrimitive) {
-	case MOTION_PRIMITIVE_START_SEQUENCE:
-		count = 0;
-		if (sma_getState() != SMA_STATE_HOLDING) {
-			app_uart_put_debug("Retracting SMA pin\r\n", DEBUG_MOTION_EVENTS);
-			sma_retract(4000, ebrakeTapPrimitiveHandler);
-			break;
-		}
-
-	case MOTION_PRIMITIVE_SMA_RETRACTED:
-		bldc_setSpeed(ebrakeTapBLDCSpeed_rpm, ebrakeTapReverse, 0, ebrakeTapPrimitiveHandler);
+	motionEvent_t motionEvent;
+	motionEvent = *(motionEvent_t *)p_event_data;
+	switch (motionEvent) {
+	case MOTION_EVENT_INERTIAL_ACTUATION_COMPLETE:
+	case MOTION_EVENT_INERTIAL_ACTUATION_FAILURE:
+		delay_ms(500);
 		break;
-
-	case MOTION_PRIMITIVE_BLDC_STABLE:
-		// tap break once
-		app_uart_put_debug("Tapping break.\r\n", DEBUG_MOTION_EVENTS);
-		bldc_setSpeed(0, false, brakeTime, ebrakeTapPrimitiveHandler);
-		break;
-
-	case MOTION_PRIMITIVE_BLDC_COASTING:
-		// tap break two more times
-		if (count > 2) {
-			app_uart_put_debug("Break tapped 3 times. Extending SMA pin.\r\n", DEBUG_MOTION_EVENTS);
-			sma_extend(ebrakeTapPrimitiveHandler);
-			break;
-		}
-
-		count++;
-		app_uart_put_debug("Tapping break.\r\n", DEBUG_MOTION_EVENTS);
-		bldc_setSpeed(0, false, brakeTime, ebrakeTapPrimitiveHandler);
-		break;
-	case MOTION_PRIMITIVE_SMA_EXTENDED:
-		app_uart_put_debug("SMA fully extended.\r\n", DEBUG_MOTION_EVENTS);
-		app_uart_put_debug("Break tap complete.\r\n", DEBUG_MOTION_EVENTS);
 	default:
 		break;
 	}
+
+	app_uart_put_debug("Calling tracker function.\r\n", DEBUG_MOTION_EVENTS);
+	vectorFloat_t vf;
+	if (!imu_getGravityFloat(&vf)) {
+		snprintf(str, sizeof(str), "Failed to read gravity vector from %s IMU\r\n", mpu6050_getName());
+		app_uart_put_string(str);
+		return;
+	}
+
+	int config = -1;
+	double EPS = 0.01;
+	int LIGHTEPS = 5;
+	for (int i = 0; i < 12; i++) {
+		if (fb_setRxEnable(alignment[i][BOTTOM], true)) {
+			delay_ms(50);
+			int16_t ambientLightBottom = fb_getAmbientLight(alignment[i][BOTTOM]);
+			fb_setRxEnable(alignment[i][BOTTOM], false);
+			
+			double cross = sqrt(2) - (alignment[i][0] * vf.x + alignment[i][1] * vf.y + alignment[i][2] * vf.z);
+
+			if (cross < EPS && ambientLightBottom < LIGHTEPS) {
+				config = i;
+				break;
+			}
+		}
+	}
+
+	/* Check to see if we're in a valid configuration */
+	if (config == -1) {
+		app_uart_put_string("Failed to find configuration of the cube. Trying to change plane.\r\n");
+		if (motionEvent_startEBrakePlaneChange(4000, 40, 0, 0, false,
+				lightTrackerPrimitiveHandler)) {
+			app_uart_put_string("Starting e-brake based plane change...\r\n");			
+		}
+		return;
+	}
+	snprintf(str, sizeof(str), "Found configuration. TOP: %u; LEFT: %u; FORWARD: %u\r\n", 
+		alignment[config][TOP], alignment[config][LEFT], alignment[config][FORWARD]);
+	app_uart_put_string(str);
+
+	/* Find strongest light signal */
+	int max_signal = 0;
+	int best_face = -1;
+	for (int i = 1; i <= 6; i++) {
+		// exclude top and bottom faces since we deal with 2D motion
+		if (alignment[config][TOP] == i || alignment[config][BOTTOM] == i)
+			continue;
+
+		if (fb_setRxEnable(i, true)) {
+			delay_ms(50);
+			int16_t ambientLight = fb_getAmbientLight(i);
+			fb_setRxEnable(i, false);
+			// if ambient light reading is 0, then we are connected and done
+			if (ambientLight < LIGHTEPS) {
+				app_uart_put_string("Connected to aggregate.\r\n");
+				return;
+			}
+
+			if (ambientLight > max_signal) {
+				max_signal = ambientLight;
+				best_face = i;
+			}
+		}
+	}
+
+	if (lt_type == 1 && max_signal < lt_threshold) {
+		app_uart_put_string("Maximum signal is below allowed threshold.\r\n");
+		return;
+	}
+	/* Move cube forward or backward if possible */
+	if (alignment[config][FORWARD] == best_face) {
+		if (motionEvent_startInertialActuation(lt_bldcSpeed_rpm_f, lt_brakeCurrent_mA_f,
+			lt_brakeTime_ms_f, false, false, false, 0, false,
+			lightTrackerPrimitiveHandler)) {
+			app_uart_put_string("Starting inertial actuation forward...\r\n");
+		}
+	}
+	else if (alignment[config][BACKWARD] == best_face) {
+		if (motionEvent_startInertialActuation(lt_bldcSpeed_rpm_r, lt_brakeCurrent_mA_r,
+			lt_brakeTime_ms_r, true, false, false, 0, false, 
+			lightTrackerPrimitiveHandler)) {
+			app_uart_put_string("Starting inertial actuation backward...\r\n");
+		}
+	}
+	/* Change plane to orient flywheel towards the right direction */
+	else {
+		bool reverse = false;
+		if (alignment[config][0] == alignment[config][1]) {
+			reverse = true;
+		}
+		if (motionEvent_startEBrakePlaneChange(4000, 40, 0, 0, reverse,
+				lightTrackerPrimitiveHandler)) {
+			app_uart_put_string("Starting e-brake based plane change...\r\n");
+		}
+	}
+}
+
+bool motionEvent_startLightTracker(bool type, 
+	uint16_t bldcSpeed_rpm_f, uint16_t brakeCurrent_mA_f, uint16_t brakeTime_ms_f,
+	uint16_t bldcSpeed_rpm_r, uint16_t brakeCurrent_mA_r, uint16_t brakeTime_ms_r,
+	uint16_t threshold) {
+	uint32_t err_code;
+
+	lt_type = type;
+	lt_bldcSpeed_rpm_f = bldcSpeed_rpm_f;
+	lt_brakeCurrent_mA_f = brakeCurrent_mA_f;
+	lt_brakeTime_ms_f = brakeTime_ms_f;
+	lt_bldcSpeed_rpm_r = bldcSpeed_rpm_r;
+	lt_brakeCurrent_mA_r = brakeCurrent_mA_r;
+	lt_brakeTime_ms_r = brakeTime_ms_r;
+	lt_threshold = threshold;
+
+	motionEvent_t motionEvent = MOTION_EVENT_START_TRACKER;
+	err_code = app_sched_event_put(&motionEvent, sizeof(motionEvent), lightTrackerPrimitiveHandler);
+	APP_ERROR_CHECK(err_code);
+
+	return true;
 }

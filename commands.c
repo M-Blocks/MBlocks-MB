@@ -91,9 +91,7 @@ static void cmdFBRxFlush(const char *args);
 static void cmdFBRxEnable(const char *args);
 static void cmdFBSleep(const char *args);
 /* Message commands */
-static void cmdMsgSend(const char *args);
 static void cmdMsgSendCmd(const char *args);
-static void cmdMsgBdcast(const char *args);
 static void cmdMsgBdcastCmd(const char *args);
 /* IMU commands */
 static void cmdIMUSelect(const char *args);
@@ -109,12 +107,14 @@ static void cmdBLETx(const char *args);
 static void cmdBLERx(const char *args);
 static void cmdBLEDiscon(const char *args);
 static void cmdBLEAdv(const char *args);
+static void cmdBLEMACAddr(const char *args);
 /* Motion commands */
 static void cmdChangePlane(const char *args);
 static void cmdInertialActuation(const char *args);
-static void cmdTapBrake(const char *args);
 /* Complex commands */
 static void cmdLightTracker(const char *args);
+/* */
+static void cmdTestCurr(const char *args);
 
 // These string are what the command line processes looking for the user to
 // type on the serial terminal.
@@ -164,9 +164,7 @@ static const char cmdFBRxFlushStr[] = "fbrxflush";
 static const char cmdFBRxEnableStr[] = "fbrxen";
 static const char cmdFBSleepStr[] = "fbsleep";
 /* Message commands */
-static const char cmdMsgSendStr[] = "msgsnd";
 static const char cmdMsgSendCmdStr[] = "msgsndcmd";
-static const char cmdMsgBdcastStr[] = "msgbdcst";
 static const char cmdMsgBdcastCmdStr[] = "msgbdcstcmd";
 /* IMU commands */
 static const char cmdIMUSelectStr[] = "imuselect";
@@ -182,13 +180,15 @@ static const char cmdBLETxStr[] = "bletx";
 static const char cmdBLERxStr[] = "blerx";
 static const char cmdBLEDisconStr[] = "blediscon";
 static const char cmdBLEAdvStr[] = "bleadv";
+static const char cmdBLEMACAddrStr[] = "blemac";
 static const char cmdEmptyStr[] = "";
 /* Motion commands */
 static const char cmdChangePlaneStr[] = "cp";
 static const char cmdInertialActuationStr[] = "ia";
-static const char cmdTapBrakeStr[] = "tb";
 /* Complext commands */
 static const char cmdLightTrackerStr[] = "ltrack";
+/* */
+static const char cmdTestCurrStr[] = "tstfun";
 
 // Other global variables
 static int msgCnt = 0;
@@ -243,9 +243,7 @@ static cmdFcnPair_t cmdTable[] = {
 		{cmdFBRxEnableStr, cmdFBRxEnable},
 		{cmdFBSleepStr, cmdFBSleep},
 		/* Message commands */
-		{cmdMsgSendStr, cmdMsgSend},
 		{cmdMsgSendCmdStr, cmdMsgSendCmd},
-		{cmdMsgBdcastStr, cmdMsgBdcast},
 		{cmdMsgBdcastCmdStr, cmdMsgBdcastCmd},
 		/* IMU commands */
 		{cmdIMUSelectStr, cmdIMUSelect},
@@ -261,19 +259,20 @@ static cmdFcnPair_t cmdTable[] = {
 		{cmdBLERxStr, cmdBLERx},
 		{cmdBLEDisconStr, cmdBLEDiscon},
 		{cmdBLEAdvStr, cmdBLEAdv},
+		{cmdBLEMACAddrStr, cmdBLEMACAddr},
 		/* Motion commands */
 		{cmdChangePlaneStr, cmdChangePlane },
 		{cmdInertialActuationStr, cmdInertialActuation },
-		{cmdTapBrakeStr, cmdTapBrake},
 		/* Complex commands */
 		{cmdLightTrackerStr, cmdLightTracker},
+		/* */
+		{cmdTestCurrStr, cmdTestCurr},
 // Always end the command table with an emptry string and null pointer
 		{ cmdEmptyStr, NULL } };
 
 /* Callbacks for printing status info after command completion */
 static void cmdMotionPrimitiveHandler(void *p_event_data, uint16_t event_size);
 static void cmdMotionEventHandler(void *p_event_data, uint16_t event_size);
-static void cmdLightTrackerEventHandler(void *p_event_data, uint16_t event_size);
 
 void commands_init() {
 	cmdline_loadCmds(cmdTable);
@@ -1483,17 +1482,6 @@ void cmdFBSleep(const char *args) {
 /******************/
 /* Comms commands */
 /******************/
-void cmdMsgSend(const char *args) {
-	int nArgs;
-	char destID[18];
-	char msg[128];
-	if ((nArgs = sscanf(args, "%17s %[^\n]", destID, msg)) != 2) {
-		return;
-	}
-
-	prepare_message_send("SEND", msgCnt++, destID, msg);
-}
-
 void cmdMsgSendCmd(const char *args) {
 	int nArgs;
 	char destID[18];
@@ -1503,16 +1491,6 @@ void cmdMsgSendCmd(const char *args) {
 	}
 
 	prepare_message_send("SENDCMD", msgCnt++, destID, cmd);
-}
-
-void cmdMsgBdcast(const char *args) {
-	int nArgs;
-	char msg[128];
-	if ((nArgs = sscanf(args, "%[^\n]", msg)) != 1) {
-		return;
-	}
-
-	prepare_message_bdcast("BDCAST", msgCnt++, msg);
 }
 
 void cmdMsgBdcastCmd(const char *args) {
@@ -1785,6 +1763,24 @@ void cmdBLEAdv(const char *args) {
 	}
 }
 
+void cmdBLEMACAddr(const char *args) {
+	uint32_t err_code;
+	char str[100];
+
+	if (m_sps.conn_handle == BLE_CONN_HANDLE_INVALID) {
+		app_uart_put_string("BLE not connected\r\n");
+		return;
+	}
+
+	ble_gap_addr_t mac_addr;
+	err_code = sd_ble_gap_address_get(&mac_addr);
+	APP_ERROR_CHECK(err_code);
+
+	for (int i = 0; i < 6; i++) {
+		
+	}
+}
+
 /*******************/
 /* Motion commands */
 /*******************/
@@ -1902,166 +1898,43 @@ void cmdInertialActuation(const char *args) {
 	}
 }
 
-void cmdTapBrake(const char *args) {
-	int nArg;
-	char dirStr[3];
-	unsigned int bldcSpeed_rpm;
-	bool reverse;
-
-	if ((nArg = sscanf(args, "%1s %u", dirStr, &bldcSpeed_rpm)) < 2) {
-		return;
-	}
-
-	if (dirStr[0] == 'f') {
-		reverse = false;
-	} else if (dirStr[0] == 'r') {
-		reverse = true;
-	} else {
-		return;
-	}
-
-	if (motionEvent_startEBrakeTap(bldcSpeed_rpm, reverse)) {
-		app_uart_put_string("Starting e-brake tap.\r\n");
-	}
-}
-
 /*********************/
 /*  Complex Commands */
 /*********************/
 
-static const enum Face {
-	FORWARD = 3,
-	BACKWARD,
-	TOP,
-	BOTTOM,
-	LEFT,
-	RIGHT
-};
+void cmdLightTracker(const char *args) {
+	unsigned int type;
+	unsigned int bldcSpeed_rpm_f, brakeCurrent_mA_f, brakeTime_ms_f;
+	unsigned int bldcSpeed_rpm_r, brakeCurrent_mA_r, brakeTime_ms_r;
+	unsigned int threshold;
 
-static const int alignment[12][9] = {
-	{1, 1, 0, 6, 5, 2, 4, 1, 3},
-	{1, -1, 0, 2, 4, 5, 6, 1, 3},
-	{-1, -1, 0, 5, 6, 4, 2, 1, 3},
-	{-1, 1, 0, 4, 2, 6, 5, 1, 3},
-	{1, 1, 0, 3, 1, 5, 6, 2, 4},
-	{1, -1, 0, 5, 6, 1, 3, 2, 4},
-	{-1, -1, 0, 1, 3, 6, 5, 2, 4},
-	{-1, 1, 0, 6, 5, 3, 1, 2, 4},
-	{1, 1, 0, 4, 2, 1, 3, 5, 6},
-	{1, -1, 0, 1, 3, 2, 4, 5, 6},
-	{-1, -1, 0, 2, 4, 3, 1, 5, 6},
-	{-1, 1, 0, 3, 1, 4, 2, 5, 6}
-};
-
-void cmdLightTrackerPrimitive(bool read, const char *args) {
-	char str[100];
-
-	static unsigned int type;
-	static unsigned int bldcSpeed_rpm_f, brakeCurrent_mA_f, brakeTime_ms_f;
-	static unsigned int bldcSpeed_rpm_r, brakeCurrent_mA_r, brakeTime_ms_r;
-	static unsigned int threshold;
-
-	if (read && (sscanf(args, "%u %u %u %u %u %u %u %u", &type,
+	if (sscanf(args, "%u %u %u %u %u %u %u %u", &type,
 			&bldcSpeed_rpm_f, &brakeCurrent_mA_f, &brakeTime_ms_f,
 			&bldcSpeed_rpm_r, &brakeCurrent_mA_r, &brakeTime_ms_r,
-			&threshold)) < 8) {
+			&threshold) < 8) {
 		return;
 	}
 
-	vectorFloat_t vf;
-	if (!imu_getGravityFloat(&vf)) {
-		snprintf(str, sizeof(str), "Failed to read gravity vector from %s IMU\r\n", mpu6050_getName());
-		app_uart_put_string(str);
-		return;
+	bool lt_type;
+	if (type == 1) {
+		lt_type = true;
+	} else {
+		lt_type = false;
 	}
 
-	int config = -1;
-	double EPS = 0.01;
-	int LIGHTEPS = 5;
-	for (int i = 0; i < 12; i++) {
-		if (fb_setRxEnable(alignment[i][BOTTOM], true)) {
-			int16_t ambientLightBottom = fb_getAmbientLight(alignment[i][BOTTOM]);
-			fb_setRxEnable(alignment[i][BOTTOM], false);
-			
-			double cross = sqrt(2) - (alignment[i][0] * vf.x + alignment[i][1] * vf.y + alignment[i][2] * vf.z);
-
-			if (cross < EPS && ambientLightBottom < LIGHTEPS) {
-				config = i;
-				break;
-			}
-		}
-	}
-
-	/* Check to see if we're in a valid configuration */
-	if (config == -1) {
-		app_uart_put_string("Failed to find configuration of the cube. Trying to change plane.\r\n");
-		if (motionEvent_startEBrakePlaneChange(5000, 50, 0, 0, false,
-				cmdLightTrackerEventHandler)) {
-			app_uart_put_string("Starting e-brake based plane change...\r\n");			
-		}
-		return;
-	}
-	snprintf(str, sizeof(str), "Found configuration. TOP: %u; LEFT: %u; FORWARD: %u\r\n", 
-		alignment[config][TOP], alignment[config][LEFT], alignment[config][FORWARD]);
-	app_uart_put_string(str);
-
-	/* Find strongest light signal */
-	fb_setRxEnable(0, true);
-	int max_signal = 0;
-	int best_face = -1;
-	for (int i = 1; i <= 6; i++) {
-		// exclude top and bottom faces since we deal with 2D motion
-		if (alignment[config][TOP] == i || alignment[config][BOTTOM] == i)
-			continue;
-
-		int16_t ambientLight = fb_getAmbientLight(i);
-		// if ambient light reading is 0, then we are connected and done
-		if (ambientLight < LIGHTEPS) {
-			app_uart_put_string("Connected to aggregate.\r\n");
-			return;
-		}
-
-		if (ambientLight > max_signal) {
-			max_signal = ambientLight;
-			best_face = i;
-		}
-	}
-	fb_setRxEnable(0, false);
-
-	if (type == 1 && max_signal < threshold) {
-		app_uart_put_string("Maximum signal is below allowed threshold.\r\n");
-		return;
-	}
-	/* Move cube forward or backward if possible */
-	if (alignment[config][FORWARD] == best_face) {
-		if (motionEvent_startInertialActuation(bldcSpeed_rpm_f, brakeCurrent_mA_f,
-			brakeTime_ms_f, false, false, false, 0, false,
-			cmdLightTrackerEventHandler)) {
-			app_uart_put_string("Starting inertial actuation forward...\r\n");
-		}
-	}
-	else if (alignment[config][BACKWARD] == best_face) {
-		if (motionEvent_startInertialActuation(bldcSpeed_rpm_r, brakeCurrent_mA_r,
-			brakeTime_ms_r, true, false, false, 0, false, 
-			cmdLightTrackerEventHandler)) {
-			app_uart_put_string("Starting inertial actuation backward...\r\n");
-		}
-	}
-	/* Change plane to orient flywheel towards the right direction */
-	else {
-		bool reverse = false;
-		if (alignment[config][0] == alignment[config][1]) {
-			reverse = true;
-		}
-		// if (motionEvent_startEBrakePlaneChange(5000, 50, 0, 0, reverse,
-		// 		cmdLightTrackerEventHandler)) {
-		// 	app_uart_put_string("Starting e-brake based plane change...\r\n");
-		// }
+	if (motionEvent_startLightTracker(lt_type, bldcSpeed_rpm_f, brakeCurrent_mA_f, brakeTime_ms_f,
+		bldcSpeed_rpm_r, brakeCurrent_mA_r, brakeTime_ms_r, threshold)) {
+		app_uart_put_string("Starting light tracker.\r\n");
 	}
 }
 
-void cmdLightTracker(const char *args) {
-	cmdLightTrackerPrimitive(true, args);
+/* */
+void cmdTestCurr(const char *args) {
+	char str[100];
+	uint32_t ticks = curr_time();
+
+	snprintf(str, sizeof(str), "Current time: %u\r\n", ticks);
+	app_uart_put_string(str);
 }
 
 /*************/
@@ -2136,30 +2009,4 @@ void cmdMotionEventHandler(void *p_event_data, uint16_t event_size) {
 	default:
 		app_uart_put_string("Motion event not recognized\r\n");
 	}
-}
-
-void cmdLightTrackerEventHandler(void *p_event_data, uint16_t event_size) {
-	motionEvent_t motionEvent;
-
-	motionEvent = *(motionEvent_t *) p_event_data;
-
-	switch (motionEvent) {
-	case MOTION_EVENT_PLANE_CHANGE_SUCCESS:
-		app_uart_put_string("Successfully changed planes\r\n");
-		break;
-	case MOTION_EVENT_PLANE_CHANGE_FAILURE:
-		app_uart_put_string("Failed to change planes\r\n");
-		break;
-	case MOTION_EVENT_INERTIAL_ACTUATION_COMPLETE:
-		app_uart_put_string("Inertial actuation complete\r\n");
-		break;
-	case MOTION_EVENT_INERTIAL_ACTUATION_FAILURE:
-		app_uart_put_string("Inertial actuation failure\r\n");
-		break;
-	default:
-		app_uart_put_string("Motion event not recognized\r\n");
-	}
-
-	delay_ms(300);
-	cmdLightTrackerPrimitive(false, "");
 }
