@@ -48,7 +48,7 @@ ASSEMBLER_SOURCE_FILES += gcc_startup_$(DEVICESERIES).s
 
 ## Assembly Flags
 ASMFLAGS += -DRELEASE -Os
-ASMFLAGS += -D__HEAP_SIZE=512 
+ASMFLAGS += -D__HEAP_SIZE=128
 ASMFLAGS += -x assembler-with-cpp
 
 ## Libraries
