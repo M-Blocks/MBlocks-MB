@@ -239,6 +239,46 @@ bool fb_sendToTxBuffer(uint8_t faceNum, uint8_t numBytes, const uint8_t *bytes) 
 	return success;
 }
 
+bool fb_queueToTxBuffer(uint8_t faceNum, uint8_t numBytes, const uint8_t *bytes) {
+	uint8_t twiBuf[256];
+	bool success = true;
+
+	if (faceNum > 6) {
+		return false;
+	}
+
+	twi_master_init();
+
+	twiBuf[0] = FB_REGISTER_ADDR_TX_MSG_BUF;
+	memcpy(&twiBuf[1], bytes, numBytes);
+
+	success &= twi_master_transfer((faceNum << 1), twiBuf, 1 + numBytes, true);
+
+	twi_master_deinit();
+
+	return success;
+}
+
+bool fb_sendMsgToTxBuffer(uint8_t faceNum, bool flash) {
+	uint8_t twiBuf[2];
+	bool success = true;
+
+	if (faceNum > 6) {
+		return false;
+	}
+
+	twi_master_init();
+
+	twiBuf[0] = FB_REGISTER_ADDR_TX_MSG_CONTROL;
+	twiBuf[1] = flash ? (0x01 | 0x02) : 0x00; 
+
+	success &= twi_master_transfer((faceNum << 1), twiBuf, 2, true);
+
+	twi_master_deinit();
+
+	return success;
+}
+
 bool fb_getTxBufferAvailableCount(uint8_t faceNum, uint8_t *bytesAvailable) {
 	uint8_t twiBuf[2];
 	bool success = true;
@@ -377,6 +417,49 @@ bool fb_flushRxBuffer(uint8_t faceNum) {
 	return success;
 }
 
+bool fb_getRxAmbientLightBuffer(uint8_t faceNum, uint8_t numBytes, uint8_t *bytes) {
+	uint8_t twiBuf[2];
+	bool success = true;
+
+	if ((faceNum < 1) || (faceNum > 6)) {
+		return -1;
+	}
+
+	twi_master_init();
+
+	twiBuf[0] = FB_REGISTER_ADDR_RX_AMBIENT_BUF;
+
+	success &= twi_master_transfer((faceNum << 1), twiBuf, 1, true);
+	success &= twi_master_transfer((faceNum << 1) | TWI_READ_BIT, bytes, numBytes, true);
+
+	twi_master_deinit();
+
+	return success;
+}
+
+bool fb_getRxAmbientBufferConsumedCount(uint8_t faceNum, uint8_t *bytesConsumed) {
+	uint8_t twiBuf[2];
+	bool success = true;
+
+	if ((faceNum < 1) || (faceNum > 6)) {
+		return -1;
+	}
+
+	twi_master_init();
+
+	twiBuf[0] = FB_REGISTER_ADDR_RX_AMBIENT_CONSUMED_COUNT;
+
+	success &= twi_master_transfer((faceNum << 1), twiBuf, 1, true);
+	success &= twi_master_transfer((faceNum << 1) | TWI_READ_BIT, twiBuf, 1, true);
+
+	twi_master_deinit();
+
+	if (success) {
+		*bytesConsumed = twiBuf[0];
+	}
+
+	return success;
+}
 
 bool fb_setRxEnable(uint8_t faceNum, bool rxEnable) {
 	uint8_t twiBuf[2];

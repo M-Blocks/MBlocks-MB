@@ -17,7 +17,7 @@ SOFTDEVICE_HEXFILE = ../s310_nrf51422_1.0.0/s310_nrf51422_1.0.0_softdevice.hex
 BOOTLOADER_HEXFILE = ../bootloader/bootloader_gcc_s310_bootloader_xxaa.hex
 
 ## C Source Files
-C_SOURCE_FILES += main.c gitversion.c global.c uart.c db.c fb.c adc.c power.c util.c pwm.c freqcntr.c spi.c bldc.c a4960.c spi_master.c sma.c led.c mechbrake.c cmdline.c commands.c motionEvent.c
+C_SOURCE_FILES += main.c gitversion.c global.c uart.c db.c fb.c adc.c power.c util.c pwm.c freqcntr.c spi.c bldc.c a4960.c spi_master.c sma.c led.c mechbrake.c cmdline.c commands.c motionEvent.c message.c
 C_SOURCE_FILES += twi_hw_master.c
 C_SOURCE_FILES += mpu6050.c imu.c
 C_SOURCE_FILES += bleApp.c ble_sps.c ble_vns.c fifo.c 
@@ -48,7 +48,7 @@ ASSEMBLER_SOURCE_FILES += gcc_startup_$(DEVICESERIES).s
 
 ## Assembly Flags
 ASMFLAGS += -DRELEASE -Os
-ASMFLAGS += -D__HEAP_SIZE=512 
+ASMFLAGS += -D__HEAP_SIZE=128
 ASMFLAGS += -x assembler-with-cpp
 
 ## Libraries

@@ -18,8 +18,6 @@ static char cmdStr[MAX_CMDSTR_LEN] = "";
 
 const char emptyCmdStr[] = "";
 
-//static bool cmdLine_execCmd(const char *cmd);
-
 void cmdline_loadCmds(const cmdFcnPair_t cmds[]) {
 	cmdTable = cmds;
 }

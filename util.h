@@ -14,5 +14,7 @@
 uint32_t app_uart_put_string(const char *str);
 uint32_t app_uart_put_debug(const char *str, bool debug);
 bool delay_ms(uint32_t ms);
+uint32_t curr_time();
+int hash(const char *str);
 
 #endif /* UTIL_H_ */

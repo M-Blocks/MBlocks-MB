@@ -20,6 +20,7 @@
 #include "bldc.h"
 #include "imu.h"
 #include "util.h"
+#include "fb.h"
 #include "motionEvent.h"
 
 #define DEBUG_MOTION_EVENTS			1
@@ -67,6 +68,16 @@ static bool inertialActuationEBrake;
 static bool inertialActuationAccel;
 static uint16_t inertialActuationEBrakeAccelStartDelay_ms;
 static bool inertialActuationAccelReverse;
+
+/* These module-level variables must be set to track a light source */
+static bool lt_type;
+static unsigned int lt_bldcSpeed_rpm_f, lt_brakeCurrent_mA_f, lt_brakeTime_ms_f;
+static unsigned int lt_bldcSpeed_rpm_r, lt_brakeCurrent_mA_r, lt_brakeTime_ms_r;
+static unsigned int lt_threshold;
+
+/* These module-level variables are used to check for actuator stabilization */
+static vectorFloat_t gravityCurrent;
+static vectorFloat_t gravityNew;
 
 static void accelPlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size);
 static void accelBrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size);
@@ -205,12 +216,12 @@ void accelBrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_si
 }
 
 bool motionEvent_startEBrakePlaneChange(uint16_t bldcSpeed_rpm, uint16_t ebrakeTime_ms,
-		uint16_t postBrakeAccelCurrent_ma, uint16_t postBrakeAccelTime_ms,
-		bool reverse, app_sched_event_handler_t motionEventHandler) {
+		uint16_t postBrakeAccelCurrent_ma, uint16_t postBrakeAccelTime_ms, bool reverse, 
+		app_sched_event_handler_t motionEventHandler) {
 	uint32_t err_code;
 	motionPrimitive_t motionPrimitive;
 
-	ebrakePlaneChangeSMAHoldTime_ms = 6000;
+	ebrakePlaneChangeSMAHoldTime_ms = 8000;
 	ebrakePlaneChangeBLDCSpeed_rpm = bldcSpeed_rpm;
 	ebrakePlaneChangeEBrakeTime_ms = ebrakeTime_ms;
 
@@ -233,257 +244,33 @@ bool motionEvent_startEBrakePlaneChange(uint16_t bldcSpeed_rpm, uint16_t ebrakeT
 	return true;
 }
 
-#if (0)
 void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) {
 	uint32_t err_code;
 	motionPrimitive_t motionPrimitive;
 	motionEvent_t motionEvent;
 	vectorFloat_t gyrosRates;
-	//vectorFloat_t gravityNew;
 	bool flywheelFrameAligned;
 	unsigned int alignmentAxisIndex;
-	bool reverseAcceleration;
 	float gyroMag;
 
-	unsigned int i;
+	char str[100];
 	float axisAngles[3];
 
-	char str[128];
-
-	static bool flywheelFrameAlignedInitial;
-	static unsigned int alignmentAxisIndexInitial, alignmentAxisIndexDesired, alignmentAxisIndexUnwanted;
-	static bool success = false;
-
-	motionPrimitive = *(motionPrimitive_t *)p_event_data;
-
-	switch(motionPrimitive) {
-	case MOTION_PRIMITIVE_START_SEQUENCE:
-		motionEvent_getFlywheelFrameAligned(&flywheelFrameAlignedInitial, &alignmentAxisIndexInitial);
-		if (!ebrakePlaneChangeReverse) {
-			alignmentAxisIndexDesired = (alignmentAxisIndexInitial + 1) % 3;
-		} else {
-			alignmentAxisIndexDesired = ((alignmentAxisIndexInitial + 3) - 1) % 3;
-		}
-
-
-#if (DEBUG_MOTION_EVENTS == 1)
-		app_uart_put_string("Executing e-brake based plane change\r\n");
-		if (flywheelFrameAlignedInitial) {
-			app_uart_put_string("Flywheel axis-aligned with frame: true\r\n");
-			snprintf(str, sizeof(str), "Initial frame axis index: %u ([%f %f %f])\r\n",
-					alignmentAxisIndexInitial,
-					frameAlignmentVectorsFloat[alignmentAxisIndexInitial].x,
-					frameAlignmentVectorsFloat[alignmentAxisIndexInitial].y,
-					frameAlignmentVectorsFloat[alignmentAxisIndexInitial].z);
-			app_uart_put_string(str);
-			snprintf(str, sizeof(str), "Desired frame axis index: %u ([%f %f %f])\r\n",
-					alignmentAxisIndexDesired,
-					frameAlignmentVectorsFloat[alignmentAxisIndexDesired].x,
-					frameAlignmentVectorsFloat[alignmentAxisIndexDesired].y,
-					frameAlignmentVectorsFloat[alignmentAxisIndexDesired].z);
-			app_uart_put_string(str);
-		} else {
-			app_uart_put_string("Flywheel axis-aligned with frame: false\r\n");
-		}
-
-		if (!ebrakePlaneChangeReverse) {
-			app_uart_put_string("Starting flywheel spinning forward\r\n");
-		} else {
-			app_uart_put_string("Starting flywheel spinning in reverse\r\n");
-		}
-#endif
-
-		bldc_setSpeed(ebrakePlaneChangeBLDCSpeed_rpm, ebrakePlaneChangeReverse, 0, ebrakePlaneChangePrimitiveHandler);
-		break;
-	case MOTION_PRIMITIVE_BLDC_STABLE:
-		/* Once the motor's speed has stabilized, begin to retract the pin. */
-		app_uart_put_debug("Flywheel speed stabilized\r\n", DEBUG_MOTION_EVENTS);
-		app_uart_put_debug("Retracting SMA pin\r\n", DEBUG_MOTION_EVENTS);
-		sma_retract(ebrakePlaneChangeSMAHoldTime_ms, ebrakePlaneChangePrimitiveHandler);
-		break;
-	case MOTION_PRIMITIVE_SMA_RETRACTED:
-		/* Once the pin is retracted, apply the electronic brake for the
-		 * specified duration. */
-		app_uart_put_debug("SMA pin retracted\r\n", DEBUG_MOTION_EVENTS);
-		app_uart_put_debug("Applying e-brake to flywheel\r\n", DEBUG_MOTION_EVENTS);
-		bldc_setSpeed(0, false, ebrakePlaneChangeEBrakeTime_ms, ebrakePlaneChangePrimitiveHandler);
-		break;
-	case MOTION_PRIMITIVE_BLDC_COASTING:
-	case MOTION_PRIMITIVE_BLDC_ACCEL_COMPLETE:
-		/* After applying the electronic brake to the flywheel, or after the
-		 * flywheel finishes accelerating, we pause briefly to allow the
-		 * central actuator to stop rotating and stabilize before we check
-		 * whether the central actuator has rotated into the correct position. */
-		app_uart_put_debug("Waiting for central actuator to stabilize\r\n", DEBUG_MOTION_EVENTS);
-		motionEvent_delay(250, ebrakePlaneChangePrimitiveHandler);
-		break;
-	case MOTION_PRIMITIVE_TIMER_EXPIRED:
-		/* Check for angular acceleration.  If negligible, the central actuator
-		 * has come to stop, so we then verify whether the actuator is aligned
-		 * with one of the cube's faces. */
-		imu_getGyrosFloat(&gyrosRates);
-		gyroMag = imu_getVectorFloatMagnitude(&gyrosRates);
-
-		if (gyroMag < 0.000488f) {
-			/* Central actuator is not moving, so we read the gravity vector
-			 * from the IMU and check whether it is 1) aligned with one of the
-			 * cube's faces, and 2) aligned with a the correct face. */
-			snprintf(str, sizeof(str), "Central actuator has stabilized (gyroscope magnitude: %f)\r\n", gyroMag);
-			app_uart_put_debug(str, DEBUG_MOTION_EVENTS);
-
-			if (!motionEvent_getFlywheelFrameAligned(&flywheelFrameAligned, &alignmentAxisIndex)) {
-				app_uart_put_debug("Failed to determine whether flywheel and frame are aligned\r\n", DEBUG_MOTION_EVENTS);
-				app_uart_put_debug("Extending SMA pin\r\n", DEBUG_MOTION_EVENTS);
-				sma_extend(ebrakePlaneChangePrimitiveHandler);
-			} else if (flywheelFrameAligned && !flywheelFrameAlignedInitial) {
-				app_uart_put_debug("Previously unaligned central actuator is now aligned with a frame axis\r\n", DEBUG_MOTION_EVENTS);
-				app_uart_put_debug("Extending SMA pin\r\n", DEBUG_MOTION_EVENTS);
-				success = true;
-				sma_extend(ebrakePlaneChangePrimitiveHandler);
-			} else if (flywheelFrameAligned && (alignmentAxisIndex == alignmentAxisIndexDesired)) {
-				app_uart_put_debug("Central actuator is aligned with desired frame axis\r\n", DEBUG_MOTION_EVENTS);
-				app_uart_put_debug("Extending SMA pin\r\n", DEBUG_MOTION_EVENTS);
-				success = true;
-				sma_extend(ebrakePlaneChangePrimitiveHandler);
-			} else if (flywheelFrameAligned && (sma_getHoldTimeRemaining_ms() > 500)) {
-				if (alignmentAxisIndex == alignmentAxisIndexInitial) {
-					/* If the central actuator is in the same position that it
-					 * started in, we need to accelerate the motor in the
-					 * opposite direction that we did when using the e-brake in
-					 * order to create a torque in the same direction using
-					 * pure acceleration. */
-					reverseAcceleration = !ebrakePlaneChangeReverse;
-					app_uart_put_debug("Central actuator is aligned, but with the initial, instead of desired, axis\r\n", DEBUG_MOTION_EVENTS);
-				} else {
-					/* At this point, we can deduce that the central actuator
-					 * is aligned with the third frame axis, that is not the
-					 * initial axis with which it was aligned, and not the
-					 * desired axis.  The desired axis is most easily reached
-					 * by applying a torque in the opposite direction of the
-					 * torque applied by the initial e-braking event, so we
-					 * need to accelerate the flywheel in the same direction
-					 * as we spun the motor before applying the e-brake. */
-					reverseAcceleration = ebrakePlaneChangeReverse;
-					app_uart_put_debug("Central actuator is aligned, but with the undesired, instead of desired, axis\r\n", DEBUG_MOTION_EVENTS);
-				}
-
-				if (!reverseAcceleration) {
-					app_uart_put_debug("Accelerating flywheel in forward direction\r\n", DEBUG_MOTION_EVENTS);
-				} else {
-					app_uart_put_debug("Accelerating flywheel in reverse\r\n", DEBUG_MOTION_EVENTS);
-				}
-
-				bldc_setAccel(ebrakePlaneChangeAccelCurrent_mA, ebrakePlaneChangeAccelTime_ms,
-						reverseAcceleration, ebrakePlaneChangePrimitiveHandler);
-			} else if (sma_getHoldTimeRemaining_ms() > 500) {
-				app_uart_put_debug("Central actuator is not aligned with any frame axis\r\n", DEBUG_MOTION_EVENTS);
-
-				vectorFloat_t gravity;
-				bool upsideDown = false;
-
-				imu_getGravityFloat(&gravity);
-				for (i=0; i<3; i++) {
-					axisAngles[i] = imu_getVectorFloatAngle(&gravity, &frameAlignmentVectorsFloat[i]);
-					if (axisAngles[i] > 120.0f) {
-						upsideDown = true;
-					}
-				}
-
-				if (upsideDown) {
-					for (i=0; i<3; i++) {
-						axisAngles[i] = 180.0f - axisAngles[i];
-					}
-				}
-
-				unsigned int alignmentAxisIndexPrecedingDesired = ((alignmentAxisIndexDesired + 3) - 1) % 3;
-				unsigned int alignmentAxisIndexFollowingDesired = (alignmentAxisIndexDesired + 1) % 3;
-
-				snprintf(str, sizeof(str), "Angle to axis (%u) preceding desired axis (%u): %f degrees\r\n",
-						alignmentAxisIndexPrecedingDesired, alignmentAxisIndexDesired,
-						axisAngles[alignmentAxisIndexPrecedingDesired]);
-				app_uart_put_debug(str, DEBUG_MOTION_EVENTS);
-
-				snprintf(str, sizeof(str), "Angle to axis (%u) following desired axis (%u): %f degrees\r\n",
-						alignmentAxisIndexFollowingDesired, alignmentAxisIndexDesired,
-						axisAngles[alignmentAxisIndexFollowingDesired]);
-				app_uart_put_debug(str, DEBUG_MOTION_EVENTS);
-
-				if (axisAngles[alignmentAxisIndexPrecedingDesired] <= axisAngles[alignmentAxisIndexFollowingDesired]) {
-					/* If the central actuator is closer to the frame axis in
-					 * the reverse direction, we need to move the actuator
-					 * 'forward', which means that we must accelerate in
-					 * reverse. */
-					reverseAcceleration = true;
-					app_uart_put_debug("Central actuator closer to preceding axis, need to move central actuator forward\r\n", DEBUG_MOTION_EVENTS);
-				} else {
-					reverseAcceleration = false;
-					app_uart_put_debug("Central actuator closer to following axis, need to move central actuator in reverse\r\n", DEBUG_MOTION_EVENTS);
-				}
-
-
-				if (!reverseAcceleration) {
-					app_uart_put_debug("Accelerating flywheel in forward direction\r\n", DEBUG_MOTION_EVENTS);
-				} else {
-					app_uart_put_debug("Accelerating flywheel in reverse\r\n", DEBUG_MOTION_EVENTS);
-				}
-
-				bldc_setAccel(3000, 100, reverseAcceleration, ebrakePlaneChangePrimitiveHandler);
-			} else {
-				app_uart_put_debug("Central actuator is not aligned with frame, but SMA hold time has expired\r\n", DEBUG_MOTION_EVENTS);
-				app_uart_put_debug("Extending SMA pin\r\n", DEBUG_MOTION_EVENTS);
-				success = false;
-				sma_extend(ebrakePlaneChangePrimitiveHandler);
-			}
-		} else  {
-			/* If the central actuator is still spinning, we delay for longer
-			 * knowing that the central actuator will eventually come to
-			 * rest.*/
-			snprintf(str, sizeof(str), "Central actuator is still rotating (gyroscope magnitude: %f)\r\n", gyroMag);
-			app_uart_put_debug(str, DEBUG_MOTION_EVENTS);
-			motionEvent_delay(250, ebrakePlaneChangePrimitiveHandler);
-		}
-		break;
-	case MOTION_PRIMITIVE_SMA_EXTENDED:
-		app_uart_put_debug("SMA pin is fully extended\r\n", DEBUG_MOTION_EVENTS);
-		if (eventHandler != NULL) {
-			if (success) {
-				motionEvent = MOTION_EVENT_PLANE_CHANGE_SUCCESS;
-			} else {
-				motionEvent = MOTION_EVENT_PLANE_CHANGE_FAILURE;
-			}
-			err_code = app_sched_event_put(&motionEvent, sizeof(motionEvent), eventHandler);
-			APP_ERROR_CHECK(err_code);
-		}
-		break;
-	default:
-		break;
-	}
-}
-#else
-void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) {
-	uint32_t err_code;
-	motionPrimitive_t motionPrimitive;
-	motionEvent_t motionEvent;
-	vectorFloat_t gyrosRates;
-	//vectorFloat_t gravityNew;
-	bool flywheelFrameAligned;
-	unsigned int alignmentAxisIndex;
-	bool reverseAcceleration;
-	float gyroMag;
-
-	unsigned int i;
-	float axisAngles[3];
-
-	char str[128];
+	static bool tapBreak = false;
+	static int tapCount = 0;
+	int ebrakeTapSpeed_rpm = 3000;
+	int ebrakeTapBrake_ms = 5;
 
 	static bool flywheelFrameAlignedInitial;
 	static unsigned int alignmentAxisIndexInitial, alignmentAxisIndexDesired;
-	static bool success = false;
 
 	motionPrimitive = *(motionPrimitive_t *)p_event_data;
 
 	switch(motionPrimitive) {
 	case MOTION_PRIMITIVE_START_SEQUENCE:
+		tapBreak = false;
+		tapCount = 0;
+
 		motionEvent_getFlywheelFrameAligned(&flywheelFrameAlignedInitial, &alignmentAxisIndexInitial);
 		if (!ebrakePlaneChangeReverse) {
 			alignmentAxisIndexDesired = (alignmentAxisIndexInitial + 1) % 3;
@@ -550,20 +337,20 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 			} else if (flywheelFrameAligned && (alignmentAxisIndex == alignmentAxisIndexDesired)) {
 				app_uart_put_debug("Bringing flywheel up to speed accidently aligned central actuator with desired frame axis\r\n", DEBUG_MOTION_EVENTS);
 				app_uart_put_debug("Extending SMA pin\r\n", DEBUG_MOTION_EVENTS);
-				success = true;
 				sma_extend(ebrakePlaneChangePrimitiveHandler);
 				break;
 			} else {
-				app_uart_put_debug("Brining flywheel up to speed did not bump central actuator into the desired position\r\n", DEBUG_MOTION_EVENTS);
+				app_uart_put_debug("Bringing flywheel up to speed did not bump central actuator into the desired position\r\n", DEBUG_MOTION_EVENTS);
 			}
 		}
 
 		/* If bringing the flywheel up to speed did not happen to bring the
 		 * central actuator into alignment with the desired frame axis, we
 		 * proceed to actuate the e-brake. */
-		app_uart_put_debug("Applying e-brake to flywheel\r\n", DEBUG_MOTION_EVENTS);
-		bldc_setSpeed(0, false, ebrakePlaneChangeEBrakeTime_ms, ebrakePlaneChangePrimitiveHandler);
-		ebrakePlaneChangeEBrakeTime_ms += ebrakePlaneChangeEBrakeTimeChange_ms;
+		app_uart_put_debug("Applying e-brake tap to flywheel\r\n", DEBUG_MOTION_EVENTS);
+		tapBreak = true;
+		tapCount = 1;
+		bldc_setSpeed(0, false, ebrakeTapBrake_ms, ebrakePlaneChangePrimitiveHandler);
 		break;
 	case MOTION_PRIMITIVE_SMA_RETRACTED:
 		/* Once the pin is retracted, apply the electronic brake for the
@@ -571,114 +358,67 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 		app_uart_put_debug("SMA pin retracted\r\n", DEBUG_MOTION_EVENTS);
 		app_uart_put_debug("Applying e-brake to flywheel\r\n", DEBUG_MOTION_EVENTS);
 		bldc_setSpeed(0, false, ebrakePlaneChangeEBrakeTime_ms, ebrakePlaneChangePrimitiveHandler);
-		ebrakePlaneChangeEBrakeTime_ms += ebrakePlaneChangeEBrakeTimeChange_ms;
 		break;
 	case MOTION_PRIMITIVE_BLDC_COASTING:
 		app_uart_put_debug("E-brake released\r\n", DEBUG_MOTION_EVENTS);
 
-		if ((ebrakePlaneChangePostBrakeAccelCurrent_mA == 0) || (ebrakePlaneChangePostBrakeAccelTime_ms == 0)) {
-			app_uart_put_debug("Post-e-brake acceleration time or current is set to 0, skipping acceleration\r\n", DEBUG_MOTION_EVENTS);
-			app_uart_put_debug("Waiting for central actuator to stabilize\r\n", DEBUG_MOTION_EVENTS);
-			motionEvent_delay(1000, ebrakePlaneChangePrimitiveHandler);
+		if (tapBreak && tapCount < 3) {
+			motionEvent_delay(250, ebrakePlaneChangePrimitiveHandler);
 			break;
 		}
 
-		reverseAcceleration = ebrakePlaneChangeReverse;
-		if (!reverseAcceleration) {
-			app_uart_put_debug("Accelerating flywheel forward to counteract e-brake torque\r\n", DEBUG_MOTION_EVENTS);
-		} else {
-			app_uart_put_debug("Accelerating flywheel in reverse to counteract e-brake torque\r\n", DEBUG_MOTION_EVENTS);
+		if ((ebrakePlaneChangePostBrakeAccelCurrent_mA == 0) || (ebrakePlaneChangePostBrakeAccelTime_ms == 0)) {
+			app_uart_put_debug("Post-e-brake acceleration time or current is set to 0, skipping acceleration\r\n", DEBUG_MOTION_EVENTS);
+			app_uart_put_debug("Waiting for central actuator to stabilize\r\n", DEBUG_MOTION_EVENTS);
+			motionEvent_delay(250, ebrakePlaneChangePrimitiveHandler);
+			break;
 		}
-
-		bldc_setAccel(ebrakePlaneChangePostBrakeAccelCurrent_mA, ebrakePlaneChangePostBrakeAccelTime_ms, reverseAcceleration, ebrakePlaneChangePrimitiveHandler);
-		break;
 	case MOTION_PRIMITIVE_BLDC_ACCEL_COMPLETE:
 		/* After the acceleration is complete, we pause briefly to allow the
 		 * central actuator to stop rotating and stabilize before we check
 		 * whether the central actuator has rotated into the correct position.
 		 */
 		app_uart_put_debug("Waiting for central actuator to stabilize\r\n", DEBUG_MOTION_EVENTS);
-		motionEvent_delay(1000, ebrakePlaneChangePrimitiveHandler);
+		motionEvent_delay(250, ebrakePlaneChangePrimitiveHandler);
 		break;
 	case MOTION_PRIMITIVE_TIMER_EXPIRED:
-		/* Check for angular acceleration.  If negligible, the central actuator
-		 * has come to stop, so we then verify whether the actuator is aligned
-		 * with one of the cube's faces. */
-		imu_getGyrosFloat(&gyrosRates);
-		gyroMag = imu_getVectorFloatMagnitude(&gyrosRates);
+		/* Check if we need to tap the break again. */
+		if (tapBreak && tapCount < 3) {
+			app_uart_put_debug("Applying e-brake tap to flywheel\r\n", DEBUG_MOTION_EVENTS);
+			bldc_setSpeed(0, false, ebrakeTapBrake_ms, ebrakePlaneChangePrimitiveHandler);
+			tapCount++;
+			break;
+		}
 
-		if (gyroMag < 0.000488f) {
+		/* Check that the accelerometer readings have stabilized. */
+		imu_getGravityFloat(&gravityNew);
+		if (fabs(gravityNew.x - gravityCurrent.x) < 0.02 &&
+			fabs(gravityNew.y - gravityCurrent.y) < 0.02 &&
+			fabs(gravityNew.z - gravityCurrent.z) < 0.02) {	
 			/* Central actuator is not moving, so we read the gravity vector
 			 * from the IMU and check whether it is 1) aligned with one of the
 			 * cube's faces, and 2) aligned with a the correct face. */
-			snprintf(str, sizeof(str), "Central actuator has stabilized (gyroscope magnitude: %f)\r\n", gyroMag);
-			app_uart_put_debug(str, DEBUG_MOTION_EVENTS);
-
+			app_uart_put_debug("Central actuator has stabilized\r\n", DEBUG_MOTION_EVENTS);
+			
 			if (!motionEvent_getFlywheelFrameAligned(&flywheelFrameAligned, &alignmentAxisIndex)) {
 				app_uart_put_debug("Failed to determine whether flywheel and frame are aligned\r\n", DEBUG_MOTION_EVENTS);
-				app_uart_put_debug("Extending SMA pin\r\n", DEBUG_MOTION_EVENTS);
-				sma_extend(ebrakePlaneChangePrimitiveHandler);
-			} else if (flywheelFrameAligned && !flywheelFrameAlignedInitial) {
-				app_uart_put_debug("Previously unaligned central actuator is now aligned with a frame axis\r\n", DEBUG_MOTION_EVENTS);
-				app_uart_put_debug("Extending SMA pin\r\n", DEBUG_MOTION_EVENTS);
-				success = true;
-				sma_extend(ebrakePlaneChangePrimitiveHandler);
-			} else if (flywheelFrameAligned && (alignmentAxisIndex == alignmentAxisIndexDesired)) {
-				app_uart_put_debug("Central actuator is aligned with desired frame axis\r\n", DEBUG_MOTION_EVENTS);
-				app_uart_put_debug("Extending SMA pin\r\n", DEBUG_MOTION_EVENTS);
-				success = true;
-				sma_extend(ebrakePlaneChangePrimitiveHandler);
-			} else if (flywheelFrameAligned && (sma_getHoldTimeRemaining_ms() > 1000)) {
-				if (alignmentAxisIndex == alignmentAxisIndexInitial) {
-					/* If the central actuator is in the same position that it
-					 * started in, we do not want to change the direction of
-					 * the torque applied when we next actuate the e-brake. */
-					app_uart_put_debug("Central actuator is aligned, but with the initial, instead of desired, axis\r\n", DEBUG_MOTION_EVENTS);
-
-					if (!ebrakePlaneChangeReverse) {
-						app_uart_put_string("Starting flywheel spinning forward\r\n");
-					} else {
-						app_uart_put_string("Starting flywheel spinning in reverse\r\n");
-					}
-
-					ebrakePlaneChangeBLDCSpeed_rpm += ebrakePlaneChangeBLDCSpeedChange_rpm;
-					bldc_setSpeed(ebrakePlaneChangeBLDCSpeed_rpm, ebrakePlaneChangeReverse, 0, ebrakePlaneChangePrimitiveHandler);
-				} else {
-					/* At this point, we can deduce that the central actuator
-					 * is aligned with the third frame axis, that is not the
-					 * initial axis with which it was aligned, and not the
-					 * desired axis.  The desired axis is most easily reached
-					 * by applying a torque in the opposite direction of the
-					 * torque applied by the initial e-braking event, so we
-					 * need to spin the flywheel in the opposite direction
-					 * as we spun the motor initially.  */
-					app_uart_put_debug("Central actuator is aligned, but with the undesired, instead of desired, axis\r\n", DEBUG_MOTION_EVENTS);
-
-					if (ebrakePlaneChangeReverse) {
-						app_uart_put_string("Starting flywheel spinning forward\r\n");
-					} else {
-						app_uart_put_string("Starting flywheel spinning in reverse\r\n");
-					}
-
-					ebrakePlaneChangeBLDCSpeed_rpm += ebrakePlaneChangeBLDCSpeedChange_rpm;
-					bldc_setSpeed(ebrakePlaneChangeBLDCSpeed_rpm, !ebrakePlaneChangeReverse, 0, ebrakePlaneChangePrimitiveHandler);
-				}
-			} else if (sma_getHoldTimeRemaining_ms() > 500) {
+				app_uart_put_debug("Trying to accelerate flywheel.\r\n", DEBUG_MOTION_EVENTS);
+				bldc_setSpeed(ebrakeTapSpeed_rpm, ebrakePlaneChangeReverse, 0, ebrakePlaneChangePrimitiveHandler);
+				break;
+			} else if (!flywheelFrameAligned && sma_getHoldTimeRemaining_ms() > 1000) {
 				app_uart_put_debug("Central actuator is not aligned with any frame axis\r\n", DEBUG_MOTION_EVENTS);
-
 				vectorFloat_t gravity;
 				bool upsideDown = false;
 
 				imu_getGravityFloat(&gravity);
-				for (i=0; i<3; i++) {
+				for (int i = 0; i < 3; i++) {
 					axisAngles[i] = imu_getVectorFloatAngle(&gravity, &frameAlignmentVectorsFloat[i]);
 					if (axisAngles[i] > 120.0f) {
 						upsideDown = true;
 					}
 				}
-
 				if (upsideDown) {
-					for (i=0; i<3; i++) {
+					for (int i = 0; i < 3; i++) {
 						axisAngles[i] = 180.0f - axisAngles[i];
 					}
 				}
@@ -696,45 +436,43 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 						axisAngles[alignmentAxisIndexFollowingDesired]);
 				app_uart_put_debug(str, DEBUG_MOTION_EVENTS);
 
+				bool reverseSpeed;
 				if (axisAngles[alignmentAxisIndexPrecedingDesired] <= axisAngles[alignmentAxisIndexFollowingDesired]) {
 					/* If the central actuator is closer to the frame axis in
 					 * the reverse direction, we need to move the actuator
-					 * 'forward' by spinning the motor in its initial direction
-					 * and then applying the e-brake. */
+					 * 'forward', which means that we must accelerate in
+					 * reverse. */
+					reverseSpeed = true;
 					app_uart_put_debug("Central actuator closer to preceding axis, need to move central actuator forward\r\n", DEBUG_MOTION_EVENTS);
-
-					if (!ebrakePlaneChangeReverse) {
-						app_uart_put_string("Starting flywheel spinning forward\r\n");
-					} else {
-						app_uart_put_string("Starting flywheel spinning in reverse\r\n");
-					}
-
-					ebrakePlaneChangeBLDCSpeed_rpm += ebrakePlaneChangeBLDCSpeedChange_rpm;
-					bldc_setSpeed(ebrakePlaneChangeBLDCSpeed_rpm, ebrakePlaneChangeReverse, 0, ebrakePlaneChangePrimitiveHandler);
 				} else {
+					reverseSpeed = false;
 					app_uart_put_debug("Central actuator closer to following axis, need to move central actuator in reverse\r\n", DEBUG_MOTION_EVENTS);
-
-					if (ebrakePlaneChangeReverse) {
-						app_uart_put_string("Starting flywheel spinning forward\r\n");
-					} else {
-						app_uart_put_string("Starting flywheel spinning in reverse\r\n");
-					}
-
-					ebrakePlaneChangeBLDCSpeed_rpm += ebrakePlaneChangeBLDCSpeedChange_rpm;
-					bldc_setSpeed(ebrakePlaneChangeBLDCSpeed_rpm, !ebrakePlaneChangeReverse, 0, ebrakePlaneChangePrimitiveHandler);
 				}
-			} else {
-				app_uart_put_debug("Central actuator is not aligned with frame, but SMA hold time has expired\r\n", DEBUG_MOTION_EVENTS);
-				app_uart_put_debug("Extending SMA pin\r\n", DEBUG_MOTION_EVENTS);
-				success = false;
-				sma_extend(ebrakePlaneChangePrimitiveHandler);
+
+				app_uart_put_debug("Trying to accelerate flywheel.\r\n", DEBUG_MOTION_EVENTS);
+				bldc_setSpeed(ebrakeTapSpeed_rpm, reverseSpeed, 0, ebrakePlaneChangePrimitiveHandler);
+				break;
 			}
-		} else  {
+
+			app_uart_put_debug("Extending SMA pin\r\n", DEBUG_MOTION_EVENTS);
+			sma_extend(ebrakePlaneChangePrimitiveHandler);
+		} else  {	
+			snprintf(str, sizeof(str), "Previous accelerometer readings: [%f %f %f]\r\n", 
+				gravityCurrent.x, gravityCurrent.y, gravityCurrent.z);
+			app_uart_put_debug(str, DEBUG_MOTION_EVENTS);
+			snprintf(str, sizeof(str), "Current accelerometer readings: [%f %f %f]\r\n", 
+				gravityNew.x, gravityNew.y, gravityNew.z);
+			app_uart_put_debug(str, DEBUG_MOTION_EVENTS);
+
+			/* Set current accelerometer readings to previous */
+			gravityCurrent.x = gravityNew.x;
+			gravityCurrent.y = gravityNew.y;
+			gravityCurrent.z = gravityNew.z;
+
 			/* If the central actuator is still spinning, we delay for longer
 			 * knowing that the central actuator will eventually come to
 			 * rest.*/
-			snprintf(str, sizeof(str), "Central actuator is still rotating (gyroscope magnitude: %f)\r\n", gyroMag);
-			app_uart_put_debug(str, DEBUG_MOTION_EVENTS);
+			app_uart_put_debug("Central actuator is still rotating\r\n", DEBUG_MOTION_EVENTS);
 			motionEvent_delay(500, ebrakePlaneChangePrimitiveHandler);
 		}
 		break;
@@ -743,6 +481,13 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 
 		/* Stop the flywheel in case it is still spinning */
 		bldc_setSpeed(0, false, 0, NULL);
+
+		bool success = false;
+		if (!motionEvent_getFlywheelFrameAligned(&flywheelFrameAligned, &alignmentAxisIndex)) {
+			app_uart_put_debug("Failed to determine whether flywheel is aligned.\r\n", DEBUG_MOTION_EVENTS);
+		} else if (flywheelFrameAligned && (alignmentAxisIndex == alignmentAxisIndexDesired)) {
+			success = true;
+		}
 
 		if (eventHandler != NULL) {
 			if (success) {
@@ -758,7 +503,6 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 		break;
 	}
 }
-#endif
 
 bool motionEvent_startInertialActuation(uint16_t bldcSpeed_rpm,
 			uint16_t brakeCurrent_mA, uint16_t brakeTime_ms, bool reverse,
@@ -886,6 +630,163 @@ bool motionEvent_getFlywheelFrameAligned(bool *flywheelFrameAligned, unsigned in
 	snprintf(str, sizeof(str), "Gravity to frame axis minimum angle: %f degrees\r\n", minAngle);
 	app_uart_put_string(str);
 #endif
+
+	return true;
+}
+
+// TODO
+static const enum Face {
+	FORWARD = 3,
+	BACKWARD,
+	TOP,
+	BOTTOM,
+	LEFT,
+	RIGHT
+};
+
+static const int alignment[12][9] = {
+	{1, 1, 0, 6, 5, 2, 4, 1, 3},
+	{1, -1, 0, 2, 4, 5, 6, 1, 3},
+	{-1, -1, 0, 5, 6, 4, 2, 1, 3},
+	{-1, 1, 0, 4, 2, 6, 5, 1, 3},
+	{1, 1, 0, 3, 1, 5, 6, 2, 4},
+	{1, -1, 0, 5, 6, 1, 3, 2, 4},
+	{-1, -1, 0, 1, 3, 6, 5, 2, 4},
+	{-1, 1, 0, 6, 5, 3, 1, 2, 4},
+	{1, 1, 0, 4, 2, 1, 3, 5, 6},
+	{1, -1, 0, 1, 3, 2, 4, 5, 6},
+	{-1, -1, 0, 2, 4, 3, 1, 5, 6},
+	{-1, 1, 0, 3, 1, 4, 2, 5, 6}
+};
+
+void lightTrackerPrimitiveHandler(void *p_event_data, uint16_t event_size) {
+	char str[100];
+
+	motionEvent_t motionEvent;
+	motionEvent = *(motionEvent_t *)p_event_data;
+	switch (motionEvent) {
+	case MOTION_EVENT_INERTIAL_ACTUATION_COMPLETE:
+	case MOTION_EVENT_INERTIAL_ACTUATION_FAILURE:
+		delay_ms(500);
+		break;
+	default:
+		break;
+	}
+
+	app_uart_put_debug("Calling tracker function.\r\n", DEBUG_MOTION_EVENTS);
+	vectorFloat_t vf;
+	if (!imu_getGravityFloat(&vf)) {
+		snprintf(str, sizeof(str), "Failed to read gravity vector from %s IMU\r\n", mpu6050_getName());
+		app_uart_put_string(str);
+		return;
+	}
+
+	int config = -1;
+	double EPS = 0.01;
+	int LIGHTEPS = 5;
+	for (int i = 0; i < 12; i++) {
+		if (fb_setRxEnable(alignment[i][BOTTOM], true)) {
+			delay_ms(50);
+			int16_t ambientLightBottom = fb_getAmbientLight(alignment[i][BOTTOM]);
+			fb_setRxEnable(alignment[i][BOTTOM], false);
+			
+			double cross = sqrt(2) - (alignment[i][0] * vf.x + alignment[i][1] * vf.y + alignment[i][2] * vf.z);
+
+			if (cross < EPS && ambientLightBottom < LIGHTEPS) {
+				config = i;
+				break;
+			}
+		}
+	}
+
+	/* Check to see if we're in a valid configuration */
+	if (config == -1) {
+		app_uart_put_string("Failed to find configuration of the cube. Trying to change plane.\r\n");
+		if (motionEvent_startEBrakePlaneChange(4000, 40, 0, 0, false,
+				lightTrackerPrimitiveHandler)) {
+			app_uart_put_string("Starting e-brake based plane change...\r\n");			
+		}
+		return;
+	}
+	snprintf(str, sizeof(str), "Found configuration. TOP: %u; LEFT: %u; FORWARD: %u\r\n", 
+		alignment[config][TOP], alignment[config][LEFT], alignment[config][FORWARD]);
+	app_uart_put_string(str);
+
+	/* Find strongest light signal */
+	int max_signal = 0;
+	int best_face = -1;
+	for (int i = 1; i <= 6; i++) {
+		// exclude top and bottom faces since we deal with 2D motion
+		if (alignment[config][TOP] == i || alignment[config][BOTTOM] == i)
+			continue;
+
+		if (fb_setRxEnable(i, true)) {
+			delay_ms(50);
+			int16_t ambientLight = fb_getAmbientLight(i);
+			fb_setRxEnable(i, false);
+			// if ambient light reading is 0, then we are connected and done
+			if (ambientLight < LIGHTEPS) {
+				app_uart_put_string("Connected to aggregate.\r\n");
+				return;
+			}
+
+			if (ambientLight > max_signal) {
+				max_signal = ambientLight;
+				best_face = i;
+			}
+		}
+	}
+
+	if (lt_type == 1 && max_signal < lt_threshold) {
+		app_uart_put_string("Maximum signal is below allowed threshold.\r\n");
+		return;
+	}
+	/* Move cube forward or backward if possible */
+	if (alignment[config][FORWARD] == best_face) {
+		if (motionEvent_startInertialActuation(lt_bldcSpeed_rpm_f, lt_brakeCurrent_mA_f,
+			lt_brakeTime_ms_f, false, false, false, 0, false,
+			lightTrackerPrimitiveHandler)) {
+			app_uart_put_string("Starting inertial actuation forward...\r\n");
+		}
+	}
+	else if (alignment[config][BACKWARD] == best_face) {
+		if (motionEvent_startInertialActuation(lt_bldcSpeed_rpm_r, lt_brakeCurrent_mA_r,
+			lt_brakeTime_ms_r, true, false, false, 0, false, 
+			lightTrackerPrimitiveHandler)) {
+			app_uart_put_string("Starting inertial actuation backward...\r\n");
+		}
+	}
+	/* Change plane to orient flywheel towards the right direction */
+	else {
+		bool reverse = false;
+		if (alignment[config][0] == alignment[config][1]) {
+			reverse = true;
+		}
+		if (motionEvent_startEBrakePlaneChange(4000, 40, 0, 0, reverse,
+				lightTrackerPrimitiveHandler)) {
+			app_uart_put_string("Starting e-brake based plane change...\r\n");
+		}
+	}
+}
+
+bool motionEvent_startLightTracker(bool type, 
+	uint16_t bldcSpeed_rpm_f, uint16_t brakeCurrent_mA_f, uint16_t brakeTime_ms_f,
+	uint16_t bldcSpeed_rpm_r, uint16_t brakeCurrent_mA_r, uint16_t brakeTime_ms_r,
+	uint16_t threshold) {
+	uint32_t err_code;
+
+	lt_type = type;
+	lt_bldcSpeed_rpm_f = bldcSpeed_rpm_f;
+	lt_brakeCurrent_mA_f = brakeCurrent_mA_f;
+	lt_brakeTime_ms_f = brakeTime_ms_f;
+	lt_bldcSpeed_rpm_r = bldcSpeed_rpm_r;
+	lt_brakeCurrent_mA_r = brakeCurrent_mA_r;
+	lt_brakeTime_ms_r = brakeTime_ms_r;
+	lt_threshold = threshold;
+
+	motionEvent_t motionEvent = MOTION_EVENT_START_TRACKER;
+	err_code = app_sched_event_put(&motionEvent, sizeof(motionEvent), lightTrackerPrimitiveHandler);
+	APP_ERROR_CHECK(err_code);
 
 	return true;
 }

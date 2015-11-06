@@ -24,11 +24,18 @@
 #define FB_REGISTER_ADDR_TX_AVAILABLE_COUNT			0x31
 /* Select which IR LEDs are used for transmission */
 #define FB_REGISTER_ADDR_TX_LED_SELECT				0x33
+/* Transmit buffered message with LED flash post-transmission */
+#define FB_REGISTER_ADDR_TX_MSG_CONTROL				0x34
+#define FB_REGISTER_ADDR_TX_MSG_BUF					0x35
 
 #define FB_REGISTER_ADDR_RX_BUF						0x40
 #define FB_REGISTER_ADDR_RX_CONSUMED_COUNT			0x41
 #define FB_REGISTER_ADDR_RX_FLUSH					0x42
 #define FB_REGISTER_ADDR_RX_ENABLE					0x43
+
+#define FB_REGISTER_ADDR_RX_AMBIENT_BUF				0x60
+#define FB_REGISTER_ADDR_RX_AMBIENT_CONSUMED_COUNT	0x61
+
 
 #define FB_REGISTER_ADDR_SLEEP						0x50
 
@@ -49,6 +56,8 @@ bool fb_setIRManualLEDs(uint8_t faceNum, bool led1, bool led2, bool led3, bool l
 bool fb_getIRManualLEDs(uint8_t faceNum, bool *led1, bool *led2, bool *led3, bool *led4);
 
 bool fb_sendToTxBuffer(uint8_t faceNum, uint8_t numBytes, const uint8_t *bytes);
+bool fb_queueToTxBuffer(uint8_t faceNum, uint8_t numBytes, const uint8_t *bytes);
+bool fb_sendMsgToTxBuffer(uint8_t faceNum, bool flash);
 bool fb_getTxBufferAvailableCount(uint8_t faceNum, uint8_t *bytesAvailable);
 bool fb_setIRTxLEDs(uint8_t faceNum, bool led1, bool led2, bool led3, bool led4);
 bool fb_getIRTxLEDs(uint8_t faceNum, bool *led1, bool *led2, bool *led3, bool *led4);

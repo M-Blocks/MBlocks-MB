@@ -91,3 +91,12 @@ bool delay_ms(uint32_t ms) {
 
     return false;
 }
+
+uint32_t curr_time() {
+    uint32_t nowTicks;
+    if (app_timer_cnt_get(&nowTicks) != NRF_SUCCESS) {
+        return 0;
+    }
+
+    return nowTicks;
+}

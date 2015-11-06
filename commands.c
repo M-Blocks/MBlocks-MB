@@ -5,6 +5,7 @@
  *      Author: kwgilpin
  */
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -40,6 +41,7 @@
 #include "ble_sps.h"
 #include "led.h"
 #include "commands.h"
+#include "message.h"
 
 extern ble_sps_t m_sps;
 
@@ -80,6 +82,7 @@ static void cmdFBRGBLED(const char *args);
 static void cmdFBLight(const char *args);
 static void cmdFBIRManualLEDs(const char *args);
 static void cmdFBTx(const char *args);
+static void cmdFBMsgTx(const char *args);
 static void cmdFBTxCount(const char *args);
 static void cmdFBTxLEDs(const char *args);
 static void cmdFBRx(const char *args);
@@ -87,6 +90,9 @@ static void cmdFBRxCount(const char *args);
 static void cmdFBRxFlush(const char *args);
 static void cmdFBRxEnable(const char *args);
 static void cmdFBSleep(const char *args);
+/* Message commands */
+static void cmdMsgSendCmd(const char *args);
+static void cmdMsgBdcastCmd(const char *args);
 /* IMU commands */
 static void cmdIMUSelect(const char *args);
 static void cmdIMUInit(const char *args);
@@ -101,16 +107,14 @@ static void cmdBLETx(const char *args);
 static void cmdBLERx(const char *args);
 static void cmdBLEDiscon(const char *args);
 static void cmdBLEAdv(const char *args);
+static void cmdBLEMACAddr(const char *args);
 /* Motion commands */
 static void cmdChangePlane(const char *args);
 static void cmdInertialActuation(const char *args);
+/* Complex commands */
+static void cmdLightTracker(const char *args);
 /* */
-static void cmdJump(const char *args);
-static void cmdJumpR(const char *args);
-static void cmdSeq(const char *args);
-static void cmdProg(const char *args);
-static void cmdDelay(const char *args);
-static void cmdWobble(const char *args);
+static void cmdTestCurr(const char *args);
 
 // These string are what the command line processes looking for the user to
 // type on the serial terminal.
@@ -151,6 +155,7 @@ static const char cmdFBRGBLEDStr[] = "fbrgbled";
 static const char cmdFBLightStr[] = "fblight";
 static const char cmdFBIRManualLEDsStr[] = "fbirled";
 static const char cmdFBTxStr[] = "fbtx";
+static const char cmdFBMsgTxStr[] = "fbtxmsg";
 static const char cmdFBTxCountStr[] = "fbtxcount";
 static const char cmdFBTxLEDsStr[] = "fbtxled";
 static const char cmdFBRxStr[] = "fbrx";
@@ -158,6 +163,9 @@ static const char cmdFBRxCountStr[] = "fbrxcount";
 static const char cmdFBRxFlushStr[] = "fbrxflush";
 static const char cmdFBRxEnableStr[] = "fbrxen";
 static const char cmdFBSleepStr[] = "fbsleep";
+/* Message commands */
+static const char cmdMsgSendCmdStr[] = "msgsndcmd";
+static const char cmdMsgBdcastCmdStr[] = "msgbdcstcmd";
 /* IMU commands */
 static const char cmdIMUSelectStr[] = "imuselect";
 static const char cmdIMUInitStr[] = "imuinit";
@@ -172,17 +180,18 @@ static const char cmdBLETxStr[] = "bletx";
 static const char cmdBLERxStr[] = "blerx";
 static const char cmdBLEDisconStr[] = "blediscon";
 static const char cmdBLEAdvStr[] = "bleadv";
+static const char cmdBLEMACAddrStr[] = "blemac";
 static const char cmdEmptyStr[] = "";
 /* Motion commands */
 static const char cmdChangePlaneStr[] = "cp";
 static const char cmdInertialActuationStr[] = "ia";
+/* Complext commands */
+static const char cmdLightTrackerStr[] = "ltrack";
 /* */
-static const char cmdJumpStr[] = "jump";
-static const char cmdJumpRStr[] = "jumpr";
-static const char cmdSeqStr[] = "seq";
-static const char cmdProgStr[] = "prog";
-static const char cmdDelayStr[] = "delay";
-static const char cmdWobbleStr[] = "wobble";
+static const char cmdTestCurrStr[] = "tstfun";
+
+// Other global variables
+static int msgCnt = 0;
 
 // This table correlates the command strings above to the actual functions that
 // are called when the user types the command into the terminal and presses
@@ -225,6 +234,7 @@ static cmdFcnPair_t cmdTable[] = {
 		{cmdFBLightStr, cmdFBLight},
 		{cmdFBIRManualLEDsStr, cmdFBIRManualLEDs},
 		{cmdFBTxStr, cmdFBTx},
+		{cmdFBMsgTxStr, cmdFBMsgTx},
 		{cmdFBTxCountStr, cmdFBTxCount},
 		{cmdFBTxLEDsStr, cmdFBTxLEDs},
 		{cmdFBRxStr, cmdFBRx},
@@ -232,6 +242,9 @@ static cmdFcnPair_t cmdTable[] = {
 		{cmdFBRxFlushStr, cmdFBRxFlush},
 		{cmdFBRxEnableStr, cmdFBRxEnable},
 		{cmdFBSleepStr, cmdFBSleep},
+		/* Message commands */
+		{cmdMsgSendCmdStr, cmdMsgSendCmd},
+		{cmdMsgBdcastCmdStr, cmdMsgBdcastCmd},
 		/* IMU commands */
 		{cmdIMUSelectStr, cmdIMUSelect},
 		{cmdIMUInitStr, cmdIMUInit},
@@ -246,16 +259,14 @@ static cmdFcnPair_t cmdTable[] = {
 		{cmdBLERxStr, cmdBLERx},
 		{cmdBLEDisconStr, cmdBLEDiscon},
 		{cmdBLEAdvStr, cmdBLEAdv},
+		{cmdBLEMACAddrStr, cmdBLEMACAddr},
 		/* Motion commands */
 		{cmdChangePlaneStr, cmdChangePlane },
 		{cmdInertialActuationStr, cmdInertialActuation },
+		/* Complex commands */
+		{cmdLightTrackerStr, cmdLightTracker},
 		/* */
-		{cmdJumpStr, cmdJump},
-		{cmdJumpRStr, cmdJumpR},
-		{cmdSeqStr, cmdSeq},
-		{cmdProgStr, cmdProg},
-		{cmdDelayStr, cmdDelay},
-		{cmdWobbleStr,	cmdWobble},
+		{cmdTestCurrStr, cmdTestCurr},
 // Always end the command table with an emptry string and null pointer
 		{ cmdEmptyStr, NULL } };
 
@@ -1052,6 +1063,14 @@ void cmdFBLight(const char *args) {
 		return;
 	}
 
+	bool enabled;
+	if (fb_getRxEnable(faceNum, &enabled)) {
+		if (!enabled) {
+			fb_setRxEnable(faceNum, true);
+			delay_ms(50);
+		}
+	}
+
 	ambientLight = fb_getAmbientLight(faceNum);
 	if (ambientLight >= 0) {
 		snprintf(str, sizeof(str), "Faceboard %u ambient light: %d\r\n", faceNum, ambientLight);
@@ -1060,6 +1079,7 @@ void cmdFBLight(const char *args) {
 	}
 
 	app_uart_put_string(str);
+	fb_setRxEnable(faceNum, false);
 }
 
 void cmdFBIRManualLEDs(const char *args) {
@@ -1174,6 +1194,39 @@ void cmdFBTx(const char *args) {
 		snprintf(str, sizeof(str), "Failed to write to IR transmit buffer on faceboard %u\r\n", faceNum);
 	}
 
+	app_uart_put_string(str);
+}
+
+void cmdFBMsgTx(const char *args) {
+	unsigned int faceNum;
+	unsigned int flashPostTx;
+	unsigned int numBytes;
+	char txData[256];
+	char str[100];
+
+	if (sscanf(args, "%u %u %255s", &faceNum, &flashPostTx, txData) != 2) {
+		return;
+	}
+
+	if ((faceNum < 1) || (faceNum > 6)) {
+		return;
+	}
+	app_uart_put_string(str);
+
+	numBytes = strlen(txData);
+
+	if (fb_queueToTxBuffer(faceNum, numBytes, (uint8_t *)txData)) {
+		snprintf(str, sizeof(str), "Queued %u bytes on faceboard %u\r\n", numBytes, faceNum);
+	} else {
+		snprintf(str, sizeof(str), "Failed to queue to IR transmit buffer on faceboard %u\r\n", faceNum);
+	}
+	app_uart_put_string(str);
+
+	if (fb_sendMsgToTxBuffer(faceNum, flashPostTx)) {
+		snprintf(str, sizeof(str), "Sent queued message on faceboard %u\r\n", faceNum);
+	} else {
+		snprintf(str, sizeof(str), "Failed to transmit queued message on faceboard %u\r\n", faceNum);
+	}
 	app_uart_put_string(str);
 }
 
@@ -1442,6 +1495,31 @@ void cmdFBSleep(const char *args) {
 	}
 }
 
+/******************/
+/* Comms commands */
+/******************/
+void cmdMsgSendCmd(const char *args) {
+	unsigned int faceNum;
+	char destID[20];
+	char cmd[128];
+	int nArgs;
+	
+	if ((nArgs = sscanf(args, "%u %s %[^\n]", &faceNum, destID, cmd)) != 3) {
+		return;
+	}
+
+	prepare_message_send(faceNum, "SENDCMD", msgCnt++, destID, cmd);
+}
+
+void cmdMsgBdcastCmd(const char *args) {
+	int nArgs;
+	char cmd[128];
+	if ((nArgs = sscanf(args, "%[^\n]", cmd)) != 1) {
+		return;
+	}
+
+	prepare_message_bdcast("BDCASTCMD", msgCnt++, cmd);
+}
 
 /****************/
 /* IMU commands */
@@ -1703,6 +1781,24 @@ void cmdBLEAdv(const char *args) {
 	}
 }
 
+void cmdBLEMACAddr(const char *args) {
+	uint32_t err_code;
+	char str[100];
+
+	if (m_sps.conn_handle == BLE_CONN_HANDLE_INVALID) {
+		app_uart_put_string("BLE not connected\r\n");
+		return;
+	}
+
+	ble_gap_addr_t mac_addr;
+	err_code = sd_ble_gap_address_get(&mac_addr);
+	APP_ERROR_CHECK(err_code);
+
+	for (int i = 0; i < 6; i++) {
+		
+	}
+}
+
 /*******************/
 /* Motion commands */
 /*******************/
@@ -1820,159 +1916,43 @@ void cmdInertialActuation(const char *args) {
 	}
 }
 
+/*********************/
+/*  Complex Commands */
+/*********************/
+
+void cmdLightTracker(const char *args) {
+	unsigned int type;
+	unsigned int bldcSpeed_rpm_f, brakeCurrent_mA_f, brakeTime_ms_f;
+	unsigned int bldcSpeed_rpm_r, brakeCurrent_mA_r, brakeTime_ms_r;
+	unsigned int threshold;
+
+	if (sscanf(args, "%u %u %u %u %u %u %u %u", &type,
+			&bldcSpeed_rpm_f, &brakeCurrent_mA_f, &brakeTime_ms_f,
+			&bldcSpeed_rpm_r, &brakeCurrent_mA_r, &brakeTime_ms_r,
+			&threshold) < 8) {
+		return;
+	}
+
+	bool lt_type;
+	if (type == 1) {
+		lt_type = true;
+	} else {
+		lt_type = false;
+	}
+
+	if (motionEvent_startLightTracker(lt_type, bldcSpeed_rpm_f, brakeCurrent_mA_f, brakeTime_ms_f,
+		bldcSpeed_rpm_r, brakeCurrent_mA_r, brakeTime_ms_r, threshold)) {
+		app_uart_put_string("Starting light tracker.\r\n");
+	}
+}
+
 /* */
+void cmdTestCurr(const char *args) {
+	char str[100];
+	uint32_t ticks = curr_time();
 
-void cmdJump(const char *args) {
-	int nArgs;
-	unsigned int speed;
-	//unsigned int time;
-
-	nArgs = sscanf(args, "%u", &speed);
-
-	char temp[50];
-	snprintf(temp, sizeof(temp), "Speed: %u \r\n", speed);
-	app_uart_put_string(temp);
-	//snprintf(temp, sizeof(temp), "Time: %u \r\n", time);
-	//app_uart_put_string(temp);
-
-	if (nArgs == -1) {
-		app_uart_put_string("no args");
-		//with no arguments, set a default speed and delay
-		cmdLine_execCmd("bldcspeed f 5000");
-		delay_ms(4000);
-		cmdLine_execCmd("brake cw 4000 300");
-		delay_ms(1000);
-		cmdLine_execCmd("bldcstop");
-	} else {
-		app_uart_put_string("yes args");
-		char str[50];
-		snprintf(str, sizeof(str), "bldcspeed f %u", speed);
-		cmdLine_execCmd(str);
-		delay_ms(4000);
-		cmdLine_execCmd("brake cw 4000 300");
-		delay_ms(1000);
-		cmdLine_execCmd("bldcstop");
-	}
-}
-
-void cmdJumpR(const char *args) {
-	int nArgs;
-	unsigned int speed;
-	//unsigned int time;
-
-	nArgs = sscanf(args, "%u", &speed);
-
-	char temp[50];
-	snprintf(temp, sizeof(temp), "Speed: %u \r\n", speed);
-	app_uart_put_string(temp);
-	//snprintf(temp, sizeof(temp), "Time: %u \r\n", time);
-	//app_uart_put_string(temp);
-
-	if (nArgs == -1) {
-		app_uart_put_string("no args");
-		//with no arguments, set a default speed and delay
-		cmdLine_execCmd("bldcspeed r 5000");
-		delay_ms(4000);
-		cmdLine_execCmd("brake ccw 4000 300");
-		delay_ms(1000);
-		cmdLine_execCmd("bldcstop");
-	} else {
-		app_uart_put_string("yes args");
-		char str[50];
-		snprintf(str, sizeof(str), "bldcspeed r %u", speed);
-		cmdLine_execCmd(str);
-		delay_ms(4000);
-		cmdLine_execCmd("brake ccw 4000 300");
-		delay_ms(1000);
-		cmdLine_execCmd("bldcstop");
-	}
-}
-
-void cmdSeq(const char *args) {
-	int nArgs;
-	unsigned int repeat;
-	unsigned int speed;
-	//unsigned int time;
-	char str[50] = "";
-
-	nArgs = sscanf(args, "%u %u", &speed, &repeat);
-
-	if (nArgs == -1) {
-		//with no arguments, set a default speed and delay
-		repeat = 2;
-	} else {
-		snprintf(str, sizeof(str), "%u", speed);
-	}
-
-	for (int i = 0; i < repeat; ++i) {
-		cmdJump(str);
-		delay_ms(300);
-	}
-}
-
-void cmdProg(const char *args) {
-	//allows the user to send a sequence of commands, including delays, to be executed
-	//commands must be separated by semicolons
-
-	char str[MAX_CMDSTR_LEN];
-
-	strncpy(str, args, sizeof(str) - 1);
-	str[sizeof(str) - 1] = '\0';
-
-	app_uart_put_string("Started executing program.\r\n");
-
-	char *token;
-	token = strtok(str, ";");
-
-	while (token != NULL ) {
-		if (token[0] == ' ')
-			token++;
-		if (cmdLine_execCmd(token))
-			app_uart_put_string("Executed command.\r\n");
-		else
-			app_uart_put_string("Failed to execute command.\r\n");
-		token = strtok(NULL, ";");
-	}
-
-	app_uart_put_string("Requested program completed.\r\n");
-}
-
-void cmdDelay(const char *args) {
-	int nArgs;
-	unsigned int time;
-
-	nArgs = sscanf(args, "%u", &time);
-
-	if (nArgs == -1) {
-		app_uart_put_string("Default delay, 500 ms\r\n");
-		delay_ms(500);
-	} else {
-		char temp[50];
-		snprintf(temp, sizeof(temp), "Delay: %u \r\n", time);
-		app_uart_put_string(temp);
-		delay_ms(time);
-	}
-}
-
-void cmdWobble(const char *args) {
-	int nArgs;
-	unsigned int repeat = 2;
-	unsigned int speed;
-	//unsigned int time;
-	char str[50] = "";
-
-	nArgs = sscanf(args, "%u %u", &speed, &repeat);
-
-	if (nArgs != -1) {
-		snprintf(str, sizeof(str), "%u", speed);
-	}
-
-	for (int i = 0; i < repeat; ++i) {
-		cmdJump(str);
-		delay_ms(300);
-		cmdJumpR(str);
-		delay_ms(300);
-	}
+	snprintf(str, sizeof(str), "Current time: %u\r\n", ticks);
+	app_uart_put_string(str);
 }
 
 /*************/

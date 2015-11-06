@@ -28,6 +28,7 @@ typedef enum {
 } motionPrimitive_t;
 
 typedef enum {
+	MOTION_EVENT_START_TRACKER,
 	MOTION_EVENT_PLANE_CHANGE_SUCCESS,
 	MOTION_EVENT_PLANE_CHANGE_FAILURE,
 	MOTION_EVENT_INERTIAL_ACTUATION_COMPLETE,
@@ -39,6 +40,7 @@ bool motionEvent_startAccelPlaneChange(uint16_t accelCurrent_mA, uint16_t accelT
 bool motionEvent_startAccelBrakePlaneChange(uint16_t accelCurrent_mA, uint16_t accelTime_ms, uint16_t coastTime_ms, uint16_t brakeTime_ms, bool reverse, app_sched_event_handler_t motionEventHandler);
 bool motionEvent_startEBrakePlaneChange(uint16_t bldcSpeed_rpm, uint16_t ebrakeTime_ms, uint16_t postBrakeAccelCurrent_ma, uint16_t postBrakeAccelTime_ms, bool reverse, app_sched_event_handler_t motionEventHandler);
 bool motionEvent_startInertialActuation(uint16_t bldcSpeed_rpm, uint16_t brakeCurrent_mA, uint16_t brakeTime_ms, bool reverse, bool eBrake, bool accel, uint16_t eBrakeAccelStartDelay_ms, bool accelReverse, app_sched_event_handler_t motionEventHandler);
+bool motionEvent_startLightTracker(bool type, uint16_t bldcSpeed_rpm_f, uint16_t brakeCurrent_mA_f, uint16_t brakeTime_ms_f, uint16_t bldcSpeed_rpm_r, uint16_t brakeCurrent_mA_r, uint16_t brakeTime_ms_r, uint16_t threshold);
 
 bool motionEvent_getFlywheelFrameAligned(bool *flywheelFrameAligned, unsigned int *axisIndex);
 

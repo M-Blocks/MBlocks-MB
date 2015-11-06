@@ -71,6 +71,7 @@
 #include "led.h"
 #include "commands.h"
 #include "cmdline.h"
+#include "message.h"
 
 #include "bleApp.h"
 #include "ble_sps.h"
@@ -401,6 +402,7 @@ int main(void) {
     spi_init();
     power_init();
     commands_init();
+    message_init();
 
     //main_schedulerInit();
     bleApp_gapParamsInit();
@@ -637,6 +639,7 @@ void main_powerManage() {
 		spi_init();
 		power_init();
 		bldc_init();
+        message_init();
 
 		if (motionCheckTimerID != TIMER_NULL) {
 			err_code = app_timer_stop(motionCheckTimerID);
@@ -729,6 +732,7 @@ void main_powerManage() {
 		    spi_deinit();
 		    power_deinit();
 		    bldc_deinit();
+            message_deinit();
 		}
 
 		sleeping = true;
