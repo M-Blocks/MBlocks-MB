@@ -253,7 +253,7 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 	unsigned int alignmentAxisIndex;
 	float gyroMag;
 
-	char str[128];
+	char str[100];
 	float axisAngles[3];
 
 	static bool tapBreak = false;
@@ -363,9 +363,7 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 		app_uart_put_debug("E-brake released\r\n", DEBUG_MOTION_EVENTS);
 
 		if (tapBreak && tapCount < 3) {
-			app_uart_put_debug("Applying e-brake tap to flywheel\r\n", DEBUG_MOTION_EVENTS);
-			bldc_setSpeed(0, false, ebrakeTapBrake_ms, ebrakePlaneChangePrimitiveHandler);
-			tapCount++;
+			motionEvent_delay(250, ebrakePlaneChangePrimitiveHandler);
 			break;
 		}
 
@@ -384,6 +382,14 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 		motionEvent_delay(250, ebrakePlaneChangePrimitiveHandler);
 		break;
 	case MOTION_PRIMITIVE_TIMER_EXPIRED:
+		/* Check if we need to tap the break again. */
+		if (tapBreak && tapCount < 3) {
+			app_uart_put_debug("Applying e-brake tap to flywheel\r\n", DEBUG_MOTION_EVENTS);
+			bldc_setSpeed(0, false, ebrakeTapBrake_ms, ebrakePlaneChangePrimitiveHandler);
+			tapCount++;
+			break;
+		}
+
 		/* Check that the accelerometer readings have stabilized. */
 		imu_getGravityFloat(&gravityNew);
 		if (fabs(gravityNew.x - gravityCurrent.x) < 0.02 &&
@@ -400,7 +406,6 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 				bldc_setSpeed(ebrakeTapSpeed_rpm, ebrakePlaneChangeReverse, 0, ebrakePlaneChangePrimitiveHandler);
 				break;
 			} else if (!flywheelFrameAligned && sma_getHoldTimeRemaining_ms() > 1000) {
-				// TODO: figure out which direction is best
 				app_uart_put_debug("Central actuator is not aligned with any frame axis\r\n", DEBUG_MOTION_EVENTS);
 				vectorFloat_t gravity;
 				bool upsideDown = false;
@@ -459,7 +464,7 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 				gravityNew.x, gravityNew.y, gravityNew.z);
 			app_uart_put_debug(str, DEBUG_MOTION_EVENTS);
 
-			/* Set previous accelerometer readings to previous */
+			/* Set current accelerometer readings to previous */
 			gravityCurrent.x = gravityNew.x;
 			gravityCurrent.y = gravityNew.y;
 			gravityCurrent.z = gravityNew.z;
