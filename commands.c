@@ -1211,15 +1211,22 @@ void cmdFBMsgTx(const char *args) {
 	if ((faceNum < 1) || (faceNum > 6)) {
 		return;
 	}
+	app_uart_put_string(str);
 
 	numBytes = strlen(txData);
 
-	if (fb_sendMsgToTxBuffer(faceNum, numBytes, flashPostTx, (uint8_t *)txData)) {
-		snprintf(str, sizeof(str), "Sent %u bytes on faceboard %u\r\n", numBytes, faceNum);
+	if (fb_queueToTxBuffer(faceNum, numBytes, (uint8_t *)txData)) {
+		snprintf(str, sizeof(str), "Queued %u bytes on faceboard %u\r\n", numBytes, faceNum);
 	} else {
-		snprintf(str, sizeof(str), "Failed to write to IR transmit buffer on faceboard %u\r\n", faceNum);
+		snprintf(str, sizeof(str), "Failed to queue to IR transmit buffer on faceboard %u\r\n", faceNum);
 	}
+	app_uart_put_string(str);
 
+	if (fb_sendMsgToTxBuffer(faceNum, flashPostTx)) {
+		snprintf(str, sizeof(str), "Sent queued message on faceboard %u\r\n", faceNum);
+	} else {
+		snprintf(str, sizeof(str), "Failed to transmit queued message on faceboard %u\r\n", faceNum);
+	}
 	app_uart_put_string(str);
 }
 

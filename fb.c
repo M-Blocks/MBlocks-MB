@@ -239,7 +239,7 @@ bool fb_sendToTxBuffer(uint8_t faceNum, uint8_t numBytes, const uint8_t *bytes) 
 	return success;
 }
 
-bool fb_sendMsgToTxBuffer(uint8_t faceNum, uint8_t numBytes, bool flash, const uint8_t *bytes) {
+bool fb_queueToTxBuffer(uint8_t faceNum, uint8_t numBytes, const uint8_t *bytes) {
 	uint8_t twiBuf[256];
 	bool success = true;
 
@@ -249,11 +249,30 @@ bool fb_sendMsgToTxBuffer(uint8_t faceNum, uint8_t numBytes, bool flash, const u
 
 	twi_master_init();
 
-	twiBuf[0] = FB_REGISTER_ADDR_TX_MSG_CONTROL;
-	twiBuf[1] = flash ? (0x01 | 0x02) : 0; 
-	memcpy(&twiBuf[2], bytes, numBytes);
+	twiBuf[0] = FB_REGISTER_ADDR_TX_MSG_BUF;
+	memcpy(&twiBuf[1], bytes, numBytes);
 
 	success &= twi_master_transfer((faceNum << 1), twiBuf, 1 + numBytes, true);
+
+	twi_master_deinit();
+
+	return success;
+}
+
+bool fb_sendMsgToTxBuffer(uint8_t faceNum, bool flash) {
+	uint8_t twiBuf[2];
+	bool success = true;
+
+	if (faceNum > 6) {
+		return false;
+	}
+
+	twi_master_init();
+
+	twiBuf[0] = FB_REGISTER_ADDR_TX_MSG_CONTROL;
+	twiBuf[1] = flash ? (0x01 | 0x02) : 0x00; 
+
+	success &= twi_master_transfer((faceNum << 1), twiBuf, 2, true);
 
 	twi_master_deinit();
 
