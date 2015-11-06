@@ -417,6 +417,49 @@ bool fb_flushRxBuffer(uint8_t faceNum) {
 	return success;
 }
 
+bool fb_getRxAmbientLightBuffer(uint8_t faceNum, uint8_t numBytes, uint8_t *bytes) {
+	uint8_t twiBuf[2];
+	bool success = true;
+
+	if ((faceNum < 1) || (faceNum > 6)) {
+		return -1;
+	}
+
+	twi_master_init();
+
+	twiBuf[0] = FB_REGISTER_ADDR_RX_AMBIENT_BUF;
+
+	success &= twi_master_transfer((faceNum << 1), twiBuf, 1, true);
+	success &= twi_master_transfer((faceNum << 1) | TWI_READ_BIT, bytes, numBytes, true);
+
+	twi_master_deinit();
+
+	return success;
+}
+
+bool fb_getRxAmbientBufferConsumedCount(uint8_t faceNum, uint8_t *bytesConsumed) {
+	uint8_t twiBuf[2];
+	bool success = true;
+
+	if ((faceNum < 1) || (faceNum > 6)) {
+		return -1;
+	}
+
+	twi_master_init();
+
+	twiBuf[0] = FB_REGISTER_ADDR_RX_AMBIENT_CONSUMED_COUNT;
+
+	success &= twi_master_transfer((faceNum << 1), twiBuf, 1, true);
+	success &= twi_master_transfer((faceNum << 1) | TWI_READ_BIT, twiBuf, 1, true);
+
+	twi_master_deinit();
+
+	if (success) {
+		*bytesConsumed = twiBuf[0];
+	}
+
+	return success;
+}
 
 bool fb_setRxEnable(uint8_t faceNum, bool rxEnable) {
 	uint8_t twiBuf[2];
