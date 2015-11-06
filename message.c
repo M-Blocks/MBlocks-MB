@@ -46,7 +46,7 @@ void message_deinit() {
 }
 
 void message_timeoutHandler(void *p_context) {
-	static char buffer[50];
+	static char buffer[100];
 	static int bufferLen;
 
 	// read as many bytes as we can; split at '\n'
@@ -80,94 +80,103 @@ void message_timeoutHandler(void *p_context) {
 	}
 }
 
-void push_message(char *txData) {
-	/* Push message on all faces. */
-	char str[64];
+void push_message(int faceNum, char *txData) {
+	/* Push message on face faceNum. If faceNum = 0, send on all faces. */
+	if (faceNum > 6)
+		return;
+
+	char str[100];
 	int numBytes = strlen(txData);
-	for (int faceNum = 1; faceNum <= 6; faceNum++) {
+
+	if (faceNum != 0) {
 		if (fb_sendToTxBuffer(faceNum, numBytes, (uint8_t *)txData)) {
 			snprintf(str, sizeof(str), "Wrote %u bytes to IR transmit buffer on faceboard %u\r\n", numBytes, faceNum);
 		} else {
 			snprintf(str, sizeof(str), "Failed to write to IR transmit buffer on faceboard %u\r\n", faceNum);
 		}
 		app_uart_put_string(str);
+	} else {
+		for (int faceNum = 1; faceNum <= 6; faceNum++) {
+			if (fb_sendToTxBuffer(faceNum, numBytes, (uint8_t *)txData)) {
+				snprintf(str, sizeof(str), "Wrote %u bytes to IR transmit buffer on faceboard %u\r\n", numBytes, faceNum);
+			} else {
+				snprintf(str, sizeof(str), "Failed to write to IR transmit buffer on faceboard %u\r\n", faceNum);
+			}
+			app_uart_put_string(str);
+		}
 	}
 }
 
-void prepare_message_send(const char *type, int msgCnt, char *destID, char *msg) {
-	char intStr[6];
-	snprintf(intStr, 6, "%d", msgCnt);
+void prepare_message_send(int faceNum, const char *type, int msgCnt, char *destID, char *msg) {
+	char intStr[8];
+	snprintf(intStr, 8, "%d", msgCnt);
 
 	char macAddress[] = "C6:EA:B8:01:3D:EE";
-	// Prepare message ID: 17 bytes for MAC + 1 byte + 6 bytes for int
-	char msgID[25];
+	// Prepare message ID: 17 bytes for MAC + 1 byte + 8 bytes for int
+	char msgID[30];
 	strcpy(msgID, macAddress);
 	strcat(msgID, "+");
 	strcat(msgID, intStr);
 
-	char txData[100];
+	char txData[150];
 	strcpy(txData, type); 	strcat(txData, ";");
 	strcat(txData, msgID); 	strcat(txData, ";");
 	strcat(txData, destID); strcat(txData, ";");
 	strcat(txData, msg);	strcat(txData, "\n");
 
-	process_message(txData);
-	//push_message(txData);
+	push_message(faceNum, txData);
 }
 
 void prepare_message_bdcast(const char *type, int msgCnt, char *msg) {
-	char intStr[6];
-	snprintf(intStr, 6, "%d", msgCnt);
+	char intStr[8];
+	snprintf(intStr, 8, "%d", msgCnt);
 
 	char macAddress[] = "C6:EA:B8:01:3D:EE";  // TODO
 	// Prepare message ID: 17 bytes for MAC + 1 byte + 6 bytes for int
-	char msgID[25];
+	char msgID[30];
 	strcpy(msgID, macAddress);
 	strcat(msgID, "+");
 	strcat(msgID, intStr);
 
-	char txData[100];
+	char txData[150];
 	strcpy(txData, type); 	strcat(txData, ";");
 	strcat(txData, msgID); 	strcat(txData, ";");
 	strcat(txData, msg);	strcat(txData, "\n");
 
-	app_uart_put_string(txData);
-	app_uart_put_string("\r\n");
-	//push_message(txData);
+	push_message(0, txData);
 }
 
 void process_message(char *msg) {
-	char bcastCpy[100];
-	strcpy(bcastCpy, msg);
+	char str[256];
+	snprintf(str, sizeof(str), "Received message: %s\r\n", msg);
+	app_uart_put_string(str);
 
-	char *token = strtok(msg, ";");
-	if (strcmp(token, "SENDCMD") == 0) {
-		token = strtok(NULL, ";");		// get message ID
-		// if(duplicate(token)) {
-		// 	return;
-		// }			 
+	// char *token = strtok(msg, ";");
+	// if (strcmp(token, "SENDCMD") == 0) {
+	// 	token = strtok(NULL, ";");		// get message ID
+	// 	if(duplicate(token)) {
+	// 		return;
+	// 	}			 
 		
-		token = strtok(NULL, ";");
-		char macAddress[] = "c6:ea:b8:01:3d:ee";  // TODO
-		if (strcmp(token, macAddress) == 0) {
-			token = strtok(NULL, ";");
-			//cmdLine_execCmd(token);
-		}
-	}
-	if (strcmp(token, "BDCASTCMD") == 0) {
-		token = strtok(NULL, ";");		// get message ID
-		// if(duplicate(token)) {
-		// 	return;
-		// }			 
+	// 	token = strtok(NULL, ";");
+	// 	char macAddress[] = "c6:ea:b8:01:3d:ee";  // TODO
+	// 	if (strcmp(token, macAddress) == 0) {
+	// 		token = strtok(NULL, ";");
+	// 		cmdLine_execCmd(token);
+	// 	}
+	// }
+	// if (strcmp(token, "BDCASTCMD") == 0) {
+	// 	char bcastCpy[100];
+	// 	strcpy(bcastCpy, msg);
+
+	// 	token = strtok(NULL, ";");		// get message ID
+	// 	if(duplicate(token)) {
+	// 		return;
+	// 	}			 
 		
-		token = strtok(NULL, ";");
-		// cmdLine_execCmd(token);
-	}
-}
-
-// TO DO: find neighbors
-void ack_message(char *msg) {
-
+	// 	token = strtok(NULL, ";");
+	// 	cmdLine_execCmd(token);
+	// }
 }
 
 bool duplicate(char *msgid) {

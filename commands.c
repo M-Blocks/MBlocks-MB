@@ -1499,14 +1499,16 @@ void cmdFBSleep(const char *args) {
 /* Comms commands */
 /******************/
 void cmdMsgSendCmd(const char *args) {
-	int nArgs;
-	char destID[18];
+	unsigned int faceNum;
+	char destID[20];
 	char cmd[128];
-	if ((nArgs = sscanf(args, "%17s %[^\n]", destID, cmd)) != 2) {
+	int nArgs;
+	
+	if ((nArgs = sscanf(args, "%u %s %[^\n]", &faceNum, destID, cmd)) != 3) {
 		return;
 	}
 
-	prepare_message_send("SENDCMD", msgCnt++, destID, cmd);
+	prepare_message_send(faceNum, "SENDCMD", msgCnt++, destID, cmd);
 }
 
 void cmdMsgBdcastCmd(const char *args) {
