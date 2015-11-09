@@ -517,13 +517,17 @@ bool motionEvent_startInertialActuation(uint16_t bldcSpeed_rpm,
 	inertialActuationEBrakeAccelStartDelay_ms = eBrakeAccelStartDelay_ms;
 	inertialActuationAccelReverse = accelReverse;
 
+	uint32_t err_code;
+	motionPrimitive_t motionPrimitive;
+
 	eventHandler = motionEventHandler;
 
 	/* Use the IMU on the central actuator */
 	mpu6050_setAddress(MPU6050_I2C_ADDR_CENTRAL);
 
-	bldc_setSpeed(inertialActuationSpeed_rpm, inertialActuationReverse, 0,
-			inertialActuationPrimitiveHandler);
+	motionPrimitive = MOTION_PRIMITIVE_START_SEQUENCE;
+	err_code = app_sched_event_put(&motionPrimitive, sizeof(motionPrimitive), inertialActuationPrimitiveHandler);
+	APP_ERROR_CHECK(err_code);
 
 	return true;
 }
@@ -537,6 +541,10 @@ void inertialActuationPrimitiveHandler(void *p_event_data, uint16_t event_size) 
 	motionPrimitive = *(motionPrimitive_t *)p_event_data;
 
 	switch(motionPrimitive) {
+	case MOTION_PRIMITIVE_START_SEQUENCE:
+		bldc_setSpeed(inertialActuationSpeed_rpm, inertialActuationReverse, 0,
+			inertialActuationPrimitiveHandler);
+		break;
 	case MOTION_PRIMITIVE_BLDC_STABLE:
 	case MOTION_PRIMITIVE_BLDC_TIMEOUT:
 		if (inertialActuationReverse) {
@@ -664,16 +672,9 @@ void lightTrackerPrimitiveHandler(void *p_event_data, uint16_t event_size) {
 
 	motionEvent_t motionEvent;
 	motionEvent = *(motionEvent_t *)p_event_data;
-	switch (motionEvent) {
-	case MOTION_EVENT_INERTIAL_ACTUATION_COMPLETE:
-	case MOTION_EVENT_INERTIAL_ACTUATION_FAILURE:
-		delay_ms(500);
-		break;
-	default:
-		break;
-	}
 
-	app_uart_put_debug("Calling tracker function.\r\n", DEBUG_MOTION_EVENTS);
+	mpu6050_setAddress(MPU6050_I2C_ADDR_CENTRAL);
+	app_uart_put_string("Calling tracker function.\r\n");
 	vectorFloat_t vf;
 	if (!imu_getGravityFloat(&vf)) {
 		snprintf(str, sizeof(str), "Failed to read gravity vector from %s IMU\r\n", mpu6050_getName());
@@ -748,6 +749,7 @@ void lightTrackerPrimitiveHandler(void *p_event_data, uint16_t event_size) {
 			lightTrackerPrimitiveHandler)) {
 			app_uart_put_string("Starting inertial actuation forward...\r\n");
 		}
+		return;
 	}
 	else if (alignment[config][BACKWARD] == best_face) {
 		if (motionEvent_startInertialActuation(lt_bldcSpeed_rpm_r, lt_brakeCurrent_mA_r,
@@ -755,6 +757,7 @@ void lightTrackerPrimitiveHandler(void *p_event_data, uint16_t event_size) {
 			lightTrackerPrimitiveHandler)) {
 			app_uart_put_string("Starting inertial actuation backward...\r\n");
 		}
+		return;
 	}
 	/* Change plane to orient flywheel towards the right direction */
 	else {
@@ -766,6 +769,7 @@ void lightTrackerPrimitiveHandler(void *p_event_data, uint16_t event_size) {
 				lightTrackerPrimitiveHandler)) {
 			app_uart_put_string("Starting e-brake based plane change...\r\n");
 		}
+		return;
 	}
 }
 
