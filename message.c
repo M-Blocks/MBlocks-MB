@@ -63,7 +63,7 @@ void message_timeoutHandler(void *p_context) {
 
 			fb_receiveFromRxBuffer(faceNum, count, rxData);
 			for (int i = 0; i < count; i++) {
-				if ((char) rxData[i] == '\n') {
+				if ((char) rxData[i] == '}') {
 					// message has been received, send it for processing
 					strncpy(msg, buffer, bufferLen);
 					msg[bufferLen] = '\0';
