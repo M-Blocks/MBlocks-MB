@@ -1762,9 +1762,8 @@ void cmdBLEMACAddr(const char *args) {
 	err_code = sd_ble_gap_address_get(&mac_addr);
 	APP_ERROR_CHECK(err_code);
 
-	for (int i = 0; i < 6; i++) {
-		
-	}
+	snprintf(str, sizeof(str), "%u %u %u\r\n", mac_addr.addr[0], mac_addr.addr[1], mac_addr.addr[2]);
+	app_uart_put_string(str);
 }
 
 /*******************/
