@@ -107,76 +107,33 @@ void push_message(int faceNum, char *txData) {
 	}
 }
 
-void prepare_message_send(int faceNum, const char *type, int msgCnt, char *destID, char *msg) {
-	char intStr[8];
-	snprintf(intStr, 8, "%d", msgCnt);
-
-	char macAddress[] = "C6:EA:B8:01:3D:EE";
-	// Prepare message ID: 17 bytes for MAC + 1 byte + 8 bytes for int
-	char msgID[30];
-	strcpy(msgID, macAddress);
-	strcat(msgID, "+");
-	strcat(msgID, intStr);
-
-	char txData[150];
-	strcpy(txData, type); 	strcat(txData, ";");
-	strcat(txData, msgID); 	strcat(txData, ";");
-	strcat(txData, destID); strcat(txData, ";");
-	strcat(txData, msg);	strcat(txData, "\n");
-
-	push_message(faceNum, txData);
-}
-
-void prepare_message_bdcast(const char *type, int msgCnt, char *msg) {
-	char intStr[8];
-	snprintf(intStr, 8, "%d", msgCnt);
-
-	char macAddress[] = "C6:EA:B8:01:3D:EE";  // TODO
-	// Prepare message ID: 17 bytes for MAC + 1 byte + 6 bytes for int
-	char msgID[30];
-	strcpy(msgID, macAddress);
-	strcat(msgID, "+");
-	strcat(msgID, intStr);
-
-	char txData[150];
-	strcpy(txData, type); 	strcat(txData, ";");
-	strcat(txData, msgID); 	strcat(txData, ";");
-	strcat(txData, msg);	strcat(txData, "\n");
-
-	push_message(0, txData);
-}
-
 void process_message(char *msg) {
-	char str[256];
-	snprintf(str, sizeof(str), "Received message: %s\r\n", msg);
-	app_uart_put_string(str);
-
-	// char *token = strtok(msg, ";");
-	// if (strcmp(token, "SENDCMD") == 0) {
-	// 	token = strtok(NULL, ";");		// get message ID
-	// 	if(duplicate(token)) {
-	// 		return;
-	// 	}			 
+	char *token = strtok(msg, ";");
+	if (strcmp(token, "SENDCMD") == 0) {
+		token = strtok(NULL, ";");		// get message ID
+		if(duplicate(token)) {
+			return;
+		}			 
 		
-	// 	token = strtok(NULL, ";");
-	// 	char macAddress[] = "c6:ea:b8:01:3d:ee";  // TODO
-	// 	if (strcmp(token, macAddress) == 0) {
-	// 		token = strtok(NULL, ";");
-	// 		cmdLine_execCmd(token);
-	// 	}
-	// }
-	// if (strcmp(token, "BDCASTCMD") == 0) {
-	// 	char bcastCpy[100];
-	// 	strcpy(bcastCpy, msg);
+		token = strtok(NULL, ";");
+		char macAddress[] = "c6:ea:b8:01:3d:ee";  // TODO
+		if (strcmp(token, macAddress) == 0) {
+			token = strtok(NULL, ";");
+			cmdLine_execCmd(token);
+		}
+	}
+	if (strcmp(token, "BDCASTCMD") == 0) {
+		char bcastCpy[100];
+		strcpy(bcastCpy, msg);
 
-	// 	token = strtok(NULL, ";");		// get message ID
-	// 	if(duplicate(token)) {
-	// 		return;
-	// 	}			 
+		token = strtok(NULL, ";");		// get message ID
+		if(duplicate(token)) {
+			return;
+		}			 
 		
-	// 	token = strtok(NULL, ";");
-	// 	cmdLine_execCmd(token);
-	// }
+		token = strtok(NULL, ";");
+		cmdLine_execCmd(token);
+	}
 }
 
 bool duplicate(char *msgid) {

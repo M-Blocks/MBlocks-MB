@@ -163,9 +163,6 @@ static const char cmdFBRxCountStr[] = "fbrxcount";
 static const char cmdFBRxFlushStr[] = "fbrxflush";
 static const char cmdFBRxEnableStr[] = "fbrxen";
 static const char cmdFBSleepStr[] = "fbsleep";
-/* Message commands */
-static const char cmdMsgSendCmdStr[] = "msgsndcmd";
-static const char cmdMsgBdcastCmdStr[] = "msgbdcstcmd";
 /* IMU commands */
 static const char cmdIMUSelectStr[] = "imuselect";
 static const char cmdIMUInitStr[] = "imuinit";
@@ -242,9 +239,6 @@ static cmdFcnPair_t cmdTable[] = {
 		{cmdFBRxFlushStr, cmdFBRxFlush},
 		{cmdFBRxEnableStr, cmdFBRxEnable},
 		{cmdFBSleepStr, cmdFBSleep},
-		/* Message commands */
-		{cmdMsgSendCmdStr, cmdMsgSendCmd},
-		{cmdMsgBdcastCmdStr, cmdMsgBdcastCmd},
 		/* IMU commands */
 		{cmdIMUSelectStr, cmdIMUSelect},
 		{cmdIMUInitStr, cmdIMUInit},
@@ -1493,32 +1487,6 @@ void cmdFBSleep(const char *args) {
 		snprintf(str, sizeof(str), "Faceboard %u put to sleep\r\n", faceNum);
 		app_uart_put_string(str);
 	}
-}
-
-/******************/
-/* Comms commands */
-/******************/
-void cmdMsgSendCmd(const char *args) {
-	unsigned int faceNum;
-	char destID[20];
-	char cmd[128];
-	int nArgs;
-	
-	if ((nArgs = sscanf(args, "%u %s %[^\n]", &faceNum, destID, cmd)) != 3) {
-		return;
-	}
-
-	prepare_message_send(faceNum, "SENDCMD", msgCnt++, destID, cmd);
-}
-
-void cmdMsgBdcastCmd(const char *args) {
-	int nArgs;
-	char cmd[128];
-	if ((nArgs = sscanf(args, "%[^\n]", cmd)) != 1) {
-		return;
-	}
-
-	prepare_message_bdcast("BDCASTCMD", msgCnt++, cmd);
 }
 
 /****************/

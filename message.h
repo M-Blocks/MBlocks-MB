@@ -5,8 +5,7 @@
 void message_deinit(void);
 
 void push_message(int faceNum, char *txData);
-void prepare_message_send(int faceNum, const char *type, int msgCnt, char *destID, char *msg);
-void prepare_message_bdcast(const char *type, int msgCnt, char *msg);
 void process_message(char *msg);
+bool duplicate(char *msgid);
 
 #endif /* MESSAGE_H_ */
