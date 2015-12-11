@@ -234,7 +234,7 @@ bool fb_sendToTxBuffer(uint8_t faceNum, uint8_t numBytes, const uint8_t *bytes) 
 	twiBuf[1] = twiBuf[2] = twiBuf[3] = 0xB7;
 	memcpy(&twiBuf[4], bytes, numBytes);
 
-	success &= twi_master_transfer((faceNum << 1), twiBuf, 1 + numBytes, true);
+	success &= twi_master_transfer((faceNum << 1), twiBuf, 4 + numBytes, true);
 
 	twi_master_deinit();
 
@@ -256,7 +256,7 @@ bool fb_queueToTxBuffer(uint8_t faceNum, uint8_t numBytes, const uint8_t *bytes)
 	twiBuf[1] = twiBuf[2] = twiBuf[3] = 0xB7;
 	memcpy(&twiBuf[1], bytes, numBytes);
 
-	success &= twi_master_transfer((faceNum << 1), twiBuf, 1 + numBytes, true);
+	success &= twi_master_transfer((faceNum << 1), twiBuf, 4 + numBytes, true);
 
 	twi_master_deinit();
 

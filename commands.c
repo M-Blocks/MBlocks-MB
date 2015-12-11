@@ -42,6 +42,7 @@
 #include "led.h"
 #include "commands.h"
 #include "message.h"
+#include "lightTracker.h"
 
 extern ble_sps_t m_sps;
 
@@ -111,9 +112,8 @@ static void cmdBLEMACAddr(const char *args);
 /* Motion commands */
 static void cmdChangePlane(const char *args);
 static void cmdInertialActuation(const char *args);
-/* Complex commands */
-static void cmdLightTracker(const char *args);
 /* */
+static void cmdLightTracker(const char *args);
 static void cmdTestCurr(const char *args);
 
 // These string are what the command line processes looking for the user to
@@ -182,13 +182,9 @@ static const char cmdEmptyStr[] = "";
 /* Motion commands */
 static const char cmdChangePlaneStr[] = "cp";
 static const char cmdInertialActuationStr[] = "ia";
-/* Complext commands */
-static const char cmdLightTrackerStr[] = "ltrack";
 /* */
+static const char cmdLightTrackerStr[] = "ltrack";
 static const char cmdTestCurrStr[] = "tstfun";
-
-// Other global variables
-static int msgCnt = 0;
 
 // This table correlates the command strings above to the actual functions that
 // are called when the user types the command into the terminal and presses
@@ -257,14 +253,14 @@ static cmdFcnPair_t cmdTable[] = {
 		/* Motion commands */
 		{cmdChangePlaneStr, cmdChangePlane },
 		{cmdInertialActuationStr, cmdInertialActuation },
-		/* Complex commands */
-		{cmdLightTrackerStr, cmdLightTracker},
 		/* */
+		{cmdLightTrackerStr, cmdLightTracker},
 		{cmdTestCurrStr, cmdTestCurr},
 // Always end the command table with an emptry string and null pointer
 		{ cmdEmptyStr, NULL } };
 
 /* Callbacks for printing status info after command completion */
+static void cmdLightTrackerHandler(void *p_event_data, uint16_t event_size);
 static void cmdMotionPrimitiveHandler(void *p_event_data, uint16_t event_size);
 static void cmdMotionEventHandler(void *p_event_data, uint16_t event_size);
 
@@ -1172,7 +1168,7 @@ void cmdFBTx(const char *args) {
 	char txData[256];
 	char str[100];
 
-	if (sscanf(args, "%u %255s", &faceNum, txData) != 2) {
+	if (sscanf(args, "%u %[^\n]", &faceNum, txData) != 2) {
 		return;
 	}
 
@@ -1198,7 +1194,7 @@ void cmdFBMsgTx(const char *args) {
 	char txData[256];
 	char str[100];
 
-	if (sscanf(args, "%u %u %255s", &faceNum, &flashPostTx, txData) != 2) {
+	if (sscanf(args, "%u %u %[^\n]", &faceNum, &flashPostTx, txData) != 2) {
 		return;
 	}
 
@@ -1728,6 +1724,13 @@ void cmdBLEDiscon(const char *args) {
 		return;
 	}
 
+	// fb_setIRTxLEDs(0, false, false, false, false);
+	fb_setRxEnable(0, 0);
+	for (int faceNum = 1; faceNum <= 6; faceNum++) {
+		fb_setBottomLEDs(faceNum, false, false, false);
+		fb_setTopLEDs(faceNum, false, false, false);
+	}
+
 	app_uart_put_string("BLE disconnecting\r\n");
 	err_code = sd_ble_gap_disconnect(m_sps.conn_handle,
 			BLE_HCI_CONN_INTERVAL_UNACCEPTABLE);
@@ -1762,7 +1765,9 @@ void cmdBLEMACAddr(const char *args) {
 	err_code = sd_ble_gap_address_get(&mac_addr);
 	APP_ERROR_CHECK(err_code);
 
-	snprintf(str, sizeof(str), "%u %u %u\r\n", mac_addr.addr[0], mac_addr.addr[1], mac_addr.addr[2]);
+	snprintf(str, sizeof(str), "%02x:%02x:%02x:%02x:%02x:%02x\r\n", 
+		mac_addr.addr[5], mac_addr.addr[4], mac_addr.addr[3],
+		mac_addr.addr[2], mac_addr.addr[1], mac_addr.addr[0]);
 	app_uart_put_string(str);
 }
 
@@ -1886,45 +1891,35 @@ void cmdInertialActuation(const char *args) {
 /*********************/
 /*  Complex Commands */
 /*********************/
-
+/* */
 void cmdLightTracker(const char *args) {
-	unsigned int type;
-	unsigned int bldcSpeed_rpm_f, brakeCurrent_mA_f, brakeTime_ms_f;
-	unsigned int bldcSpeed_rpm_r, brakeCurrent_mA_r, brakeTime_ms_r;
-	unsigned int threshold;
+	unsigned int threshold, bldcSpeed_rpm, brakeCurrent_mA, brakeTime_ms;
+	sscanf(args, "%u %u %u %u", &bldcSpeed_rpm, &brakeCurrent_mA, &brakeTime_ms, &threshold);
 
-	if (sscanf(args, "%u %u %u %u %u %u %u %u", &type,
-			&bldcSpeed_rpm_f, &brakeCurrent_mA_f, &brakeTime_ms_f,
-			&bldcSpeed_rpm_r, &brakeCurrent_mA_r, &brakeTime_ms_r,
-			&threshold) < 8) {
-		return;
-	}
-
-	bool lt_type;
-	if (type == 1) {
-		lt_type = true;
-	} else {
-		lt_type = false;
-	}
-
-	if (motionEvent_startLightTracker(lt_type, bldcSpeed_rpm_f, brakeCurrent_mA_f, brakeTime_ms_f,
-		bldcSpeed_rpm_r, brakeCurrent_mA_r, brakeTime_ms_r, threshold)) {
-		app_uart_put_string("Starting light tracker.\r\n");
+	if (lightTracker_startLightTracker(bldcSpeed_rpm, brakeCurrent_mA, brakeTime_ms,
+			threshold, cmdLightTrackerHandler)) {
+		app_uart_put_string("Starting light tracker...\r\n");
 	}
 }
 
-/* */
-void cmdTestCurr(const char *args) {
-	char str[100];
-	uint32_t ticks = curr_time();
-
-	snprintf(str, sizeof(str), "Current time: %u\r\n", ticks);
-	app_uart_put_string(str);
+void cmdTestCurr(const char *str) {
+	return;
 }
 
 /*************/
 /* Callbacks */
 /*************/
+void cmdLightTrackerHandler(void *p_event_data, uint16_t event_size) {
+	trackerEvent_t trackerEvent;
+	trackerEvent = *(trackerEvent_t *) p_event_data;
+
+	switch (trackerEvent) {
+	case LIGHT_TRACKER_EVENT_COMPLETE:
+		app_uart_put_string("Successfully tracked light source.\r\n");
+		break;
+	}
+}
+
 
 void cmdMotionPrimitiveHandler(void *p_event_data, uint16_t event_size) {
 	motionPrimitive_t motionPrimitive;

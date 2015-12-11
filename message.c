@@ -3,11 +3,16 @@
 
 #include "app_timer.h"
 
+#include "ble_gap.h"
+
+#include "cmdline.h"
 #include "fb.h"
 #include "util.h"
 #include "global.h"
 
 #include "message.h"
+
+#define MAC_ADDRESS_SIZE 17
 
 app_timer_id_t messageTimerID = TIMER_NULL;
 
@@ -46,11 +51,9 @@ void message_deinit() {
 }
 
 void message_timeoutHandler(void *p_context) {
-	static char buffer[100];
-	static int bufferLen;
+	static char buffer[1][100];
+	static int bufferlen[1];
 
-	// read as many bytes as we can; split at '\n'
-	// keep buffer; once '\n' is seen, parse message
 	uint8_t count;
 	uint8_t rxData[100];
 	char msg[100];
@@ -63,17 +66,17 @@ void message_timeoutHandler(void *p_context) {
 
 			fb_receiveFromRxBuffer(faceNum, count, rxData);
 			for (int i = 0; i < count; i++) {
-				if ((char) rxData[i] == '}') {
-					// message has been received, send it for processing
-					strncpy(msg, buffer, bufferLen);
-					msg[bufferLen] = '\0';
+				if (rxData[i] == 0xB7) {		// skip header characters
+					continue;
+				} else if ((char) rxData[i] == '}') {
+					strncpy(msg, buffer[faceNum], bufferlen[faceNum]);
+					msg[bufferlen[faceNum]] = '\0';
 					process_message(msg);
-
-					// reset variables
-					bufferLen = 0;
+					
+					bufferlen[faceNum] = 0;
 				} else {
-					buffer[bufferLen] = (char) rxData[i];
-					bufferLen += 1;
+					buffer[faceNum][bufferlen[faceNum]] = (char) rxData[i];
+					bufferlen[faceNum] += 1;
 				}
 			}
 		}
@@ -108,31 +111,49 @@ void push_message(int faceNum, char *txData) {
 }
 
 void process_message(char *msg) {
+	uint32_t err_code;
+	ble_gap_addr_t mac_addr;
+	err_code = sd_ble_gap_address_get(&mac_addr);
+	APP_ERROR_CHECK(err_code);
+
+	char macAddress[30];
+	snprintf(macAddress, sizeof(macAddress), "%02x:%02x:%02x:%02x:%02x:%02x", 
+		mac_addr.addr[5], mac_addr.addr[4], mac_addr.addr[3],
+		mac_addr.addr[2], mac_addr.addr[1], mac_addr.addr[0]);
+
+	char str[200];
+	snprintf(str, sizeof(str), "Received at %s: %s\r\n", macAddress, msg);
+	app_uart_put_string(str);
+
+	char bcastCpy[100];
+	char duplicateStr[30];
+	strcpy(bcastCpy, msg);
+
 	char *token = strtok(msg, ";");
-	if (strcmp(token, "SENDCMD") == 0) {
+	if (strcmp(token, "sendcmd") == 0) {
 		token = strtok(NULL, ";");		// get message ID
-		if(duplicate(token)) {
+		strcpy(duplicateStr, token);
+		if(duplicate(duplicateStr)) {
 			return;
 		}			 
 		
 		token = strtok(NULL, ";");
-		char macAddress[] = "c6:ea:b8:01:3d:ee";  // TODO
-		if (strcmp(token, macAddress) == 0) {
+		if (strncmp(token, macAddress, MAC_ADDRESS_SIZE) == 0) {
 			token = strtok(NULL, ";");
+			
 			cmdLine_execCmd(token);
 		}
-	}
-	if (strcmp(token, "BDCASTCMD") == 0) {
-		char bcastCpy[100];
-		strcpy(bcastCpy, msg);
-
+	} else if (strcmp(token, "bdcastcmd") == 0) {
 		token = strtok(NULL, ";");		// get message ID
-		if(duplicate(token)) {
+		strcpy(duplicateStr, token);
+		if(duplicate(duplicateStr)) {
 			return;
 		}			 
 		
 		token = strtok(NULL, ";");
+
 		cmdLine_execCmd(token);
+		push_message(0, bcastCpy);
 	}
 }
 

@@ -1,10 +1,10 @@
 ## Hardware definitions
 DEVICE := NRF51
 DEVICESERIES := nrf51
-DEVICE_VARIANT := xxaa
+DEVICE_VARIANT := xxac
 
 CPU := cortex-m0
-TARGET_CHIP := NRF51422_QFAA_E0
+TARGET_CHIP := NRF51422_QFAC_R
 BOARD := BOARD_MBLOCKS_MB_2P1
 
 USE_S310 = 1
@@ -17,20 +17,14 @@ SOFTDEVICE_HEXFILE = ../s310_nrf51422_1.0.0/s310_nrf51422_1.0.0_softdevice.hex
 BOOTLOADER_HEXFILE = ../bootloader/bootloader_gcc_s310_bootloader_xxaa.hex
 
 ## C Source Files
-C_SOURCE_FILES += main.c gitversion.c global.c uart.c db.c fb.c adc.c power.c util.c pwm.c freqcntr.c spi.c bldc.c a4960.c spi_master.c sma.c led.c mechbrake.c cmdline.c commands.c motionEvent.c message.c
+C_SOURCE_FILES += main.c gitversion.c global.c uart.c db.c fb.c adc.c power.c util.c pwm.c freqcntr.c spi.c bldc.c a4960.c spi_master.c sma.c led.c mechbrake.c cmdline.c commands.c motionEvent.c message.c lightTracker.c
 C_SOURCE_FILES += twi_hw_master.c
 C_SOURCE_FILES += mpu6050.c imu.c
 C_SOURCE_FILES += bleApp.c ble_sps.c ble_vns.c fifo.c 
 C_SOURCE_FILES += nrf_delay.c
 
-C_SOURCE_FILES += app_scheduler.c app_button.c app_gpiote.c app_timer.c app_uart_fifo.c app_fifo.c 
-C_SOURCE_FILES += ble_advdata.c ble_conn_params.c
-C_SOURCE_FILES += softdevice_handler.c
-
-C_SOURCE_FILES += system_$(DEVICESERIES).c
-
 ## The Following files are only needed when the ble_debug_assert_handler() function is called from the app_error_handler() in main ##
-C_SOURCE_FILES += ble_debug_assert_handler.c ble_error_log.c ble_flash.c 
+C_SOURCE_FILES += ble_debug_assert_handler.c
 
 ## C Flags
 
@@ -42,9 +36,6 @@ CFLAGS += -DBLE_STACK_SUPPORT_REQD
 CFLAGS += -mcpu=$(CPU) -mthumb -mabi=aapcs -D$(DEVICE) -D$(BOARD) -D$(TARGET_CHIP) --std=gnu99
 CFLAGS += -Wall
 CFLAGS += -mfloat-abi=soft
-
-## Assembly source files
-ASSEMBLER_SOURCE_FILES += gcc_startup_$(DEVICESERIES).s
 
 ## Assembly Flags
 ASMFLAGS += -DRELEASE -Os
@@ -73,22 +64,75 @@ OUTPUT_FILENAME_SUFFIX := Release
 ## Output Filename Complete
 OUTPUT_FILENAME := $(OUTPUT_FILENAME_BASE)_$(OUTPUT_FILENAME_SUFFIX)_$(SOFTDEVICE_NAME)_$(DEVICE_VARIANT)
 
-## Paths
-SDK_PATH = ../nrf51_sdk_v6_1_0_b2ec2e6/nrf51422/
+SDK_PATH = ../nRF51_SDK_10.0.0_dc26b5e/
+TEMPLATE_PATH = $(SDK_PATH)components/toolchain/gcc/
 
-SDK_INCLUDE_PATH = $(SDK_PATH)/Include/
-SDK_SOURCE_PATH = $(SDK_PATH)/Source/
-TEMPLATE_PATH += $(SDK_SOURCE_PATH)/templates/gcc/
+#source common to all targets
+C_SOURCE_FILES += \
+$(abspath $(SDK_PATH)components/libraries/ant/ant_stack_config/ant_stack_config.c) \
+$(abspath $(SDK_PATH)components/libraries/button/app_button.c) \
+$(abspath $(SDK_PATH)components/libraries/util/app_error.c) \
+$(abspath $(SDK_PATH)components/libraries/timer/app_timer.c) \
+$(abspath $(SDK_PATH)components/libraries/trace/app_trace.c) \
+$(abspath $(SDK_PATH)components/libraries/util/nrf_assert.c) \
+$(abspath $(SDK_PATH)components/libraries/uart/retarget.c) \
+$(abspath $(SDK_PATH)components/libraries/sensorsim/sensorsim.c) \
+$(abspath $(SDK_PATH)components/libraries/spi/spi_master.c) \
+$(abspath $(SDK_PATH)components/libraries/spi/spi_slave.c) \
+$(abspath $(SDK_PATH)components/libraries/fifo/app_fifo.c) \
+$(abspath $(SDK_PATH)components/drivers_nrf/delay/nrf_delay.c) \
+$(abspath $(SDK_PATH)components/ant/ant_stack_config/ant_stack_config.c) \
+$(abspath $(SDK_PATH)components/ble/common/ble_advdata.c) \
+$(abspath $(SDK_PATH)components/ble/common/ble_conn_params.c) \
+$(abspath $(SDK_PATH)components/toolchain/system_nrf51.c) \
+$(abspath $(SDK_PATH)components/softdevice/common/softdevice_handler/softdevice_handler.c) \
+$(abspath $(SDK_PATH)components/ble/ble_error_log/ble_error_log.c) \
+$(abspath $(SDK_PATH)components/ble/ble_flash/ble_flash.c) \
 
-INCLUDEPATHS += -I"../"
-INCLUDEPATHS += -I"$(SDK_PATH)Include"
-INCLUDEPATHS += -I"$(SDK_PATH)Include/gcc"
-INCLUDEPATHS += -I"$(SDK_PATH)Include/ext_sensors"
-INCLUDEPATHS += -I"$(SDK_PATH)Include/app_common"
-INCLUDEPATHS += -I"$(SDK_PATH)Include/sd_common"
-INCLUDEPATHS += -I"$(SDK_PATH)Include/ble"
-INCLUDEPATHS += -I"$(SDK_PATH)Include/ble/ble_services"
-INCLUDEPATHS += -I"$(SDK_PATH)Include/s310"
+
+C_PATHS += ../ $(SDK_PATH) $(TEMPLATE_PATH) $(wildcard $(SDK_PATH)components/*/) $(wildcard $(SDK_PATH)components/ant/*/) \
+$(wildcard $(SDK_PATH)components/softdevice/common/*/) $(wildcard $(SDK_PATH)components/drivers_nrf/*/) $(wildcard $(SDK_PATH)components/ble/*/) \
+$(wildcard $(SDK_PATH)components/libraries/*/)
+
+#assembly files common to all targets
+ASM_SOURCE_FILES  = $(abspath $(SDK_PATH)components/toolchain/gcc/gcc_startup_nrf51.s)
+
+#includes common to all targets
+INCLUDEPATHS += -I$(abspath ../)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/softdevice/s310/headers)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/config)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/delay)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/util)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/scheduler)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ble/device_manager)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/uart)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ble/common)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ble/ble_error_log)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/sensorsim)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/pstorage)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ble/ble_services/ble_dis)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/device)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/uart)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/button)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/timer)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/gpiote)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/spi)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/fifo)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ant/ant_stack_config)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ant/ant_stack_config/config)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/gpiote)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/hal)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/twi_master)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/toolchain/gcc)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/toolchain)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/common)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/trace)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ble/ble_services/ble_bas)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ble/ble_debug_assert_handler)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/softdevice/common/softdevice_handler)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ble/ble_services/ble_hrs)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/ble_flash)
 
 ## Output directories
 OBJECT_DIRECTORY := _build
@@ -98,25 +142,24 @@ OUTPUT_BINARY_DIRECTORY := _build
 # Sorting removes duplicates
 BUILD_DIRECTORIES := $(sort $(OBJECT_DIRECTORY) $(OUTPUT_BINARY_DIRECTORY) $(LISTING_DIRECTORY) )
 
-
-
 ####################################################################
 # Rules                                                            #
 ####################################################################
 
-C_SOURCE_FILENAMES = $(notdir $(C_SOURCE_FILES) )
-ASSEMBLER_SOURCE_FILENAMES = $(notdir $(ASSEMBLER_SOURCE_FILES) )
+C_SOURCE_FILE_NAMES = $(notdir $(C_SOURCE_FILES))
+C_PATHS += $(call remduplicates, $(dir $(C_SOURCE_FILES) ) )
+C_OBJECTS = $(addprefix $(OBJECT_DIRECTORY)/, $(C_SOURCE_FILE_NAMES:.c=.o) )
 
-# Make a list of source paths
-C_SOURCE_PATHS += ../ $(SDK_SOURCE_PATH) $(TEMPLATE_PATH) $(wildcard $(SDK_SOURCE_PATH)*/)  $(wildcard $(SDK_SOURCE_PATH)ext_sensors/*/) $(wildcard $(SDK_SOURCE_PATH)ble/*/)
-ASSEMBLER_SOURCE_PATHS = ../ $(SDK_SOURCE_PATH) $(TEMPLATE_PATH) $(wildcard $(SDK_SOURCE_PATH)*/)
+ASM_PATHS += $(SDK_PATH) $(TEMPLATE_PATH) $(SDK_PATH)components/*/
 
-C_OBJECTS = $(addprefix $(OBJECT_DIRECTORY)/, $(C_SOURCE_FILENAMES:.c=.o) )
-ASSEMBLER_OBJECTS = $(addprefix $(OBJECT_DIRECTORY)/, $(ASSEMBLER_SOURCE_FILENAMES:.s=.o) )
+ASM_SOURCE_FILE_NAMES = $(notdir $(ASM_SOURCE_FILES))
+ASM_PATHS += $(call remduplicates, $(dir $(ASM_SOURCE_FILES) ))
+ASSEMBLER_OBJECTS = $(addprefix $(OBJECT_DIRECTORY)/, $(ASM_SOURCE_FILE_NAMES:.s=.o) )
 
-# Set source lookup paths
-vpath %.c $(C_SOURCE_PATHS)
-vpath %.s $(ASSEMBLER_SOURCE_PATHS)
+vpath %.c $(C_PATHS)
+vpath %.s $(ASM_PATHS)
+
+OBJECTS = $(C_OBJECTS) $(ASSEMBLER_OBJECTS)
 
 # Include automatically previously generated dependencies
 -include $(addprefix $(OBJECT_DIRECTORY)/, $(COBJS:.o=.d))
@@ -143,7 +186,8 @@ clean:
 echostuff:
 	@echo C_OBJECTS: [$(C_OBJECTS)]
 	@echo C_SOURCE_FILES: [$(C_SOURCE_FILES)]
-	@echo C_SOURCE_PATHS: [$(C_SOURCE_PATHS)]
+	@echo C_PATHS: [$(C_PATHS)]
+	@echo $(CC)
 
 .PHONY: updateGitVersion
 updateGitVersion:
