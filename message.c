@@ -51,8 +51,8 @@ void message_deinit() {
 }
 
 void message_timeoutHandler(void *p_context) {
-	static char buffer[1][100];
-	static int bufferlen[1];
+	static char buffer[2][100];
+	static int bufferlen[2];
 
 	uint8_t count;
 	uint8_t rxData[100];

@@ -23,7 +23,7 @@
 #include "ble_stack_handler_types.h"
 
 #include "softdevice_handler.h"
-
+#include "softdevice_handler_appsh.h"
 
 #include "global.h"
 #include "fifo.h"
@@ -73,7 +73,7 @@ static void bleApp_connParamsErrorHandler(uint32_t nrf_error);
 void bleApp_stackInit() {
 	uint32_t err_code;
 
-	SOFTDEVICE_HANDLER_INIT(NRF_CLOCK_LFCLKSRC_RC_250_PPM_4000MS_CALIBRATION, true);
+	SOFTDEVICE_HANDLER_APPSH_INIT(NRF_CLOCK_LFCLKSRC_RC_250_PPM_4000MS_CALIBRATION, true);
 
 	err_code = softdevice_ble_evt_handler_set(bleApp_evtDispatch);
 	APP_ERROR_CHECK(err_code);
@@ -104,70 +104,136 @@ void bleApp_evtDispatch(ble_evt_t * p_ble_evt) {
  * @param[in]   p_ble_evt   Bluetooth stack event.
  */
 void bleApp_onEvt(ble_evt_t * p_ble_evt) {
-    uint32_t                         err_code = NRF_SUCCESS;
-    static ble_gap_evt_auth_status_t m_auth_status;
+    uint32_t                         err_code;
+    static uint16_t                  s_conn_handle = BLE_CONN_HANDLE_INVALID;
+    static ble_gap_sec_keyset_t      s_sec_keyset;
     ble_gap_enc_info_t *             p_enc_info;
 
     switch (p_ble_evt->header.evt_id)
     {
         case BLE_GAP_EVT_CONNECTED:
-            m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
-        	led_setState(LED_BLUE, LED_STATE_ON);
+            s_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
+            led_setState(LED_BLUE, LED_STATE_ON);
             break;
-
+            
         case BLE_GAP_EVT_DISCONNECTED:
-        	m_conn_handle = BLE_CONN_HANDLE_INVALID;
-        	led_setState(LED_BLUE, LED_STATE_OFF);
-        	if (advertisingEnabled) {
-        		bleApp_advertisingStart();
-        	}
+            if (advertisingEnabled) {
+                bleApp_advertisingStart();
+            }
+            led_setState(LED_BLUE, LED_STATE_OFF);
             break;
 
         case BLE_GAP_EVT_SEC_PARAMS_REQUEST:
-            err_code = sd_ble_gap_sec_params_reply(m_conn_handle,
-                                                   BLE_GAP_SEC_STATUS_SUCCESS,
-                                                   &m_sec_params);
+            s_sec_keyset.keys_central.p_enc_key  = NULL;
+            s_sec_keyset.keys_central.p_id_key   = NULL;
+            s_sec_keyset.keys_central.p_sign_key = NULL;
+            err_code = sd_ble_gap_sec_params_reply(s_conn_handle, 
+                                                   BLE_GAP_SEC_STATUS_SUCCESS,        
+                                                   &m_sec_params,
+                                                   &s_sec_keyset);
+            APP_ERROR_CHECK(err_code);
+            break;
+            
+        case BLE_GAP_EVT_AUTH_STATUS:
             break;
 
         case BLE_GATTS_EVT_SYS_ATTR_MISSING:
-            err_code = sd_ble_gatts_sys_attr_set(m_conn_handle, NULL, 0);
-            break;
-
-        case BLE_GAP_EVT_AUTH_STATUS:
-            m_auth_status = p_ble_evt->evt.gap_evt.params.auth_status;
+            err_code = sd_ble_gatts_sys_attr_set(s_conn_handle, NULL, 0, 0);
+            APP_ERROR_CHECK(err_code);
             break;
 
         case BLE_GAP_EVT_SEC_INFO_REQUEST:
-            p_enc_info = &m_auth_status.periph_keys.enc_info;
-            if (p_enc_info->div == p_ble_evt->evt.gap_evt.params.sec_info_request.div)
+            if (s_sec_keyset.keys_periph.p_enc_key != NULL)
             {
-                err_code = sd_ble_gap_sec_info_reply(m_conn_handle, p_enc_info, NULL);
+                p_enc_info = &s_sec_keyset.keys_periph.p_enc_key->enc_info;
+
+                err_code = sd_ble_gap_sec_info_reply(s_conn_handle, p_enc_info, NULL, NULL);
+                APP_ERROR_CHECK(err_code);
             }
             else
             {
-                // No keys found for this device
-                err_code = sd_ble_gap_sec_info_reply(m_conn_handle, NULL, NULL);
+                // No keys found for this device.
+                err_code = sd_ble_gap_sec_info_reply(s_conn_handle, NULL, NULL, NULL);
+                APP_ERROR_CHECK(err_code);
             }
             break;
 
         case BLE_GAP_EVT_TIMEOUT:
-            if (p_ble_evt->evt.gap_evt.params.timeout.src == BLE_GAP_TIMEOUT_SRC_ADVERTISEMENT) {
-            	led_setState(LED_BLUE, LED_STATE_OFF);
-
-                // Go to system-off mode (this function will not return; wakeup will cause a reset)
-                //GPIO_WAKEUP_BUTTON_CONFIG(WAKEUP_BUTTON_PIN);
-                //err_code = sd_power_system_off();
+            if (p_ble_evt->evt.gap_evt.params.timeout.src == BLE_GAP_TIMEOUT_SRC_ADVERTISING)
+            { 
+                led_setState(LED_BLUE, LED_STATE_OFF);
             }
             break;
-
-        case BLE_GAP_EVT_RSSI_CHANGED:
-        	break;
-
-        default:
+            
+        default: 
+            // No implementation needed.
             break;
     }
+    // uint32_t                         err_code = NRF_SUCCESS;
+    // static ble_gap_evt_auth_status_t m_auth_status;
+    // ble_gap_enc_info_t *             p_enc_info;
 
-    APP_ERROR_CHECK(err_code);
+    // switch (p_ble_evt->header.evt_id)
+    // {
+    //     case BLE_GAP_EVT_CONNECTED:
+    //         m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
+    //     	led_setState(LED_BLUE, LED_STATE_ON);
+    //         break;
+
+    //     case BLE_GAP_EVT_DISCONNECTED:
+    //     	m_conn_handle = BLE_CONN_HANDLE_INVALID;
+    //     	led_setState(LED_BLUE, LED_STATE_OFF);
+    //     	if (advertisingEnabled) {
+    //     		bleApp_advertisingStart();
+    //     	}
+    //         break;
+
+    //     case BLE_GAP_EVT_SEC_PARAMS_REQUEST:
+    //         err_code = sd_ble_gap_sec_params_reply(m_conn_handle,
+    //                                                BLE_GAP_SEC_STATUS_SUCCESS,
+    //                                                &m_sec_params,
+    //                                                NULL);
+    //         break;
+
+    //     case BLE_GATTS_EVT_SYS_ATTR_MISSING:
+    //         err_code = sd_ble_gatts_sys_attr_set(m_conn_handle, NULL, 0, 0);
+    //         break;
+
+    //     case BLE_GAP_EVT_AUTH_STATUS:
+    //         m_auth_status = p_ble_evt->evt.gap_evt.params.auth_status;
+    //         break;
+
+    //     case BLE_GAP_EVT_SEC_INFO_REQUEST:
+    //         p_enc_info = &m_auth_status.kdist_periph.enc;
+    //         if (p_enc_info->master_id == p_ble_evt->evt.gap_evt.params.sec_info_request.master_id)
+    //         {
+    //             err_code = sd_ble_gap_sec_info_reply(m_conn_handle, p_enc_info, NULL);
+    //         }
+    //         else
+    //         {
+    //             // No keys found for this device
+    //             err_code = sd_ble_gap_sec_info_reply(m_conn_handle, NULL, NULL);
+    //         }
+    //         break;
+
+    //     case BLE_GAP_EVT_TIMEOUT:
+    //         if (p_ble_evt->evt.gap_evt.params.timeout.src == BLE_GAP_TIMEOUT_SRC_ADVERTISING) {
+    //         	led_setState(LED_BLUE, LED_STATE_OFF);
+
+    //             // Go to system-off mode (this function will not return; wakeup will cause a reset)
+    //             //GPIO_WAKEUP_BUTTON_CONFIG(WAKEUP_BUTTON_PIN);
+    //             //err_code = sd_power_system_off();
+    //         }
+    //         break;
+
+    //     case BLE_GAP_EVT_RSSI_CHANGED:
+    //     	break;
+
+    //     default:
+    //         break;
+    // }
+
+    // APP_ERROR_CHECK(err_code);
 }
 
 /**@brief GAP initialization.
@@ -332,8 +398,7 @@ void bleApp_advertisingInit() {
     memset(&advdata, 0, sizeof(advdata));
     advdata.name_type               = BLE_ADVDATA_NO_NAME;
     //advdata.include_appearance      = true;
-    advdata.flags.size              = sizeof(flags);
-    advdata.flags.p_data            = &flags;
+    advdata.flags                   = flags;
     advdata.uuids_complete.uuid_cnt	= sizeof(adv_uuids) / sizeof(adv_uuids[0]);
     advdata.uuids_complete.p_uuids	= adv_uuids;
     manuf_data.company_identifier 	= 0xFFFF;

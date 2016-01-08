@@ -140,8 +140,8 @@ default: clean nrf51422_xxac_s310
 
 #building all targets
 all: clean
-	$(NO_ECHO)$(MAKE) -f $(MAKEFILE_NAME) -C $(MAKEFILE_DIR) -e cleanobj
-	$(NO_ECHO)$(MAKE) -f $(MAKEFILE_NAME) -C $(MAKEFILE_DIR) -e nrf51422_xxac_s310
+	$(NO_ECHO)"$(MAKE)" -f $(MAKEFILE_NAME) -C $(MAKEFILE_DIR) -e cleanobj
+	$(NO_ECHO)"$(MAKE)" -f $(MAKEFILE_NAME) -C $(MAKEFILE_DIR) -e nrf51422_xxac_s310
 
 #target for printing all targets
 help:
@@ -168,7 +168,7 @@ nrf51422_xxac_s310: LINKER_SCRIPT=ble_ant_app_hrm_gcc_nrf51.ld
 nrf51422_xxac_s310: $(BUILD_DIRECTORIES) $(OBJECTS)
 	@echo Linking target: $(OUTPUT_FILENAME).out
 	$(NO_ECHO)$(CC) $(LDFLAGS) $(OBJECTS) $(LIBS) -o $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).out
-	$(NO_ECHO)$(MAKE) -f $(MAKEFILE_NAME) -C $(MAKEFILE_DIR) -e finalize
+	$(NO_ECHO)"$(MAKE)" -f $(MAKEFILE_NAME) -C $(MAKEFILE_DIR) -e finalize
 
 ## Create build directories
 $(BUILD_DIRECTORIES):

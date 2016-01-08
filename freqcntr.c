@@ -60,12 +60,12 @@ void freqcntr_init() {
 
 	/* Configure GPIO task/event block to generate an event for every low-to-
 	 * high transition of the input signal. */
-	nrf_gpiote_event_config(FREQCNTR_GPIOTE_CHANNEL, BLDCTACHO_PIN_NO, NRF_GPIOTE_POLARITY_LOTOHI);
+	nrf_gpiote_event_configure(FREQCNTR_GPIOTE_CHANNEL, BLDCTACHO_PIN_NO, NRF_GPIOTE_POLARITY_LOTOHI);
 
 	/* Whether or not the soft device is enabled determines how we configure
 	 * the PPI block. */
 	err_code = sd_softdevice_is_enabled(&softdevice_enabled);
-	ASSERT(err_code == NRF_SUCCESS);
+	APP_ERROR_CHECK(err_code);
 
 	/* Connect the rising-edge GPIOTE event to the counter's count task so that
 	 * we count the number of rising edges and then enable the PPI channel. */
@@ -73,10 +73,10 @@ void freqcntr_init() {
 		err_code = sd_ppi_channel_assign(FREQCNTR_PPI_CHANNEL,
 				&(NRF_GPIOTE->EVENTS_IN[FREQCNTR_GPIOTE_CHANNEL]),
 				&(NRF_TIMER1->TASKS_COUNT));
-		ASSERT(err_code == NRF_SUCCESS);
+		APP_ERROR_CHECK(err_code);
 
 		err_code = sd_ppi_channel_enable_set(FREQCNTR_PPI_CHENSET_MASK);
-    	ASSERT(err_code == NRF_SUCCESS);
+    	APP_ERROR_CHECK(err_code);
 	} else {
 		NRF_PPI->CH[FREQCNTR_PPI_CHANNEL].EEP = (uint32_t)&(NRF_GPIOTE->EVENTS_IN[FREQCNTR_GPIOTE_CHANNEL]);
 		NRF_PPI->CH[FREQCNTR_PPI_CHANNEL].TEP = (uint32_t)&(NRF_TIMER1->TASKS_COUNT);
@@ -113,13 +113,13 @@ void freqcntr_deinit() {
 	/* Whether or not the soft device is enabled determines how we configure
 	 * the PPI block. */
 	err_code = sd_softdevice_is_enabled(&softdevice_enabled);
-	ASSERT(err_code == NRF_SUCCESS);
+	APP_ERROR_CHECK(err_code);
 
 	/* Disable the PPI channel which routes rising edge events on the GPIO line
 	 * to the timer's count task. */
 	if (softdevice_enabled) {
 		err_code = sd_ppi_channel_enable_clr(FREQCNTR_PPI_CHEN_MASK);
-    	ASSERT(err_code == NRF_SUCCESS);
+    	APP_ERROR_CHECK(err_code);
 	} else {
 		NRF_PPI->CHENCLR = FREQCNTR_PPI_CHENCLR_MASK;
 	}

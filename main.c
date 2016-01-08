@@ -43,6 +43,7 @@
 
 #include "app_scheduler.h"
 #include "app_timer.h"
+#include "app_timer_appsh.h"
 #include "app_gpiote.h"
 #include "app_button.h"
 #include "app_timer.h"
@@ -52,7 +53,6 @@
 #include "global.h"
 #include "pins.h"
 #include "util.h"
-#include "gitversion.h"
 #include "uart.h"
 #include "db.h"
 #include "fb.h"
@@ -181,7 +181,7 @@ void main_timersInit() {
     uint32_t err_code;
 
 	// Initialize timer module, making it use the scheduler
-    APP_TIMER_INIT(APP_TIMER_PRESCALER, APP_TIMER_MAX_TIMERS, APP_TIMER_OP_QUEUE_SIZE, true);
+    APP_TIMER_APPSH_INIT(APP_TIMER_PRESCALER, APP_TIMER_OP_QUEUE_SIZE, true);
 
     if (motionCheckTimerID == TIMER_NULL) {
     	err_code = app_timer_create(&motionCheckTimerID, APP_TIMER_MODE_REPEATED, main_motionCheckTimerHandler);
@@ -192,7 +192,6 @@ void main_timersInit() {
 /**@brief Start timers.
 */
 void main_timersStart() {
-    uint32_t err_code;
 	/* YOUR_JOB: Start your timers. below is an example of how to start a timer.
     
     err_code = app_timer_start(m_app_timer_id, TIMER_INTERVAL, NULL);
@@ -402,7 +401,7 @@ int main(void) {
     spi_init();
     power_init();
     commands_init();
-    message_init();
+    //message_init();
 
     //main_schedulerInit();
     bleApp_gapParamsInit();
@@ -423,7 +422,6 @@ int main(void) {
     app_uart_put_string("\r\n");
     app_uart_put_string("\r\n");
     app_uart_put_string("MBlocks-MB ");
-    app_uart_put_string(gitVersionLongStr);
 #ifdef DEBUG
 	app_uart_put_string(" (Debug)");
 #elif defined(RELEASE)
@@ -639,7 +637,7 @@ void main_powerManage() {
 		spi_init();
 		power_init();
 		bldc_init();
-        message_init();
+        //message_init();
 
 		if (motionCheckTimerID != TIMER_NULL) {
 			err_code = app_timer_stop(motionCheckTimerID);

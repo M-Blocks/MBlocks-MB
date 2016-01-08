@@ -27,7 +27,7 @@
 
 #define DEBUG_EVENTS			1
 
-static const enum {
+enum {
 	FORWARD = 3,
 	BACKWARD,
 	TOP,
@@ -132,7 +132,7 @@ void lightTrackerPrimitiveHandler(void *p_event_data, uint16_t event_size) {
 	static int ambientReadings[6];
 	static int config;
 	
-	int max_signal, max_face;
+	int max_signal = 0, max_face = 0;
 
 	trackerPrimitive_t trackerPrimitive;
 	trackerPrimitive = *(trackerPrimitive_t *)p_event_data;

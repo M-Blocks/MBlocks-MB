@@ -10,7 +10,6 @@
 #include <stddef.h>
 #include <math.h>
 
-#include "app_scheduler.h"
 #include "app_timer.h"
 
 #include "global.h"

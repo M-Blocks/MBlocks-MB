@@ -10,6 +10,8 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+ 
+#include "app_scheduler.h"
 
 typedef enum {
 	MOTION_PRIMITIVE_START_SEQUENCE,

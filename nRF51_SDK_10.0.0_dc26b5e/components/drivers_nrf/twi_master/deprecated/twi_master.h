@@ -51,6 +51,7 @@
 #define TWI_SDA_LOW()    do { NRF_GPIO->OUTCLR = (1UL << TWI_MASTER_CONFIG_DATA_PIN_NUMBER);  } while(0)   /*!< Pulls SDA line low  */
 #define TWI_SDA_INPUT()  do { NRF_GPIO->DIRCLR = (1UL << TWI_MASTER_CONFIG_DATA_PIN_NUMBER);  } while(0)   /*!< Configures SDA pin as input  */
 #define TWI_SDA_OUTPUT() do { NRF_GPIO->DIRSET = (1UL << TWI_MASTER_CONFIG_DATA_PIN_NUMBER);  } while(0)   /*!< Configures SDA pin as output */
+#define TWI_SCL_INPUT()  do { NRF_GPIO->DIRCLR = (1UL << TWI_MASTER_CONFIG_CLOCK_PIN_NUMBER);  } while(0)  /*!< Configures SCL pin as input  */
 #define TWI_SCL_OUTPUT() do { NRF_GPIO->DIRSET = (1UL << TWI_MASTER_CONFIG_CLOCK_PIN_NUMBER); } while(0)   /*!< Configures SCL pin as output */
 /*lint -restore */
 
@@ -70,6 +71,10 @@
  * @retval false TWI bus is stuck.
  */
 bool twi_master_init(void);
+
+void twi_master_deinit(void);
+
+bool twi_master_get_init(void);
 
 /**
  * @brief Function for transferring data over TWI bus.

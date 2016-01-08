@@ -10,17 +10,23 @@
  *
  */
 
+#include "global.h"
 #include "twi_master.h"
 #include "twi_master_config.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include "nrf.h"
+#include "nrf_sdm.h"
+#include "nrf_soc.h"
 #include "nrf_delay.h"
 #include "nrf_gpio.h"
+#include "app_error.h"
 
 /* Max cycles approximately to wait on RXDREADY and TXDREADY event,
  * This is optimized way instead of using timers, this is not power aware. */
 #define MAX_TIMEOUT_LOOPS (20000UL) /**< MAX while loops to wait for RXD/TXD event */
+
+static bool initialized = false;
 
 static bool twi_master_write(uint8_t * data, uint8_t data_length, bool issue_stop_condition)
 {
@@ -273,7 +279,43 @@ bool twi_master_init(void)
     NRF_PPI->CHENCLR          = PPI_CHENCLR_CH0_Msk;
     NRF_TWI1->ENABLE          = TWI_ENABLE_ENABLE_Enabled << TWI_ENABLE_ENABLE_Pos;
 
-    return twi_master_clear_bus();
+    initialized = twi_master_clear_bus();
+
+    return initialized;
+}
+
+bool twi_master_get_init() {
+    return initialized;
+}
+
+void twi_master_deinit() {
+    uint32_t err_code;
+    uint8_t softdevice_enabled;
+
+    /* Whether or not the softdevice is enabled determines how we disable the
+     * PPI channels. */
+    err_code = sd_softdevice_is_enabled(&softdevice_enabled);
+    APP_ERROR_CHECK(err_code);
+
+    /* Disable the TWI's PPI channels */
+    if (softdevice_enabled) {
+        err_code = sd_ppi_channel_enable_clr(TWI_MASTER_PPI_CHEN_MASK);
+        APP_ERROR_CHECK(err_code);
+    } else {
+        NRF_PPI->CHENCLR = TWI_MASTER_PPI_CHENCLR_MASK;
+    }
+
+    /* Disable the TWI interface, primarily so that it does not consume power
+     * or keep the 16MHz clock active when the nRF is in idle mode. */
+    NRF_TWI1->ENABLE = (TWI_ENABLE_ENABLE_Disabled << TWI_ENABLE_ENABLE_Pos);
+
+    /* Ensure that the SCL and SDA pins are inputs.  We assume that they do not
+     * need to be pulled-up as there should be external pull-up resistors on
+     * the I2C bus. */
+    nrf_gpio_cfg_input(TWI_MASTER_CONFIG_CLOCK_PIN_NUMBER, NRF_GPIO_PIN_NOPULL);
+    nrf_gpio_cfg_input(TWI_MASTER_CONFIG_DATA_PIN_NUMBER, NRF_GPIO_PIN_NOPULL);
+
+    initialized = false;
 }
 
 

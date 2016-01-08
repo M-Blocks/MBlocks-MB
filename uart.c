@@ -15,11 +15,11 @@
 
 #include "app_util.h"
 #include "app_uart.h"
+#include "app_error.h"
 
 #include "pins.h"
 
 static bool initialized = false;
-static uint16_t app_uart_uid = 0;
 static uint8_t rx_buf[64];
 static uint8_t tx_buf[512];
 
@@ -43,7 +43,7 @@ void uart_init() {
     buffers.tx_buf = tx_buf;
     buffers.tx_buf_size = sizeof(tx_buf);
 
-	err_code = app_uart_init(&comm_params, &buffers, on_uart_evt, 3, &app_uart_uid);
+	err_code = app_uart_init(&comm_params, &buffers, on_uart_evt, 3);
 	APP_ERROR_CHECK(err_code);
 
 	initialized = true;
@@ -55,8 +55,7 @@ void uart_deinit() {
 		return;
 	}
 
-	app_uart_close(app_uart_uid);
-	app_uart_uid = 0;
+	app_uart_close();
 
 	/* Make the TXD pin an output which drives high */
     nrf_gpio_pin_set(UART_TX_PIN_NO);

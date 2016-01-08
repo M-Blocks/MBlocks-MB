@@ -286,7 +286,6 @@ void cmdVersion(const char *args) {
 	app_uart_put_string("\r\n");
 
 	app_uart_put_string("MB Firmware: ");
-	app_uart_put_string(gitVersionLongStr);
 #ifdef DEBUG
 	app_uart_put_string(" (Debug)");
 #elif defined(RELEASE)

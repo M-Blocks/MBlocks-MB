@@ -36,7 +36,6 @@
 #include "nordic_common.h"
 #include "nrf_sdm.h"
 #include "app_error.h"
-#include "app_scheduler.h"
 #include "app_util.h"
 #include "ble_stack_handler_types.h"
 #include "ant_stack_handler_types.h"
@@ -55,12 +54,11 @@ typedef void (*sys_evt_handler_t) (uint32_t evt_id);
  *
  * @details   It will handle dimensioning and allocation of the memory buffer required for reading
  *            events from the stack, making sure the buffer is correctly aligned. It will also
- *            connect the stack event handler to the scheduler (if specified).
+ *            connect the stack event handler to the scheduler/RTOS (if specified).
  *
  * @param[in] CLOCK_SOURCE     Low frequency clock source and accuracy (type nrf_clock_lfclksrc_t,
  *                             see sd_softdevice_enable() for details).
- * @param[in] USE_SCHEDULER    TRUE if the application is using the event scheduler, FALSE
- *                             otherwise.
+ * @param[in] EVT_HANDLER      scheduler/RTOS event handler function.
  *
  * @note      Since this macro allocates a buffer, it must only be called once (it is OK to call it
  *            several times as long as it is from the same location, that is to do a
@@ -68,23 +66,26 @@ typedef void (*sys_evt_handler_t) (uint32_t evt_id);
  */
 /*lint -emacro(506, SOFTDEVICE_HANDLER_INIT) */ /* Suppress "Constant value Boolean */
 #define SOFTDEVICE_HANDLER_INIT(CLOCK_SOURCE,                                                      \
-                                USE_SCHEDULER)                                                     \
+                                EVT_HANDLER)                                                     \
     do                                                                                             \
     {                                                                                              \
-        static uint32_t EVT_BUFFER[CEIL_DIV(MAX(                                                   \
-                                                MAX(BLE_STACK_EVT_MSG_BUF_SIZE,                    \
-                                                    ANT_STACK_EVT_STRUCT_SIZE),                    \
-                                                SYS_EVT_MSG_BUF_SIZE                               \
-                                               ),                                                  \
-                                            sizeof(uint32_t))];                                    \
+        static uint32_t BLE_EVT_BUFFER[CEIL_DIV(BLE_STACK_EVT_MSG_BUF_SIZE, sizeof(uint32_t))];    \
         uint32_t ERR_CODE;                                                                         \
         ERR_CODE = softdevice_handler_init((CLOCK_SOURCE),                                         \
-                                           EVT_BUFFER,                                             \
-                                           sizeof(EVT_BUFFER),                                     \
-                                           (USE_SCHEDULER) ? softdevice_evt_schedule : NULL);      \
+                                           BLE_EVT_BUFFER,                                         \
+                                           sizeof(BLE_EVT_BUFFER),                                 \
+                                           EVT_HANDLER);      \
         APP_ERROR_CHECK(ERR_CODE);                                                                 \
     } while (0)
 
+/**
+ * @brief Function for retrieving the information about SD state
+ *
+ * The information about current state of softdevice.
+ * @retval false SD is not initialized and SD commands should not be called.
+ * @retval true  SD is already initialized
+ */
+bool softdevice_handler_isEnabled(void);
 
 /**@brief      Function for initializing the stack handler module.
  *
@@ -96,13 +97,13 @@ typedef void (*sys_evt_handler_t) (uint32_t evt_id);
  *             as that will both allocate the event buffer, and also align the buffer correctly.
  *
  * @param[in]  clock_source        Low frequency clock source to be used by the SoftDevice.
- * @param[in]  p_evt_buffer        Buffer for holding one stack event. Since heap is not being
+ * @param[in]  p_ble_evt_buffer    Buffer for holding one BLE stack event. Since heap is not being
  *                                 used, this buffer must be provided by the application. The
  *                                 buffer must be large enough to hold the biggest stack event the
  *                                 application is supposed to handle. The buffer must be aligned to
- *                                 a 4 byte boundary. This parameter is unused if neither BLE nor
- *                                 ANT stack support is required.
- * @param[in]  evt_buffer_size     Size of SoftDevice event buffer. This parameter is unused if
+ *                                 a 4 byte boundary. This parameter is unused if BLE stack support 
+ *                                 is not required.
+ * @param[in]  ble_evt_buffer_size Size of SoftDevice BLE event buffer. This parameter is unused if
  *                                 BLE stack support is not required.
  * @param[in]  evt_schedule_func   Function for passing events to the scheduler. Point to
  *                                 ble_ant_stack_evt_schedule() to connect to the scheduler.
@@ -114,8 +115,8 @@ typedef void (*sys_evt_handler_t) (uint32_t evt_id);
  *                                       boundary) or NULL.
  */
 uint32_t softdevice_handler_init(nrf_clock_lfclksrc_t              clock_source,
-                                 void *                            p_evt_buffer,
-                                 uint16_t                          evt_buffer_size,
+                                 void *                            p_ble_evt_buffer,
+                                 uint16_t                          ble_evt_buffer_size,
                                  softdevice_evt_schedule_func_t    evt_schedule_func);
 
 
@@ -148,16 +149,7 @@ uint32_t softdevice_sys_evt_handler_set(sys_evt_handler_t sys_evt_handler);
 /**@cond NO_DOXYGEN */
 void intern_softdevice_events_execute(void);
 
-static __INLINE void softdevice_evt_get(void * p_event_data, uint16_t event_size)
-{
-    APP_ERROR_CHECK_BOOL(event_size == 0);
-    intern_softdevice_events_execute();
-}
 
-static __INLINE uint32_t softdevice_evt_schedule(void)
-{
-    return app_sched_event_put(NULL, 0, softdevice_evt_get);
-}
 /**@endcond */
 
 #endif // SOFTDEVICE_HANDLER_H__

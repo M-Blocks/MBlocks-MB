@@ -340,6 +340,23 @@ __STATIC_INLINE void nrf_gpiote_te_default(uint32_t idx)
 {
     NRF_GPIOTE->CONFIG[idx] = 0;
 }
+
+/**
+ * @brief Function for unconfiguring GPIOTE channel.
+ *
+ *
+ * Note that when unconfiguring the channel, the pin is configured as GPIO PIN_CNF configuration.
+ *
+ * @param channel_number specifies the GPIOTE channel [0:3] to unconfigure.
+ */
+static __INLINE void nrf_gpiote_unconfig(uint32_t channel_number)
+{   
+    /* Unonfigure the channel as the caller expects */
+    NRF_GPIOTE->CONFIG[channel_number] = (GPIOTE_CONFIG_MODE_Disabled   << GPIOTE_CONFIG_MODE_Pos) |
+                                         (31UL                          << GPIOTE_CONFIG_PSEL_Pos) |
+                                         (GPIOTE_CONFIG_POLARITY_Toggle << GPIOTE_CONFIG_POLARITY_Pos);
+}
+
 #endif //SUPPRESS_INLINE_IMPLEMENTATION
 /** @} */
 

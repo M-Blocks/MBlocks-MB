@@ -5,42 +5,53 @@ DEVICE_VARIANT := xxac
 
 CPU := cortex-m0
 TARGET_CHIP := NRF51422_QFAC_R
-BOARD := BOARD_MBLOCKS_MB_2P1
 
 USE_S310 = 1
 SOFTDEVICE_NAME := S310
 
 ## Softdevice hex file location
-SOFTDEVICE_HEXFILE = ../s310_nrf51422_1.0.0/s310_nrf51422_1.0.0_softdevice.hex
+SOFTDEVICE_HEXFILE = ../s310_nrf51422_3.0.0/s310_nrf51422_3.0.0_softdevice.hex
 
 ## Bootloader hex file location
 BOOTLOADER_HEXFILE = ../bootloader/bootloader_gcc_s310_bootloader_xxaa.hex
 
 ## C Source Files
-C_SOURCE_FILES += main.c gitversion.c global.c uart.c db.c fb.c adc.c power.c util.c pwm.c freqcntr.c spi.c bldc.c a4960.c spi_master.c sma.c led.c mechbrake.c cmdline.c commands.c motionEvent.c message.c lightTracker.c
-C_SOURCE_FILES += twi_hw_master.c
+C_SOURCE_FILES += main.c global.c uart.c db.c fb.c adc.c power.c util.c pwm.c freqcntr.c spi.c bldc.c a4960.c sma.c led.c mechbrake.c cmdline.c commands.c motionEvent.c message.c lightTracker.c
 C_SOURCE_FILES += mpu6050.c imu.c
 C_SOURCE_FILES += bleApp.c ble_sps.c ble_vns.c fifo.c 
-C_SOURCE_FILES += nrf_delay.c
 
 ## The Following files are only needed when the ble_debug_assert_handler() function is called from the app_error_handler() in main ##
 C_SOURCE_FILES += ble_debug_assert_handler.c
 
 ## C Flags
 
+#flags common to all targets
 CFLAGS += -DRELEASE -Os
 CFLAGS += -DBLE_DEBUG=0
+CFLAGS += -DNRF51
 CFLAGS += -DENABLE_BLE_COMMANDS=1
 CFLAGS += -DHARDWARE_VERSION=2
+CFLAGS += -DBOARD_PCA10028
 CFLAGS += -DBLE_STACK_SUPPORT_REQD
-CFLAGS += -mcpu=$(CPU) -mthumb -mabi=aapcs -D$(DEVICE) -D$(BOARD) -D$(TARGET_CHIP) --std=gnu99
-CFLAGS += -Wall
+CFLAGS += -DSOFTDEVICE_PRESENT
+CFLAGS += -DS310
+CFLAGS += -mcpu=cortex-m0
+CFLAGS += -mthumb -mabi=aapcs --std=gnu99
+CFLAGS += -Wall -Werror -O3
 CFLAGS += -mfloat-abi=soft
+# keep every function in separate section. This will allow linker to dump unused functions
+CFLAGS += -ffunction-sections -fdata-sections -fno-strict-aliasing
+CFLAGS += -fno-builtin --short-enums
 
-## Assembly Flags
+# Assembler flags
 ASMFLAGS += -DRELEASE -Os
-ASMFLAGS += -D__HEAP_SIZE=128
 ASMFLAGS += -x assembler-with-cpp
+ASMFLAGS += -DNRF51
+ASMFLAGS += -D__HEAP_SIZE=128
+ASMFLAGS += -DBOARD_PCA10028
+ASMFLAGS += -DBLE_STACK_SUPPORT_REQD
+ASMFLAGS += -DSOFTDEVICE_PRESENT
+ASMFLAGS += -DS310
 
 ## Libraries
 LIBFLAGS += -lm
@@ -69,30 +80,38 @@ TEMPLATE_PATH = $(SDK_PATH)components/toolchain/gcc/
 
 #source common to all targets
 C_SOURCE_FILES += \
-$(abspath $(SDK_PATH)components/libraries/ant/ant_stack_config/ant_stack_config.c) \
 $(abspath $(SDK_PATH)components/libraries/button/app_button.c) \
-$(abspath $(SDK_PATH)components/libraries/util/app_error.c) \
+$(abspath $(SDK_PATH)components/libraries/scheduler/app_scheduler.c) \
 $(abspath $(SDK_PATH)components/libraries/timer/app_timer.c) \
+$(abspath $(SDK_PATH)components/libraries/timer/app_timer_appsh.c) \
 $(abspath $(SDK_PATH)components/libraries/trace/app_trace.c) \
 $(abspath $(SDK_PATH)components/libraries/util/nrf_assert.c) \
+$(abspath $(SDK_PATH)components/libraries/util/app_error.c) \
+$(abspath $(SDK_PATH)components/libraries/util/app_util_platform.c) \
 $(abspath $(SDK_PATH)components/libraries/uart/retarget.c) \
+$(abspath $(SDK_PATH)components/libraries/uart/app_uart.c) \
 $(abspath $(SDK_PATH)components/libraries/sensorsim/sensorsim.c) \
 $(abspath $(SDK_PATH)components/libraries/spi/spi_master.c) \
 $(abspath $(SDK_PATH)components/libraries/spi/spi_slave.c) \
 $(abspath $(SDK_PATH)components/libraries/fifo/app_fifo.c) \
+$(abspath $(SDK_PATH)components/libraries/gpiote/app_gpiote.c) \
 $(abspath $(SDK_PATH)components/drivers_nrf/delay/nrf_delay.c) \
+$(abspath $(SDK_PATH)components/drivers_nrf/twi_master/deprecated/twi_hw_master.c) \
+$(abspath $(SDK_PATH)components/drivers_nrf/gpiote/nrf_drv_gpiote.c) \
+$(abspath $(SDK_PATH)components/drivers_nrf/uart/nrf_drv_uart.c) \
+$(abspath $(SDK_PATH)components/drivers_nrf/common/nrf_drv_common.c) \
 $(abspath $(SDK_PATH)components/ant/ant_stack_config/ant_stack_config.c) \
 $(abspath $(SDK_PATH)components/ble/common/ble_advdata.c) \
 $(abspath $(SDK_PATH)components/ble/common/ble_conn_params.c) \
-$(abspath $(SDK_PATH)components/toolchain/system_nrf51.c) \
-$(abspath $(SDK_PATH)components/softdevice/common/softdevice_handler/softdevice_handler.c) \
 $(abspath $(SDK_PATH)components/ble/ble_error_log/ble_error_log.c) \
 $(abspath $(SDK_PATH)components/ble/ble_flash/ble_flash.c) \
-
+$(abspath $(SDK_PATH)components/toolchain/system_nrf51.c) \
+$(abspath $(SDK_PATH)components/softdevice/common/softdevice_handler/softdevice_handler.c) \
+$(abspath $(SDK_PATH)components/softdevice/common/softdevice_handler/softdevice_handler_appsh.c) \
 
 C_PATHS += ../ $(SDK_PATH) $(TEMPLATE_PATH) $(wildcard $(SDK_PATH)components/*/) $(wildcard $(SDK_PATH)components/ant/*/) \
 $(wildcard $(SDK_PATH)components/softdevice/common/*/) $(wildcard $(SDK_PATH)components/drivers_nrf/*/) $(wildcard $(SDK_PATH)components/ble/*/) \
-$(wildcard $(SDK_PATH)components/libraries/*/)
+$(wildcard $(SDK_PATH)components/libraries/*/) $(wildcard $(SDK_PATH)components/drivers_nrf/twi_master/*/)
 
 #assembly files common to all targets
 ASM_SOURCE_FILES  = $(abspath $(SDK_PATH)components/toolchain/gcc/gcc_startup_nrf51.s)
@@ -102,37 +121,43 @@ INCLUDEPATHS += -I$(abspath ../)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/softdevice/s310/headers)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/config)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/delay)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/gpiote)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/hal)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/twi_master)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/twi_master/deprecated)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/common)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/uart)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/pstorage)
+
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/util)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/scheduler)
-INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ble/device_manager)
-INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/uart)
-INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ble/common)
-INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ble/ble_error_log)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/sensorsim)
-INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/pstorage)
-INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ble/ble_services/ble_dis)
-INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/device)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/uart)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/button)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/timer)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/scheduler)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/gpiote)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/spi)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/fifo)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/trace)
+
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ble/device_manager)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ble/common)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ble/ble_error_log)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ble/ble_services/ble_dis)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/device)
+
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ant/ant_stack_config)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ant/ant_stack_config/config)
-INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/gpiote)
-INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/hal)
-INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/twi_master)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/toolchain/gcc)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/toolchain)
-INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/common)
-INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/trace)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ble/ble_services/ble_bas)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ble/ble_debug_assert_handler)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/softdevice/common/softdevice_handler)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ble/ble_services/ble_hrs)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/ble_flash)
+
 
 ## Output directories
 OBJECT_DIRECTORY := _build
@@ -169,15 +194,9 @@ OBJECTS = $(C_OBJECTS) $(ASSEMBLER_OBJECTS)
 ## Default build target
 .PHONY: all
 all: clean
-all: updateGitVersion
 all: $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_BootloaderInput.hex 
 all: $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_AppWithSoftdevice.hex 
 all: $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_CompleteImage.hex
-all:
-	bash -c "../bin/append_gitVersionStr.sh $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_BootloaderInput.hex ../gitversion.c"
-	bash -c "../bin/append_gitVersionStr.sh $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_AppWithSoftdevice.hex ../gitversion.c"
-	bash -c "../bin/append_gitVersionStr.sh $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_CompleteImage.hex ../gitversion.c"
-
 
 .PHONY: clean
 clean:
@@ -188,11 +207,6 @@ echostuff:
 	@echo C_SOURCE_FILES: [$(C_SOURCE_FILES)]
 	@echo C_PATHS: [$(C_PATHS)]
 	@echo $(CC)
-
-.PHONY: updateGitVersion
-updateGitVersion:
-	bash -c "../bin/update_gitVersionStr.sh ../gitversion_template.h ../gitversion.h"
-	bash -c "../bin/update_gitVersionStr.sh ../gitversion_template.c ../gitversion.c"
 
 ## Create build directories
 $(BUILD_DIRECTORIES):
