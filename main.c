@@ -69,9 +69,9 @@
 #include "imu.h"
 #include "power.h"
 #include "led.h"
-#include "commands.h"
-#include "cmdline.h"
-#include "message.h"
+// #include "commands.h"
+// #include "cmdline.h"
+// #include "message.h"
 
 #include "bleApp.h"
 #include "ble_sps.h"
@@ -82,7 +82,7 @@
 // #define MY_BUTTON_PIN                   NRF6310_BUTTON_1
 
 
-#define BLE_APPEARANCE_CABLE_REPLACEMENT	1800
+#define BLE_APPEARANCE_CABLE_REPLACEMENT    1800
 
 // YOUR_JOB: Modify these according to requirements.
 
@@ -95,23 +95,14 @@
 #define SCHED_MAX_EVENT_DATA_SIZE       sizeof(app_timer_event_t)                   /**< Maximum size of scheduler events. Note that scheduler BLE stack events do not contain any data, as the events are being pulled from the stack in the event handler. */
 #define SCHED_QUEUE_SIZE                12                                          /**< Maximum number of events in the scheduler queue. */
 
-static bool sleepRequested = false;
-static uint32_t sleepTime_sec = 600;
-static bool sleeping = false;
-static uint32_t lastCharTime_rtcTicks = 0;
-static app_timer_id_t motionCheckTimerID = TIMER_NULL;
-static bool motionDetected = false;
 
+APP_TIMER_DEF(motionCheckTimerID); 
 
 static void main_timersInit(void);
-static void main_timersStart(void);
 static void main_schedulerInit(void);
 static void main_gpioteInit(void);
 static void main_gpioInit(void);
 static void main_configUnusedPins(void);
-
-static void main_powerManage(void);
-static void main_motionCheckTimerHandler(void *context);
 
 /**@brief Error handler function, which is called when an error has occurred. 
  *
@@ -123,9 +114,6 @@ static void main_motionCheckTimerHandler(void *context);
  * @param[in] p_file_name Pointer to the file name. 
  */
 void app_error_handler(uint32_t error_code, uint32_t line_num, const uint8_t * p_file_name) {
-	led_setAllOff();
-	led_setState(LED_RED, LED_STATE_FAST_FLASH);
-
     // This call can be used for debug purposes during development of an application.
     // @note CAUTION: Activating this code will write the stack to flash on an error.
     //                This function should NOT be used in a final product.
@@ -180,28 +168,8 @@ static void service_error_handler(uint32_t nrf_error)
 void main_timersInit() {
     uint32_t err_code;
 
-	// Initialize timer module, making it use the scheduler
+    // Initialize timer module, making it use the scheduler
     APP_TIMER_APPSH_INIT(APP_TIMER_PRESCALER, APP_TIMER_OP_QUEUE_SIZE, true);
-
-    if (motionCheckTimerID == TIMER_NULL) {
-    	err_code = app_timer_create(&motionCheckTimerID, APP_TIMER_MODE_REPEATED, main_motionCheckTimerHandler);
-    	APP_ERROR_CHECK(err_code);
-    }
-}
-
-/**@brief Start timers.
-*/
-void main_timersStart() {
-	/* YOUR_JOB: Start your timers. below is an example of how to start a timer.
-    
-    err_code = app_timer_start(m_app_timer_id, TIMER_INTERVAL, NULL);
-    APP_ERROR_CHECK(err_code); */
-
-	/* We have located most timer creation and start function in subroutines
-	 * related to the timer's purpose.  Typically, timers are created and
-	 * started in *_init() functions and stopped in *_deinit() functions.
-	 * This makes it much easier to stop all relevant timers when entering
-	 * idle or off mode. */
 }
 
 /**@brief Event Scheduler initialization. */
@@ -215,7 +183,7 @@ void main_gpioteInit() {
 }
 
 void main_gpioInit() {
-	main_configUnusedPins();
+    main_configUnusedPins();
 
     nrf_gpio_pin_clear(BAT1DISCHRG_PIN_NO);
     nrf_gpio_cfg_output(BAT1DISCHRG_PIN_NO);
@@ -240,19 +208,19 @@ void main_gpioInit() {
     nrf_gpio_pin_clear(CHRGEN_PIN_NO);
     nrf_gpio_cfg_output(CHRGEN_PIN_NO);
 
-	/* Make the SCK, MOSI, and CS pins outputs with well defined states */
-	nrf_gpio_pin_clear(SPI_SCK_PIN_NO);
-	nrf_gpio_cfg_output(SPI_SCK_PIN_NO);
+    /* Make the SCK, MOSI, and CS pins outputs with well defined states */
+    nrf_gpio_pin_clear(SPI_SCK_PIN_NO);
+    nrf_gpio_cfg_output(SPI_SCK_PIN_NO);
 
-	nrf_gpio_pin_clear(SPI_MOSI_PIN_NO);
-	nrf_gpio_cfg_output(SPI_MOSI_PIN_NO);
+    nrf_gpio_pin_clear(SPI_MOSI_PIN_NO);
+    nrf_gpio_cfg_output(SPI_MOSI_PIN_NO);
 
-	nrf_gpio_pin_set(SPI_BLDCCS_PIN_NO);
-	nrf_gpio_cfg_output(SPI_BLDCCS_PIN_NO);
+    nrf_gpio_pin_set(SPI_BLDCCS_PIN_NO);
+    nrf_gpio_cfg_output(SPI_BLDCCS_PIN_NO);
 
-	/* Make sure the MISO pin has a pull-down so that it does not float and
-	 * consume extra current. */
-	nrf_gpio_cfg_input(SPI_MOSI_PIN_NO, NRF_GPIO_PIN_PULLDOWN);
+    /* Make sure the MISO pin has a pull-down so that it does not float and
+     * consume extra current. */
+    nrf_gpio_cfg_input(SPI_MOSI_PIN_NO, NRF_GPIO_PIN_PULLDOWN);
 
     /* The BLDCRESETN pin serves as the active-low reset for the A4960 but it
      * also enables the switched battery rail when high. This switched battery
@@ -273,31 +241,31 @@ void main_gpioInit() {
      * count all rising edges.*/
     nrf_gpio_cfg_input(BLDCTACHO_PIN_NO, NRF_GPIO_PIN_PULLDOWN);
 
-	/* Make the VINSENSE, LIPROVBATOUT, and ICHARGE pins inputs with
-	 * their input buffers disabled so that they do not consume current when
-	 * the pins are at a voltage somewhere between 0 and VCC. */
+    /* Make the VINSENSE, LIPROVBATOUT, and ICHARGE pins inputs with
+     * their input buffers disabled so that they do not consume current when
+     * the pins are at a voltage somewhere between 0 and VCC. */
     NRF_GPIO->PIN_CNF[VINSENSE_PIN_NO] =
-    		(GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
-    		(GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
-    		(GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
-    		(GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
-    		(GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
+            (GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
+            (GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
+            (GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
+            (GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
+            (GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
 
     NRF_GPIO->PIN_CNF[LIPROVBATOUT_PIN_NO] =
-    		(GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
-    		(GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
-    		(GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
-    		(GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
-    		(GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
+            (GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
+            (GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
+            (GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
+            (GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
+            (GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
 
     NRF_GPIO->PIN_CNF[ICHARGE_PIN_NO] =
-    		(GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
-    		(GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
-    		(GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
-    		(GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
-    		(GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
+            (GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
+            (GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
+            (GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
+            (GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
+            (GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
 
-	/* Make the TXD pin an output which drives high */
+    /* Make the TXD pin an output which drives high */
     nrf_gpio_pin_set(UART_TX_PIN_NO);
     nrf_gpio_cfg_output(UART_TX_PIN_NO);
 
@@ -305,23 +273,23 @@ void main_gpioInit() {
     nrf_gpio_pin_set(UART_RX_PIN_NO);
     nrf_gpio_cfg_input(UART_RX_PIN_NO, NRF_GPIO_PIN_PULLUP);
 
-	/* Set the PWM pins to 0 until they are turned on. */
-	nrf_gpio_pin_clear(PRECHRGEN_PIN_NO);
-	nrf_gpio_cfg_output(PRECHRGEN_PIN_NO);
+    /* Set the PWM pins to 0 until they are turned on. */
+    nrf_gpio_pin_clear(PRECHRGEN_PIN_NO);
+    nrf_gpio_cfg_output(PRECHRGEN_PIN_NO);
 
     nrf_gpio_pin_clear(BLDCIREF_PIN_NO);
     nrf_gpio_cfg_output(BLDCIREF_PIN_NO);
 
     /* The SMAPWM is controlled by software-based PWM, but we still need to
      * set its initial state to 0. */
-	nrf_gpio_pin_clear(SMAPWM_PIN_NO);
-	nrf_gpio_cfg_output(SMAPWM_PIN_NO);
+    nrf_gpio_pin_clear(SMAPWM_PIN_NO);
+    nrf_gpio_cfg_output(SMAPWM_PIN_NO);
 
-	/* Ensure that the SCL and SDA pins are inputs.  We assume that they do not
-	 * need to be pulled-up as there should be external pull-up resistors on
-	 * the I2C bus. */
-	nrf_gpio_cfg_input(TWI_MASTER_CONFIG_CLOCK_PIN_NUMBER, NRF_GPIO_PIN_NOPULL);
-	nrf_gpio_cfg_input(TWI_MASTER_CONFIG_DATA_PIN_NUMBER, NRF_GPIO_PIN_NOPULL);
+    /* Ensure that the SCL and SDA pins are inputs.  We assume that they do not
+     * need to be pulled-up as there should be external pull-up resistors on
+     * the I2C bus. */
+    nrf_gpio_cfg_input(TWI_MASTER_CONFIG_CLOCK_PIN_NUMBER, NRF_GPIO_PIN_NOPULL);
+    nrf_gpio_cfg_input(TWI_MASTER_CONFIG_DATA_PIN_NUMBER, NRF_GPIO_PIN_NOPULL);
 
     /* The IMUINT pin should be configured as an input without pull-up or pull-
      * down as the accelerometer default to making its interrupt pin a push-
@@ -340,9 +308,9 @@ void main_gpioInit() {
 }
 
 void main_configUnusedPins() {
-	/* P0.26 is truly unconnected */
-	nrf_gpio_pin_clear(26);
-	nrf_gpio_cfg_output(26);
+    /* P0.26 is truly unconnected */
+    nrf_gpio_pin_clear(26);
+    nrf_gpio_cfg_output(26);
 
     /* P0.03 is truly unconnected.*/
     nrf_gpio_pin_clear(3);
@@ -357,430 +325,25 @@ void main_configUnusedPins() {
 /**@brief Application main function.
  */
 int main(void) {
-	uint8_t c;
-	char str[64];
-	uint8_t strSize;
-	uint16_t bootCurrent_mA;
-	bool mpu6050Initialized_central, dmpInitialized_central;
-	bool mpu6050Initialized_face, dmpInitialized_face;
-	bool dbAwakeAfterBoot;
-	bool ledsOnAfterBoot;
-	uint32_t currentTime_rtcTicks;
 
-	nrf_delay_ms(10);
+    nrf_delay_ms(10);
 
-	main_schedulerInit();
+    main_schedulerInit();
 
-	/* The timer subsystem must be initialized before we can create timers. */
+    /* The timer subsystem must be initialized before we can create timers. */
     main_timersInit();
     main_gpioteInit();
-
-    bleApp_stackInit();
     main_gpioInit();
-    uart_init();
-
-    /* We need to initialize the IMU's DMP before other sub-systems because
-     * it takes long enough that multiple timers can expire during its
-     * initialization, and if too many timers expire, and too many events are
-     * added to the scheduler's queue, the queue will overflow and the nRF will
-     * reset. */
-    //twi_master_init();
-
-	mpu6050_setAddress(MPU6050_I2C_ADDR_FACE);
-	mpu6050Initialized_face = imu_init();
-	dmpInitialized_face = imu_initDMP();
-
-	mpu6050_setAddress(MPU6050_I2C_ADDR_CENTRAL);
-	mpu6050Initialized_central = imu_init();
-	dmpInitialized_central = imu_initDMP();
-
-
 
     led_init();
-    pwm_init();
-    spi_init();
-    power_init();
-    commands_init();
-    //message_init();
 
-    //main_schedulerInit();
-    bleApp_gapParamsInit();
-    bleApp_servicesInit();
-    bleApp_connParamsInit();
-    bleApp_secParamsInit();
-    bleApp_advertisingInit();
-
-    main_timersStart();
-
-    led_setAllOn();
-    ledsOnAfterBoot = true;
-
-    /* Reset the daughterboard by pulling the SCL line low */
-    db_reset();
-    dbAwakeAfterBoot = true;
-
-    app_uart_put_string("\r\n");
-    app_uart_put_string("\r\n");
-    app_uart_put_string("MBlocks-MB ");
-#ifdef DEBUG
-	app_uart_put_string(" (Debug)");
-#elif defined(RELEASE)
-	app_uart_put_string(" (Release)");
-#else
-	app_uart_put_string(" (Unknown)");
-#endif
-    app_uart_put_string("\r\n");
-
-    strSize = sizeof(str);
-    if (db_getVersion(str, strSize)) {
-    	app_uart_put_string("Daughterboard: OK (");
-    	app_uart_put_string(str);
-    	app_uart_put_string(")\r\n");
-    } else {
-    	app_uart_put_string("Daughterboard: Fail\r\n");
-    }
-
-    if (bldc_init()) {
-    	app_uart_put_string("A4960: OK\r\n");
-    } else {
-    	app_uart_put_string("A4960: Fail\r\n");
-    }
-
-	if (mpu6050Initialized_central) {
-    	app_uart_put_string("MPU-6050 (central actuator): OK\r\n");
-    } else {
-    	app_uart_put_string("MPU-6050 (central actuator): Fail\r\n");
-    }
-
-    if (dmpInitialized_central) {
-    	app_uart_put_string("DMP (central actuator): OK\r\n");
-    } else {
-    	app_uart_put_string("DMP (central actuator): Fail\r\n");
-    }
-
-	if (mpu6050Initialized_face) {
-    	app_uart_put_string("MPU-6050 (faceboard 1): OK\r\n");
-    } else {
-    	app_uart_put_string("MPU-6050 (faceboard 1): Fail\r\n");
-    }
-
-    if (dmpInitialized_face) {
-    	app_uart_put_string("DMP (faceboard 1): OK\r\n");
-    } else {
-    	app_uart_put_string("DMP (faceboard 1): Fail\r\n");
-    }
-
-    strSize = sizeof(str);
-    if (fb_getVersion(1, str, strSize)) {
-    	app_uart_put_string("Faceboard 1: OK (");
-    	app_uart_put_string(str);
-    	app_uart_put_string(")\r\n");
-    } else {
-    	app_uart_put_string("Faceboard 1: Fail\r\n");
-    }
-
-    strSize = sizeof(str);
-    if (fb_getVersion(2, str, strSize)) {
-    	app_uart_put_string("Faceboard 2: OK (");
-    	app_uart_put_string(str);
-    	app_uart_put_string(")\r\n");
-    } else {
-    	app_uart_put_string("Faceboard 2: Fail\r\n");
-    }
-
-    strSize = sizeof(str);
-    if (fb_getVersion(3, str, strSize)) {
-    	app_uart_put_string("Faceboard 3: OK (");
-    	app_uart_put_string(str);
-    	app_uart_put_string(")\r\n");
-    } else {
-    	app_uart_put_string("Faceboard 3: Fail\r\n");
-    }
-
-    strSize = sizeof(str);
-    if (fb_getVersion(4, str, strSize)) {
-    	app_uart_put_string("Faceboard 4: OK (");
-    	app_uart_put_string(str);
-    	app_uart_put_string(")\r\n");
-    } else {
-    	app_uart_put_string("Faceboard 4: Fail\r\n");
-    }
-
-    strSize = sizeof(str);
-    if (fb_getVersion(5, str, strSize)) {
-    	app_uart_put_string("Faceboard 5: OK (");
-    	app_uart_put_string(str);
-    	app_uart_put_string(")\r\n");
-    } else {
-    	app_uart_put_string("Faceboard 5: Fail\r\n");
-    }
-
-    strSize = sizeof(str);
-    if (fb_getVersion(6, str, strSize)) {
-    	app_uart_put_string("Faceboard 6: OK (");
-    	app_uart_put_string(str);
-    	app_uart_put_string(")\r\n");
-    } else {
-    	app_uart_put_string("Faceboard 6: Fail\r\n");
-    }
-
-    bootCurrent_mA = power_getChargeCurrent_mA();
-    if (bootCurrent_mA < 20) {
-    	snprintf(str, sizeof(str), "Boot current: OK (%u mA)\r\n", bootCurrent_mA);
-    } else {
-    	snprintf(str, sizeof(str), "Boot current: Fail (%u mA)\r\n", bootCurrent_mA);
-    }
-    app_uart_put_string(str);
-    app_uart_put_string("\r\n");
-
-    mpu6050_setAddress(MPU6050_I2C_ADDR_FACE);
-    imu_enableDMP();
-
-    mpu6050_setAddress(MPU6050_I2C_ADDR_CENTRAL);
-    imu_enableDMP();
-
-    // Enter main loop
     for (;;) {
-        app_sched_execute();
-
-        while (app_uart_get(&c) == NRF_SUCCESS) {
-        	cmdline_newChar(c);
-        	app_timer_cnt_get(&lastCharTime_rtcTicks);
-        }
-
-#if (ENABLE_BLE_COMMANDS == 1)
-        while (ble_sps_get_char(&m_sps, &c)) {
-        	cmdline_newChar(c);
-        	app_timer_cnt_get(&lastCharTime_rtcTicks);
-        }
-#endif
-
-        /* One second after reboot, we turn off the LEDs and start advertising */
-        if (ledsOnAfterBoot && (app_timer_cnt_get(&currentTime_rtcTicks) == NRF_SUCCESS) &&
-        		(currentTime_rtcTicks * USEC_PER_APP_TIMER_TICK >= 1000000)) {
-        	led_setAllOff();
-        	ledsOnAfterBoot = false;
-
-            if (bleApp_isAdvertisingEnabled()) {
-            	bleApp_advertisingStart();
-            }
-        }
-
-        /* Three seconds after reboot, we put the daughterboard and faceboards
-         * to sleep. */
-        if (dbAwakeAfterBoot && (app_timer_cnt_get(&currentTime_rtcTicks) == NRF_SUCCESS) &&
-        		(currentTime_rtcTicks * USEC_PER_APP_TIMER_TICK >= 3000000)) {
-        	db_sleep(true);
-        	dbAwakeAfterBoot = false;
-        	fb_sleep(0, true);
-        }
-
-        main_powerManage();
+        nrf_delay_ms(200);
+        led_setAllOn();
+        nrf_delay_ms(200);
+        led_setAllOff();
     }
 }
-
-/**@brief Power manager. */
-void main_powerManage() {
-	uint32_t err_code;
-	uint32_t currentTime_rtcTicks;
-	uint32_t elapsedTime_rtcTicks;
-
-	uint32_t elapsedCharTime_sec;
-	bool chargerActive;
-
-	app_timer_cnt_get(&currentTime_rtcTicks);
-
-	elapsedTime_rtcTicks = 0x00FFFFFF & (currentTime_rtcTicks - lastCharTime_rtcTicks);
-	elapsedCharTime_sec = (elapsedTime_rtcTicks * USEC_PER_APP_TIMER_TICK) / 1000000;
-
-
-	if ((power_getChargeState() == POWER_CHARGESTATE_OFF) ||
-			(power_getChargeState() == POWER_CHARGESTATE_STANDBY) ||
-			(power_getChargeState() == POWER_CHARGESTATE_ERROR)) {
-		chargerActive = false;
-	} else {
-		chargerActive = true;
-	}
-
-
-	if (sleeping && motionDetected) {
-		/* If the processor was sleeping, the IMU has detected motion, we must
-		 * re-initialize the peripherals that we de-initialized before entering
-		 * sleep mode. */
-
-		/* Turn on all LEDs on the mainboard and the daughterboard for 1 second
-		 * as an indication that the M-Blocks has exited sleep. */
-		db_setLEDs(true, true, true);
-		fb_setTopLEDs(0, true, true, true);
-		fb_setBottomLEDs(0, true, true, true);
-
-		nrf_gpio_pin_set(LED_RED_PIN_NO);
-		nrf_gpio_pin_set(LED_GREEN_PIN_NO);
-		nrf_gpio_pin_set(LED_BLUE_PIN_NO);
-		nrf_delay_ms(1000);
-
-		/* Turn off all of the LEDs.  The led_init() function will handle this
-		 * on the mainboard. */
-		db_setLEDs(false, false, false);
-		fb_setTopLEDs(0, false, false, false);
-		fb_setBottomLEDs(0, false, false, false);
-
-		/* Sleep the daughterboard and the faceboards */
-		db_sleep(true);
-		fb_sleep(0, true);
-
-
-		led_init();
-
-		uart_init();
-		pwm_init();
-		spi_init();
-		power_init();
-		bldc_init();
-        //message_init();
-
-		if (motionCheckTimerID != TIMER_NULL) {
-			err_code = app_timer_stop(motionCheckTimerID);
-			APP_ERROR_CHECK(err_code);
-		}
-
-		mpu6050_setAddress(MPU6050_I2C_ADDR_CENTRAL);
-		imu_enableSleepMode();
-		imu_enableDMP();
-
-		mpu6050_setAddress(MPU6050_I2C_ADDR_FACE);
-		imu_enableSleepMode();
-		imu_enableDMP();
-
-		sleeping = false;
-
-		/* So that the device does not go back to sleep immediately, we pretend
-		 * that we just received a character on one of the serial communication
-		 * interfaces.  This effectively resets the character timer. */
-		app_timer_cnt_get(&lastCharTime_rtcTicks);
-
-		bleApp_setAdvertisingEnabled(true);
-
-		/* Restart charging */
-		power_setChargeState(POWER_CHARGESTATE_STANDBY);
-
-		app_uart_put_string("Awoken from sleep\r\n");
-	} else if (sleepRequested ||
-			((elapsedCharTime_sec > sleepTime_sec) && (sleepTime_sec != 0) && !chargerActive)) {
-		/* If we have received a sleep command, or it has been a long time
-		 * since we received the last character over one of the serial
-		 * interfaces, (and the batteries are not currently charging, we go to
-		 * sleep. */
-
-		/* Clear the sleep requested flag so that we do not re-enter sleep
-		 * immediately after waking up.*/
-		sleepRequested = false;
-
-		if (!sleeping) {
-			app_uart_put_string("Going to sleep\r\n");
-			nrf_delay_ms(10);
-
-			/* In case the charger was in standby or an error state, we force
-			 * it off before going to sleep. */
-			power_setChargeState(POWER_CHARGESTATE_OFF);
-
-			/* Turn off power to the SMA controller and BLDC driver */
-			power_setVBATSWState(VBATSW_SUPERUSER, false);
-			/* Ensure that the daughterboard is in sleep mode */
-			db_sleep(true);
-
-			/* Put all faceboards to sleep, too */
-			fb_sleep(0, true);
-
-			/* Terminate the BLE connection, if one exists */
-			if (m_sps.conn_handle != BLE_CONN_HANDLE_INVALID) {
-				err_code = sd_ble_gap_disconnect(m_sps.conn_handle, BLE_HCI_CONN_INTERVAL_UNACCEPTABLE);
-				APP_ERROR_CHECK(err_code);
-			}
-
-			/* Stop advertising */
-			bleApp_setAdvertisingEnabled(false);
-
-			/* Disable the DMP by placing the IMU into sleep mode and then
-			 * enable low-power motion detection.  We'll use motion to
-			 * wake-up from sleep. */
-			mpu6050_setAddress(MPU6050_I2C_ADDR_CENTRAL);
-			imu_enableSleepMode();
-			imu_enableMotionDetection(true);
-
-			mpu6050_setAddress(MPU6050_I2C_ADDR_FACE);
-			imu_enableSleepMode();
-			imu_enableMotionDetection(false);
-
-			/* Start the timer which we'll use to check whether the IMU has
-			 * sensed motion. */
-		    if (motionCheckTimerID != TIMER_NULL) {
-		    	err_code = app_timer_start(motionCheckTimerID, APP_TIMER_TICKS(1000, APP_TIMER_PRESCALER), NULL);
-		    	APP_ERROR_CHECK(err_code);
-		    }
-
-		    /* Clear the motion detected flag so that we do not wake-up
-		     * immediately. */
-		    motionDetected = false;
-
-		    led_deinit();
-		    uart_deinit();
-		    twi_master_deinit();
-		    pwm_deinit();
-		    spi_deinit();
-		    power_deinit();
-		    bldc_deinit();
-            message_deinit();
-		}
-
-		sleeping = true;
-	}
-
-	err_code = sd_app_evt_wait();
-	APP_ERROR_CHECK(err_code);
-}
-
-void main_motionCheckTimerHandler(void *context) {
-	static uint32_t lastLEDFlashTime_rtcTicks = 0;
-	bool newMotionDetected;
-	uint32_t currentTime_rtcTicks;
-	uint32_t elapsedTime_sec;
-
-	app_timer_cnt_get(&currentTime_rtcTicks);
-	elapsedTime_sec = ((0x00FFFFFF & (currentTime_rtcTicks - lastLEDFlashTime_rtcTicks)) * USEC_PER_APP_TIMER_TICK) / 1000000;
-
-	if (sleeping && (elapsedTime_sec >= 30)) {
-		nrf_gpio_pin_set(LED_RED_PIN_NO);
-		lastLEDFlashTime_rtcTicks = currentTime_rtcTicks;
-		nrf_delay_ms(25);
-	}
-
-	mpu6050_setAddress(MPU6050_I2C_ADDR_CENTRAL);
-	if (imu_checkForMotion(&newMotionDetected) && newMotionDetected) {
-		motionDetected = true;
-	}
-
-	nrf_gpio_pin_clear(LED_RED_PIN_NO);
-}
-
-void main_setSleepRequested(bool requested) {
-	sleepRequested = requested;
-}
-
-bool main_setSleepTime(uint32_t time_sec) {
-	if (time_sec > 3600) {
-		return false;
-	}
-
-	sleepTime_sec = time_sec;
-	return true;
-}
-
-uint32_t main_getSleepTime() {
-	return sleepTime_sec;
-}
-
-
 
 
 /** 

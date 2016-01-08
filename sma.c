@@ -57,7 +57,8 @@ static app_sched_event_handler_t eventHandler;
 static bool sma_init(void);
 static void sma_deinit(void);
 
-static app_timer_id_t sma_timerID = TIMER_NULL;
+APP_TIMER_DEF(sma_timerID); 
+
 static void sma_timerHandler(void *p_context);
 
 bool sma_init() {
@@ -70,14 +71,12 @@ bool sma_init() {
 	nrf_gpio_pin_clear(SMAPWM_PIN_NO);
 	nrf_gpio_cfg_output(SMAPWM_PIN_NO);
 
-	if (sma_timerID == TIMER_NULL) {
-		/* If the timer has not yet been created, create it now. At the moment,
-		 * the SDK does not provide a way to destroy a timer, so we set the
-		 * initial value of sma_timerID to TIMER_NULL in order to mark it
-		 * invalid. */
-		err_code = app_timer_create(&sma_timerID, APP_TIMER_MODE_SINGLE_SHOT, sma_timerHandler);
-		APP_ERROR_CHECK(err_code);
-	}
+	/* If the timer has not yet been created, create it now. At the moment,
+	 * the SDK does not provide a way to destroy a timer, so we set the
+	 * initial value of sma_timerID to TIMER_NULL in order to mark it
+	 * invalid. */
+	err_code = app_timer_create(&sma_timerID, APP_TIMER_MODE_SINGLE_SHOT, sma_timerHandler);
+	APP_ERROR_CHECK(err_code);
 
     smaState = SMA_STATE_EXTENDED;
 
@@ -93,9 +92,7 @@ void sma_deinit() {
 
 	/* If the SMA timer exists, attempt to stop it.  If it is already stopped,
 	 * there is no harm done. */
-	if (sma_timerID != TIMER_NULL) {
-		app_timer_stop(sma_timerID);
-	}
+	app_timer_stop(sma_timerID);
 
 	/* Disable the SMA controller */
 	nrf_gpio_pin_clear(SMAPWM_PIN_NO);

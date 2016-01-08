@@ -74,7 +74,7 @@ static uint16_t setSpeed_rpm;
 //static bool accelModeActive = false;
 //static bool brakeModeActive = false;
 //static bool coastModeActive = false;
-static app_timer_id_t bldc_speedControlTimerID = TIMER_NULL;
+APP_TIMER_DEF(bldc_speedControlTimerID); 
 
 static app_sched_event_handler_t eventHandler;
 
@@ -93,11 +93,9 @@ static bool bldc_updateStable(int32_t newestError);
 bool bldc_init() {
 	uint32_t err_code;
 
-	if (bldc_speedControlTimerID == TIMER_NULL ) {
-		err_code = app_timer_create(&bldc_speedControlTimerID,
-				APP_TIMER_MODE_REPEATED, bldc_speedControlTimerHandler);
-		APP_ERROR_CHECK(err_code);
-	}
+	err_code = app_timer_create(&bldc_speedControlTimerID,
+			APP_TIMER_MODE_REPEATED, bldc_speedControlTimerHandler);
+	APP_ERROR_CHECK(err_code);
 
 	/* The BLDCSPEED is a PWM input to the A4960 which can be used to modulate
 	 * speed, but we use the IREF input instead.  To keep the A4960 from

@@ -28,7 +28,8 @@
 
 static bool initialized = false;
 
-static app_timer_id_t timerID = TIMER_NULL;
+APP_TIMER_DEF(timerID); 
+
 static app_sched_event_handler_t timeoutHandler = NULL;
 static void motionEvent_timeoutHandler(void *p_context);
 static void motionEvent_delay(uint16_t delay_ms, app_sched_event_handler_t delayTimeoutHandler);
@@ -80,10 +81,8 @@ static void inertialActuationPrimitiveHandler(void *p_event_data, uint16_t event
 bool motionEvent_init() {
 	uint32_t err_code;
 
-	if (timerID == TIMER_NULL) {
-		err_code = app_timer_create(&timerID, APP_TIMER_MODE_SINGLE_SHOT, motionEvent_timeoutHandler);
-		APP_ERROR_CHECK(err_code);
-	}
+	err_code = app_timer_create(&timerID, APP_TIMER_MODE_SINGLE_SHOT, motionEvent_timeoutHandler);
+	APP_ERROR_CHECK(err_code);
 
 	initialized = true;
 

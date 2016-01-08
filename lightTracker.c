@@ -53,7 +53,8 @@ static const int alignment[12][9] = {
 
 static bool initialized = false;
 
-static app_timer_id_t timerID = TIMER_NULL;
+APP_TIMER_DEF(timerID); 
+
 static app_sched_event_handler_t timeoutHandler = NULL;
 
 static void lightTracker_timeoutHandler(void *p_context);
@@ -71,10 +72,8 @@ static app_sched_event_handler_t eventHandler;
 bool lightTracker_init() {
 	uint32_t err_code;
 
-	if (timerID == TIMER_NULL) {
-		err_code = app_timer_create(&timerID, APP_TIMER_MODE_SINGLE_SHOT, lightTracker_timeoutHandler);
-		APP_ERROR_CHECK(err_code);
-	}
+	err_code = app_timer_create(&timerID, APP_TIMER_MODE_SINGLE_SHOT, lightTracker_timeoutHandler);
+	APP_ERROR_CHECK(err_code);
 
 	initialized = true;
 

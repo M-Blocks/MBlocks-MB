@@ -17,7 +17,7 @@
 
 #define COUNT_PERIOD	20
 
-app_timer_id_t ledTimerID = TIMER_NULL;
+APP_TIMER_DEF(ledTimerID); 
 
 static uint8_t led_pin_number[LED_COUNT] = {LED_RED_PIN_NO, LED_GREEN_PIN_NO, LED_BLUE_PIN_NO};
 static led_state_t led_state[LED_COUNT];
@@ -27,21 +27,10 @@ static void led_timerHandler(void *p_context);
 
 void led_init() {
 	uint32_t err_code;
-	uint32_t led;
-
-	for (led=0; led<LED_COUNT; led++) {
-		nrf_gpio_pin_clear(led_pin_number[led]);
-		nrf_gpio_cfg_output(led_pin_number[led]);
-		led_state[led] = LED_STATE_OFF;
-	}
-
 
     /* Create a timer which will be used to flash the LEDs */
-	if (ledTimerID == TIMER_NULL) {
-		err_code = app_timer_create(&ledTimerID, APP_TIMER_MODE_REPEATED, led_timerHandler);
-		APP_ERROR_CHECK(err_code);
-	}
-
+	err_code = app_timer_create(&ledTimerID, APP_TIMER_MODE_REPEATED, led_timerHandler);
+	APP_ERROR_CHECK(err_code);
 	/* Start the timer which controls the LEDs */
 	err_code = app_timer_start(ledTimerID, APP_TIMER_TICKS(100, APP_TIMER_PRESCALER), NULL);
 	APP_ERROR_CHECK(err_code);
@@ -57,11 +46,9 @@ void led_deinit(void) {
 		return;
 	}
 
-	if (ledTimerID != TIMER_NULL) {
-		err_code = app_timer_stop(ledTimerID);
-		APP_ERROR_CHECK(err_code);
-	}
-
+	err_code = app_timer_stop(ledTimerID);
+	APP_ERROR_CHECK(err_code);
+		
 	for (led=0; led<LED_COUNT; led++) {
 		led_state[led] = LED_STATE_OFF;
 		nrf_gpio_pin_clear(led_pin_number[led]);

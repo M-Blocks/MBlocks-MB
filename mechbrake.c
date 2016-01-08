@@ -28,17 +28,16 @@ static app_sched_event_handler_t eventHandler = NULL;
 
 static uint32_t startTime_rtcTicks;
 static uint32_t timeoutInterval_ms;
-static app_timer_id_t mechbrake_timerID = TIMER_NULL;
+
+APP_TIMER_DEF(mechbrake_timerID); 
 
 static void mechbrake_timerHandler(void *p_context);
 
 bool mechbrake_init() {
 	uint32_t err_code;
 
-	if (mechbrake_timerID == TIMER_NULL) {
-		err_code = app_timer_create(&mechbrake_timerID, APP_TIMER_MODE_REPEATED, mechbrake_timerHandler);
-		APP_ERROR_CHECK(err_code);
-	}
+	err_code = app_timer_create(&mechbrake_timerID, APP_TIMER_MODE_REPEATED, mechbrake_timerHandler);
+	APP_ERROR_CHECK(err_code);
 
 	initialized = true;
 
@@ -48,10 +47,8 @@ bool mechbrake_init() {
 void mechbrake_deinit() {
 	uint32_t err_code;
 
-	if (mechbrake_timerID != TIMER_NULL) {
-		err_code = app_timer_stop(mechbrake_timerID);
-		APP_ERROR_CHECK(err_code);
-	}
+	err_code = app_timer_stop(mechbrake_timerID);
+	APP_ERROR_CHECK(err_code);
 
 	initialized = false;
 }

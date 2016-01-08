@@ -65,7 +65,8 @@ static bool VBATSWEnabled = false;
 
 static bool initialized = false;
 
-static app_timer_id_t powerTimerID = TIMER_NULL;
+APP_TIMER_DEF(powerTimerID); 
+
 void power_timerHandler(void *p_context);
 
 /* These flags are set when VIN is removed while the charger is still active.
@@ -83,13 +84,11 @@ static void power_setVBATSWTurnedOffFlags(void);
 bool power_init() {
 	uint32_t err_code;
 
-	if (powerTimerID == TIMER_NULL) {
-		/* If the battery charging timer has not been initialized, go ahead and
-		 * create it now.  When it is created, powerTimerID will be updated so
-		 * that in the future we can tell that the timer already exists. */
-		err_code = app_timer_create(&powerTimerID, APP_TIMER_MODE_REPEATED, power_timerHandler);
-		APP_ERROR_CHECK(err_code);
-	}
+	/* If the battery charging timer has not been initialized, go ahead and
+	 * create it now.  When it is created, powerTimerID will be updated so
+	 * that in the future we can tell that the timer already exists. */
+	err_code = app_timer_create(&powerTimerID, APP_TIMER_MODE_REPEATED, power_timerHandler);
+	APP_ERROR_CHECK(err_code);
 
 	/* Start timer which manages battery charging.  It will fire every 200 ms. */
 	err_code = app_timer_start(powerTimerID, APP_TIMER_TICKS(200, APP_TIMER_PRESCALER), NULL);
@@ -107,12 +106,10 @@ void power_deinit() {
 		return;
 	}
 
-	if (powerTimerID != TIMER_NULL) {
-		/* If the timer's ID is valid, stop the timer.  If it is not running
-		 * this does not do any harm. */
-		err_code = app_timer_stop(powerTimerID);
-		APP_ERROR_CHECK(err_code);
-	}
+	/* If the timer's ID is valid, stop the timer.  If it is not running
+	 * this does not do any harm. */
+	err_code = app_timer_stop(powerTimerID);
+	APP_ERROR_CHECK(err_code);
 
 	/* Drive both the LIPROCTL3 and LIPOCTL4 lines high to keep them from
 	 * floating and consuming extra current when in sleep mode. */

@@ -16,7 +16,7 @@ SOFTDEVICE_HEXFILE = ../s310_nrf51422_3.0.0/s310_nrf51422_3.0.0_softdevice.hex
 BOOTLOADER_HEXFILE = ../bootloader/bootloader_gcc_s310_bootloader_xxaa.hex
 
 ## C Source Files
-C_SOURCE_FILES += main.c global.c uart.c db.c fb.c adc.c power.c util.c pwm.c freqcntr.c spi.c bldc.c a4960.c sma.c led.c mechbrake.c cmdline.c commands.c motionEvent.c message.c lightTracker.c
+C_SOURCE_FILES += main.c global.c uart.c db.c fb.c adc.c power.c util.c pwm.c freqcntr.c spi.c bldc.c a4960.c sma.c led.c mechbrake.c cmdline.c
 C_SOURCE_FILES += mpu6050.c imu.c
 C_SOURCE_FILES += bleApp.c ble_sps.c ble_vns.c fifo.c 
 
@@ -37,7 +37,7 @@ CFLAGS += -DSOFTDEVICE_PRESENT
 CFLAGS += -DS310
 CFLAGS += -mcpu=cortex-m0
 CFLAGS += -mthumb -mabi=aapcs --std=gnu99
-CFLAGS += -Wall -Werror -O3
+CFLAGS += -Wall
 CFLAGS += -mfloat-abi=soft
 # keep every function in separate section. This will allow linker to dump unused functions
 CFLAGS += -ffunction-sections -fdata-sections -fno-strict-aliasing
@@ -196,6 +196,7 @@ OBJECTS = $(C_OBJECTS) $(ASSEMBLER_OBJECTS)
 all: clean
 all: $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_BootloaderInput.hex 
 all: $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_AppWithSoftdevice.hex 
+all: $(OUTPUT_BINARY_DIRECTORY)/MBlocks-MB_s310_xxaa-IncSD.hex
 all: $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_CompleteImage.hex
 
 .PHONY: clean
@@ -238,6 +239,9 @@ $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_BootloaderInput.hex: $(OUTPUT_BINA
 
 ## Merge the basic application image with the softdevice
 $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_AppWithSoftdevice.hex: $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_BootloaderInput.hex
+	 mergehex --merge $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_BootloaderInput.hex $(SOFTDEVICE_HEXFILE) --output $@
+
+$(OUTPUT_BINARY_DIRECTORY)/MBlocks-MB_s310_xxaa-IncSD.hex: $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_BootloaderInput.hex
 	 mergehex --merge $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_BootloaderInput.hex $(SOFTDEVICE_HEXFILE) --output $@
 
 ## Merge the basic application image with the bootloader and the softdevice, and configure the bootloader configuration settings to mark the application image valid 
