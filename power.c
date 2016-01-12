@@ -2,14 +2,14 @@
  * power.c
  *
  *  Created on: Nov 12, 2013
- *      Author: kwgilpin
+ *      Author: kwgilpin, sclaici
  */
 
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-
+ 
 #include "nrf_gpio.h"
 #include "nrf_delay.h"
 

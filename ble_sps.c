@@ -10,6 +10,8 @@
  *
  */
 
+#include "SEGGER_RTT.h"
+
 #include "ble_sps.h"
 #include <string.h>
 #include <stdbool.h>
@@ -43,9 +45,9 @@ static uint32_t ackdata_char_add(ble_sps_t * p_sps, const ble_sps_init_t * p_sps
  */
 void on_connect(ble_sps_t * p_sps, ble_evt_t * p_ble_evt) {
 
-#if ((BLE_DEBUG == 1) && (ENABLE_BLE_COMMANDS != 1))
-    app_uart_put_string("\r\nON_CONNECT\r\n");
-#endif
+//#if ((BLE_DEBUG == 1) && (ENABLE_BLE_COMMANDS != 1))
+    SEGGER_RTT_WriteString(0, "\r\nON_CONNECT\r\n");
+//#endif
 
     p_sps->conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
 }
@@ -59,9 +61,9 @@ void on_connect(ble_sps_t * p_sps, ble_evt_t * p_ble_evt) {
 void on_disconnect(ble_sps_t * p_sps, ble_evt_t * p_ble_evt) {
     UNUSED_PARAMETER(p_ble_evt);
 
-#if ((BLE_DEBUG == 1) && (ENABLE_BLE_COMMANDS != 1))
-    app_uart_put_string("\r\nON_DISCONNECT\r\n");
-#endif
+//#if ((BLE_DEBUG == 1) && (ENABLE_BLE_COMMANDS != 1))
+    SEGGER_RTT_WriteString(0, "\r\nON_DISCONNECT\r\n");
+//#endif
 
     p_sps->conn_handle = BLE_CONN_HANDLE_INVALID;
 
@@ -82,9 +84,9 @@ void on_disconnect(ble_sps_t * p_sps, ble_evt_t * p_ble_evt) {
 void on_write(ble_sps_t * p_sps, ble_evt_t * p_ble_evt)
 {
 
-#if ((BLE_DEBUG == 1) && (ENABLE_BLE_COMMANDS != 1))
-    app_uart_put_string("\r\nON_WRITE\r\n");
-#endif
+//#if ((BLE_DEBUG == 1) && (ENABLE_BLE_COMMANDS != 1))
+    SEGGER_RTT_WriteString(0, "\r\nON_WRITE\r\n");
+//#endif
 
     ble_gatts_evt_write_t * p_evt_write = &p_ble_evt->evt.gatts_evt.params.write;
 
@@ -100,9 +102,9 @@ void on_write(ble_sps_t * p_sps, ble_evt_t * p_ble_evt)
 void on_rw_authorize_request(ble_sps_t *p_sps, ble_evt_t *p_ble_evt) {
 	ble_gatts_evt_rw_authorize_request_t *auth_req;
 
-#if ((BLE_DEBUG == 1) && (ENABLE_BLE_COMMANDS != 1))
-    app_uart_put_string("\r\nON_RW_AUTHORIZE_REQUEST\r\n");
-#endif
+//#if ((BLE_DEBUG == 1) && (ENABLE_BLE_COMMANDS != 1))
+    SEGGER_RTT_WriteString(0, "\r\nON_RW_AUTHORIZE_REQUEST\r\n");
+//#endif
 
 	auth_req = &p_ble_evt->evt.gatts_evt.params.authorize_request;
 
@@ -128,9 +130,9 @@ void on_rw_authorize_request(ble_sps_t *p_sps, ble_evt_t *p_ble_evt) {
 void on_hvc(ble_sps_t *p_sps, ble_evt_t *p_ble_evt) {
 	fifoSize_t numBytesIndicated;
 
-#if ((BLE_DEBUG == 1) && (ENABLE_BLE_COMMANDS != 1))
-    app_uart_put_string("\r\nON_HVC\r\n");
-#endif
+//#if ((BLE_DEBUG == 1) && (ENABLE_BLE_COMMANDS != 1))
+    SEGGER_RTT_WriteString(0, "\r\nON_HVC\r\n");
+//#endif
 
 	if (p_ble_evt->evt.gatts_evt.params.hvc.handle ==
 			p_sps->ackdata_char_handles.value_handle) {
@@ -150,9 +152,9 @@ void on_hvc(ble_sps_t *p_sps, ble_evt_t *p_ble_evt) {
 
 void on_timeout(ble_sps_t *p_sps, ble_evt_t *p_ble_evt) {
 
-#if ((BLE_DEBUG == 1) && (ENABLE_BLE_COMMANDS != 1))
-    app_uart_put_string("\r\nON_TIMEOUT\r\n");
-#endif
+//#if ((BLE_DEBUG == 1) && (ENABLE_BLE_COMMANDS != 1))
+    SEGGER_RTT_WriteString(0, "\r\nON_TIMEOUT\r\n");
+//#endif
 
 	/* If the client did not confirmation our attempt to indicate the data we
 	 * sent to it before the built-in timeout, we now allow more data to be
@@ -222,16 +224,16 @@ void xfer_writeData_to_rxFifo(ble_sps_t *p_sps) {
 		authorize_reply_params.params.write.gatt_status = BLE_GATT_STATUS_SUCCESS;
 		sd_ble_gatts_rw_authorize_reply(p_sps->conn_handle, &authorize_reply_params);
 
-#if ((BLE_DEBUG == 1) && (ENABLE_BLE_COMMANDS != 1))
-		app_uart_put_string("\r\nREQUEST GRANTED\r\n");
-#endif
+//#if ((BLE_DEBUG == 1) && (ENABLE_BLE_COMMANDS != 1))
+		SEGGER_RTT_WriteString(0, "\r\nREQUEST GRANTED\r\n");
+//#endif
 
 		/* Allow future writes. */
 		p_sps->writeAuthorizationPending = 0;
 	} else {
-#if ((BLE_DEBUG == 1) && (ENABLE_BLE_COMMANDS != 1))
-		app_uart_put_string("\r\nNO ROOM IN RX FIFO FOR WRITE DATA\r\n");
-#endif
+//#if ((BLE_DEBUG == 1) && (ENABLE_BLE_COMMANDS != 1))
+		SEGGER_RTT_WriteString(0, "\r\nNO ROOM IN RX FIFO FOR WRITE DATA\r\n");
+//#endif
 	}
 }
 
@@ -342,9 +344,7 @@ uint32_t config_char_add(ble_sps_t * p_sps, const ble_sps_init_t * p_sps_init) {
      * p_sps->config_char_uuid_type. */
     ble_uuid128_t base_uuid = SPS_UUID_CONFIG_CHAR_BASE;
     err_code = sd_ble_uuid_vs_add(&base_uuid, &p_sps->config_char_uuid_type);
-    if (err_code != NRF_SUCCESS) {
-    	return err_code;
-    }
+    APP_ERROR_CHECK(err_code);
 
     /* Create a more easily used 24-bit UUID from the new vendor-specific
      * acknowledged data characteristic UUID base and the two TimeLow bytes
@@ -423,9 +423,7 @@ uint32_t ackdata_char_add(ble_sps_t * p_sps, const ble_sps_init_t * p_sps_init) 
      * p_sps->ackdata_char_uuid_type. */
     ble_uuid128_t base_uuid = SPS_UUID_ACKDATA_CHAR_BASE;
     err_code = sd_ble_uuid_vs_add(&base_uuid, &p_sps->ackdata_char_uuid_type);
-    if (err_code != NRF_SUCCESS) {
-    	return err_code;
-    }
+    APP_ERROR_CHECK(err_code);
 
     /* Create a more easily used 24-bit UUID from the new vendor-specific
      * acknowledged data characteristic UUID base and the two TimeLow bytes
@@ -478,9 +476,9 @@ uint32_t ble_sps_init(ble_sps_t * p_sps, const ble_sps_init_t * p_sps_init)
     ble_service_uuid.type = p_sps->service_uuid_type;
     ble_service_uuid.uuid = SPS_UUID_SERVICE;
 
-#if ((BLE_DEBUG == 1) && (ENABLE_BLE_COMMANDS != 1))
-    app_uart_put_string("\r\nBLE_SPS_INIT\r\n");
-#endif
+//#if ((BLE_DEBUG == 1) && (ENABLE_BLE_COMMANDS != 1))
+    SEGGER_RTT_WriteString(0, "\r\nBLE_SPS_INIT\r\n");
+//#endif
 
     /* Add the Serial Port Service to the BLE stack using the 24-bit
      * abbreviated UUID which we just created. */

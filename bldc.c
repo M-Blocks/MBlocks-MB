@@ -2,7 +2,7 @@
  * bldc.c
  *
  *  Created on: Nov 25, 2013
- *      Author: kwgilpin
+ *      Author: kwgilpin, sclaici
  */
 
 #include <stdint.h>
@@ -74,7 +74,7 @@ static uint16_t setSpeed_rpm;
 //static bool accelModeActive = false;
 //static bool brakeModeActive = false;
 //static bool coastModeActive = false;
-APP_TIMER_DEF(bldc_speedControlTimerID); 
+APP_TIMER_DEF(bldc_speed_control_timer_id); 
 
 static app_sched_event_handler_t eventHandler;
 
@@ -93,7 +93,7 @@ static bool bldc_updateStable(int32_t newestError);
 bool bldc_init() {
 	uint32_t err_code;
 
-	err_code = app_timer_create(&bldc_speedControlTimerID,
+	err_code = app_timer_create(&bldc_speed_control_timer_id,
 			APP_TIMER_MODE_REPEATED, bldc_speedControlTimerHandler);
 	APP_ERROR_CHECK(err_code);
 
@@ -307,7 +307,7 @@ bool bldc_stop(uint16_t brakeTime_ms) {
 
 		/* Stop and restart the speed control timer so that it expires at the
 		 * moment when we need to release the electronic brake. */
-		err_code = app_timer_stop(bldc_speedControlTimerID);
+		err_code = app_timer_stop(bldc_speed_control_timer_id);
 		APP_ERROR_CHECK(err_code);
 
 		/* Indicate to the speed control timer handler that when the timer next
@@ -316,7 +316,7 @@ bool bldc_stop(uint16_t brakeTime_ms) {
 
 		/* Re-start the timer, indicating that when it expires that the eBrake
 		 * should be released. */
-		err_code = app_timer_start(bldc_speedControlTimerID,
+		err_code = app_timer_start(bldc_speed_control_timer_id,
 				APP_TIMER_TICKS(brakeTime_ms, APP_TIMER_PRESCALER),
 				&bldcModeEBrake);
 		APP_ERROR_CHECK(err_code);
@@ -333,14 +333,14 @@ bool bldc_stop(uint16_t brakeTime_ms) {
 
 		/* Stop the speed control timer before restarting to so that it expires
 		 * next when we know that the motor has coasted to a stop. */
-		err_code = app_timer_stop(bldc_speedControlTimerID);
+		err_code = app_timer_stop(bldc_speed_control_timer_id);
 		APP_ERROR_CHECK(err_code);
 
 		bldcModeCurrent = BLDC_MODE_COAST;
 
 		/* Re-start the timer, indicating that when it expires that the motor
 		 * has coasted to a stop. */
-		err_code = app_timer_start(bldc_speedControlTimerID,
+		err_code = app_timer_start(bldc_speed_control_timer_id,
 				APP_TIMER_TICKS(COAST_TIME_MAX_MS, APP_TIMER_PRESCALER),
 				&bldcModeCoast);
 		APP_ERROR_CHECK(err_code);
@@ -456,10 +456,11 @@ bool bldc_setSpeed(uint16_t speed_rpm, bool reverse, uint16_t brakeTime_ms,
 
 	/* Stop the speed control timer before restarting it in case it is already
 	 * running. */
-	err_code = app_timer_stop(bldc_speedControlTimerID);
+	err_code = app_timer_stop(bldc_speed_control_timer_id);
 	APP_ERROR_CHECK(err_code);
-	err_code = app_timer_start(bldc_speedControlTimerID,
-			APP_TIMER_TICKS(20, APP_TIMER_PRESCALER), &bldcModeConstSpeed);
+	err_code = app_timer_start(bldc_speed_control_timer_id,
+							   APP_TIMER_TICKS(20, APP_TIMER_PRESCALER), 
+							   &bldcModeConstSpeed);
 	APP_ERROR_CHECK(err_code);
 
 	/* Manually call the control function immediately so that we do not have to
@@ -525,10 +526,11 @@ bool bldc_setAccel(uint16_t accel_mA, uint16_t time_ms, bool reverse,
 	 * to be executed and that it will be executed once more before the timer
 	 * is actually stopped.  To avoid this scenario, we make use of the
 	 * constSpeedModeActive flag in the timer handler.  */
-	err_code = app_timer_stop(bldc_speedControlTimerID);
+	err_code = app_timer_stop(bldc_speed_control_timer_id);
 	APP_ERROR_CHECK(err_code);
-	err_code = app_timer_start(bldc_speedControlTimerID,
-			APP_TIMER_TICKS(time_ms, APP_TIMER_PRESCALER), &bldcModeAccel);
+	err_code = app_timer_start(bldc_speed_control_timer_id,
+							   APP_TIMER_TICKS(time_ms, APP_TIMER_PRESCALER), 
+							   &bldcModeAccel);
 	APP_ERROR_CHECK(err_code);
 
 	return success;
@@ -668,7 +670,7 @@ void bldc_speedControlLoop(bool reinit, bldcMode_t bldcModeTimerStart) {
 	 * stopped before returning. */
 	if (!initialized || !power_getVBATSWState() || !configured
 			|| needToReconfigure) {
-		app_timer_stop(bldc_speedControlTimerID);
+		app_timer_stop(bldc_speed_control_timer_id);
 		bldc_stop(0);
 		return;
 	}
@@ -726,7 +728,7 @@ void bldc_speedControlLoop(bool reinit, bldcMode_t bldcModeTimerStart) {
 		 * indicates that enough time has expired for the motor to completely
 		 * spin down to its stopped state.  As such, we disable the speed
 		 * control timer and turn off the BLDC controller. */
-		app_timer_stop(bldc_speedControlTimerID);
+		app_timer_stop(bldc_speed_control_timer_id);
 
 		/* Withdraw our request to keep the VBATSW supply powered.  If nothing
 		 * else is using the VBATSW supply, this will turn it off. */

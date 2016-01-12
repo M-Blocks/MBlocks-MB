@@ -16,10 +16,8 @@ SOFTDEVICE_HEXFILE = ../s310_nrf51422_3.0.0/s310_nrf51422_3.0.0_softdevice.hex
 BOOTLOADER_HEXFILE = ../bootloader/bootloader_gcc_s310_bootloader_xxaa.hex
 
 ## C Source Files
-C_SOURCE_FILES += main.c global.c uart.c db.c fb.c adc.c power.c util.c pwm.c freqcntr.c spi.c bldc.c a4960.c sma.c led.c mechbrake.c cmdline.c
-C_SOURCE_FILES += mpu6050.c imu.c
-C_SOURCE_FILES += bleApp.c ble_sps.c ble_vns.c fifo.c 
-
+C_SOURCE_FILES += main.c global.c led.c pwm.c spi.c uart.c util.c power.c adc.c db.c fb.c bldc.c a4960.c freqcntr.c mpu6050.c imu.c motionEvent.c sma.c mechbrake.c commands.c cmdline.c
+C_SOURCE_FILES += bleApp.c ble_sps.c ble_vns.c fifo.c
 ## The Following files are only needed when the ble_debug_assert_handler() function is called from the app_error_handler() in main ##
 C_SOURCE_FILES += ble_debug_assert_handler.c
 
@@ -84,12 +82,9 @@ $(abspath $(SDK_PATH)components/libraries/button/app_button.c) \
 $(abspath $(SDK_PATH)components/libraries/scheduler/app_scheduler.c) \
 $(abspath $(SDK_PATH)components/libraries/timer/app_timer.c) \
 $(abspath $(SDK_PATH)components/libraries/timer/app_timer_appsh.c) \
-$(abspath $(SDK_PATH)components/libraries/trace/app_trace.c) \
 $(abspath $(SDK_PATH)components/libraries/util/nrf_assert.c) \
 $(abspath $(SDK_PATH)components/libraries/util/app_error.c) \
-$(abspath $(SDK_PATH)components/libraries/util/app_util_platform.c) \
-$(abspath $(SDK_PATH)components/libraries/uart/retarget.c) \
-$(abspath $(SDK_PATH)components/libraries/uart/app_uart.c) \
+$(abspath $(SDK_PATH)components/libraries/uart/app_uart_fifo.c) \
 $(abspath $(SDK_PATH)components/libraries/sensorsim/sensorsim.c) \
 $(abspath $(SDK_PATH)components/libraries/spi/spi_master.c) \
 $(abspath $(SDK_PATH)components/libraries/spi/spi_slave.c) \
@@ -108,10 +103,18 @@ $(abspath $(SDK_PATH)components/ble/ble_flash/ble_flash.c) \
 $(abspath $(SDK_PATH)components/toolchain/system_nrf51.c) \
 $(abspath $(SDK_PATH)components/softdevice/common/softdevice_handler/softdevice_handler.c) \
 $(abspath $(SDK_PATH)components/softdevice/common/softdevice_handler/softdevice_handler_appsh.c) \
+$(abspath ../includes/RTT/SEGGER_RTT.c) \
+$(abspath ../includes/RTT/SEGGER_RTT_printf.c)
 
-C_PATHS += ../ $(SDK_PATH) $(TEMPLATE_PATH) $(wildcard $(SDK_PATH)components/*/) $(wildcard $(SDK_PATH)components/ant/*/) \
-$(wildcard $(SDK_PATH)components/softdevice/common/*/) $(wildcard $(SDK_PATH)components/drivers_nrf/*/) $(wildcard $(SDK_PATH)components/ble/*/) \
-$(wildcard $(SDK_PATH)components/libraries/*/) $(wildcard $(SDK_PATH)components/drivers_nrf/twi_master/*/)
+C_PATHS += ../ $(SDK_PATH) $(TEMPLATE_PATH) \
+			   $(wildcard $(SDK_PATH)components/*/) \
+			   $(wildcard $(SDK_PATH)components/ant/*/) \
+			   $(wildcard $(SDK_PATH)components/softdevice/common/*/) \
+			   $(wildcard $(SDK_PATH)components/drivers_nrf/*/) \
+			   $(wildcard $(SDK_PATH)components/ble/*/) \
+			   $(wildcard $(SDK_PATH)components/libraries/*/) \
+			   $(wildcard $(SDK_PATH)components/drivers_nrf/twi_master/*/) \
+			   $(wildcard ../includes/RTT/) \
 
 #assembly files common to all targets
 ASM_SOURCE_FILES  = $(abspath $(SDK_PATH)components/toolchain/gcc/gcc_startup_nrf51.s)
@@ -157,6 +160,8 @@ INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ble/ble_debug_assert_handler)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/softdevice/common/softdevice_handler)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ble/ble_services/ble_hrs)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/ble_flash)
+
+INCLUDEPATHS += -I$(abspath ../includes/RTT)
 
 
 ## Output directories

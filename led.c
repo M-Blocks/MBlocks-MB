@@ -2,7 +2,7 @@
  * led.c
  *
  *  Created on: Jan 29, 2014
- *      Author: kwgilpin
+ *      Author: kwgilpin, sclaici
  */
 
 #include "nrf_gpio.h"
@@ -17,22 +17,22 @@
 
 #define COUNT_PERIOD	20
 
-APP_TIMER_DEF(ledTimerID); 
+APP_TIMER_DEF(led_timer_id); 
 
 static uint8_t led_pin_number[LED_COUNT] = {LED_RED_PIN_NO, LED_GREEN_PIN_NO, LED_BLUE_PIN_NO};
 static led_state_t led_state[LED_COUNT];
 static bool initialized = false;
 
-static void led_timerHandler(void *p_context);
+static void led_timer_handler(void *p_context);
 
 void led_init() {
 	uint32_t err_code;
 
     /* Create a timer which will be used to flash the LEDs */
-	err_code = app_timer_create(&ledTimerID, APP_TIMER_MODE_REPEATED, led_timerHandler);
+	err_code = app_timer_create(&led_timer_id, APP_TIMER_MODE_REPEATED, led_timer_handler);
 	APP_ERROR_CHECK(err_code);
 	/* Start the timer which controls the LEDs */
-	err_code = app_timer_start(ledTimerID, APP_TIMER_TICKS(100, APP_TIMER_PRESCALER), NULL);
+	err_code = app_timer_start(led_timer_id, APP_TIMER_TICKS(100, APP_TIMER_PRESCALER), NULL);
 	APP_ERROR_CHECK(err_code);
 
 	initialized = true;
@@ -46,7 +46,7 @@ void led_deinit(void) {
 		return;
 	}
 
-	err_code = app_timer_stop(ledTimerID);
+	err_code = app_timer_stop(led_timer_id);
 	APP_ERROR_CHECK(err_code);
 		
 	for (led=0; led<LED_COUNT; led++) {
@@ -113,7 +113,7 @@ uint32_t led_getDutyCycle_percent(uint8_t led) {
 	return 0;
 }
 
-void led_timerHandler(void *p_context) {
+void led_timer_handler(void *p_context) {
 	static uint32_t count = 0;
 	uint32_t adjCount;
 	uint32_t led;

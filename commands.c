@@ -41,8 +41,6 @@
 #include "ble_sps.h"
 #include "led.h"
 #include "commands.h"
-#include "message.h"
-#include "lightTracker.h"
 
 extern ble_sps_t m_sps;
 
@@ -91,9 +89,6 @@ static void cmdFBRxCount(const char *args);
 static void cmdFBRxFlush(const char *args);
 static void cmdFBRxEnable(const char *args);
 static void cmdFBSleep(const char *args);
-/* Message commands */
-static void cmdMsgSendCmd(const char *args);
-static void cmdMsgBdcastCmd(const char *args);
 /* IMU commands */
 static void cmdIMUSelect(const char *args);
 static void cmdIMUInit(const char *args);
@@ -113,7 +108,6 @@ static void cmdBLEMACAddr(const char *args);
 static void cmdChangePlane(const char *args);
 static void cmdInertialActuation(const char *args);
 /* */
-static void cmdLightTracker(const char *args);
 static void cmdTestCurr(const char *args);
 
 // These string are what the command line processes looking for the user to
@@ -254,13 +248,11 @@ static cmdFcnPair_t cmdTable[] = {
 		{cmdChangePlaneStr, cmdChangePlane },
 		{cmdInertialActuationStr, cmdInertialActuation },
 		/* */
-		{cmdLightTrackerStr, cmdLightTracker},
 		{cmdTestCurrStr, cmdTestCurr},
 // Always end the command table with an emptry string and null pointer
 		{ cmdEmptyStr, NULL } };
 
 /* Callbacks for printing status info after command completion */
-static void cmdLightTrackerHandler(void *p_event_data, uint16_t event_size);
 static void cmdMotionPrimitiveHandler(void *p_event_data, uint16_t event_size);
 static void cmdMotionEventHandler(void *p_event_data, uint16_t event_size);
 
@@ -1891,16 +1883,6 @@ void cmdInertialActuation(const char *args) {
 /*  Complex Commands */
 /*********************/
 /* */
-void cmdLightTracker(const char *args) {
-	unsigned int threshold, bldcSpeed_rpm, brakeCurrent_mA, brakeTime_ms;
-	sscanf(args, "%u %u %u %u", &bldcSpeed_rpm, &brakeCurrent_mA, &brakeTime_ms, &threshold);
-
-	if (lightTracker_startLightTracker(bldcSpeed_rpm, brakeCurrent_mA, brakeTime_ms,
-			threshold, cmdLightTrackerHandler)) {
-		app_uart_put_string("Starting light tracker...\r\n");
-	}
-}
-
 void cmdTestCurr(const char *str) {
 	return;
 }
@@ -1908,18 +1890,6 @@ void cmdTestCurr(const char *str) {
 /*************/
 /* Callbacks */
 /*************/
-void cmdLightTrackerHandler(void *p_event_data, uint16_t event_size) {
-	trackerEvent_t trackerEvent;
-	trackerEvent = *(trackerEvent_t *) p_event_data;
-
-	switch (trackerEvent) {
-	case LIGHT_TRACKER_EVENT_COMPLETE:
-		app_uart_put_string("Successfully tracked light source.\r\n");
-		break;
-	}
-}
-
-
 void cmdMotionPrimitiveHandler(void *p_event_data, uint16_t event_size) {
 	motionPrimitive_t motionPrimitive;
 

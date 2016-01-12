@@ -2,7 +2,7 @@
  * util.c
  *
  *  Created on: Nov 13, 2013
- *      Author: kwgilpin
+ *      Author: kwgilpin, sclaici
  */
 
 #include <stdint.h>

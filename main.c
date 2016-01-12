@@ -23,9 +23,11 @@
  * and how you can customize.
  */
 
-
+#include <inttypes.h>
 #include <stdint.h>
 #include <string.h>
+
+#include "SEGGER_RTT.h"
 
 #include "nordic_common.h"
 #include "nrf.h"
@@ -52,31 +54,27 @@
 
 #include "global.h"
 #include "pins.h"
-#include "util.h"
-#include "uart.h"
-#include "db.h"
-#include "fb.h"
-#include "adc.h"
-#include "pwm.h"
-#include "freqcntr.h"
-#include "spi.h"
-#include "twi_master_config.h"
-#include "twi_master.h"
-#include "bldc.h"
-#include "a4960.h"
-#include "sma.h"
-#include "mpu6050.h"
-#include "imu.h"
-#include "power.h"
 #include "led.h"
-// #include "commands.h"
-// #include "cmdline.h"
-// #include "message.h"
+#include "pwm.h"
+#include "spi.h"
+#include "adc.h"
+#include "uart.h"
+#include "util.h"
+#include "power.h"
+#include "db.h"
+#include "fb.h" 
+#include "bldc.h"
+#include "imu.h"
+#include "mpu6050.h"
+#include "twi_master.h"
+#include "twi_master_config.h"
+#include "commands.h"
+#include "cmdline.h"
 
 #include "bleApp.h"
 #include "ble_sps.h"
 #include "ble_vns.h"
-
+ 
 //#define WAKEUP_BUTTON_PIN               NRF6310_BUTTON_0                            /**< Button used to wake up the application. */
 // YOUR_JOB: Define any other buttons to be used by the applications:
 // #define MY_BUTTON_PIN                   NRF6310_BUTTON_1
@@ -95,14 +93,22 @@
 #define SCHED_MAX_EVENT_DATA_SIZE       sizeof(app_timer_event_t)                   /**< Maximum size of scheduler events. Note that scheduler BLE stack events do not contain any data, as the events are being pulled from the stack in the event handler. */
 #define SCHED_QUEUE_SIZE                12                                          /**< Maximum number of events in the scheduler queue. */
 
+static bool sleepRequested = false;
+static uint32_t sleepTime_sec = 600;
+static bool sleeping = false;
+static uint32_t lastCharTime_rtcTicks = 0;
+static bool motionDetected = false;
 
 APP_TIMER_DEF(motionCheckTimerID); 
 
 static void main_timersInit(void);
+static void main_timersStart(void);
 static void main_schedulerInit(void);
 static void main_gpioteInit(void);
 static void main_gpioInit(void);
 static void main_configUnusedPins(void);
+
+static void main_motionCheckTimerHandler(void *context);
 
 /**@brief Error handler function, which is called when an error has occurred. 
  *
@@ -124,7 +130,9 @@ void app_error_handler(uint32_t error_code, uint32_t line_num, const uint8_t * p
     //ble_debug_assert_handler(error_code, line_num, p_file_name);
 
     // On assert, the system can only recover with a reset.
-    NVIC_SystemReset();
+    char err[20];
+    sprintf(err, "Error Code: %u\n", (unsigned) error_code);
+    SEGGER_RTT_WriteString(0, err);
 }
 
 
@@ -166,10 +174,21 @@ static void service_error_handler(uint32_t nrf_error)
  * @details Initializes the timer module.
  */
 void main_timersInit() {
-    uint32_t err_code;
-
     // Initialize timer module, making it use the scheduler
     APP_TIMER_APPSH_INIT(APP_TIMER_PRESCALER, APP_TIMER_OP_QUEUE_SIZE, true);
+
+    // Create the motion detection timer
+    uint32_t err_code;
+    err_code = app_timer_create(&motionCheckTimerID, APP_TIMER_MODE_REPEATED, main_motionCheckTimerHandler);
+    APP_ERROR_CHECK(err_code);
+}
+
+/**@brief Timer start.
+ *
+ * @details Starts all timers
+ */
+void main_timersStart() {
+    // Nothing here
 }
 
 /**@brief Event Scheduler initialization. */
@@ -321,10 +340,178 @@ void main_configUnusedPins() {
     nrf_gpio_cfg_output(2);
 }
 
+/**@brief Power management
+ */
+static void power_manage(void)
+{
+    uint32_t err_code;
+    uint32_t currentTime_rtcTicks;
+    uint32_t elapsedTime_rtcTicks;
+
+    uint32_t elapsedCharTime_sec;
+    bool chargerActive;
+
+    app_timer_cnt_get(&currentTime_rtcTicks);
+
+    elapsedTime_rtcTicks = 0x00FFFFFF & (currentTime_rtcTicks - lastCharTime_rtcTicks);
+    elapsedCharTime_sec = (elapsedTime_rtcTicks * USEC_PER_APP_TIMER_TICK) / 1000000;
+
+
+    if ((power_getChargeState() == POWER_CHARGESTATE_OFF) ||
+            (power_getChargeState() == POWER_CHARGESTATE_STANDBY) ||
+            (power_getChargeState() == POWER_CHARGESTATE_ERROR)) {
+        chargerActive = false;
+    } else {
+        chargerActive = true;
+    }
+
+
+    if (sleeping && motionDetected) {
+        /* If the processor was sleeping, the IMU has detected motion, we must
+         * re-initialize the peripherals that we de-initialized before entering
+         * sleep mode. */
+
+        /* Turn on all LEDs on the mainboard and the daughterboard for 1 second
+         * as an indication that the M-Blocks has exited sleep. */
+        db_setLEDs(true, true, true);
+        fb_setTopLEDs(0, true, true, true);
+        fb_setBottomLEDs(0, true, true, true);
+
+        nrf_gpio_pin_set(LED_RED_PIN_NO);
+        nrf_gpio_pin_set(LED_GREEN_PIN_NO);
+        nrf_gpio_pin_set(LED_BLUE_PIN_NO);
+        nrf_delay_ms(1000);
+
+        /* Turn off all of the LEDs.  The led_init() function will handle this
+         * on the mainboard. */
+        db_setLEDs(false, false, false);
+        fb_setTopLEDs(0, false, false, false);
+        fb_setBottomLEDs(0, false, false, false);
+
+        /* Sleep the daughterboard and the faceboards */
+        db_sleep(true);
+        fb_sleep(0, true);
+
+
+        led_init();
+        uart_init();
+        pwm_init();
+        spi_init();
+        power_init();
+        bldc_init();
+
+        if (motionCheckTimerID != TIMER_NULL) {
+            err_code = app_timer_stop(motionCheckTimerID);
+            APP_ERROR_CHECK(err_code);
+        }
+
+        mpu6050_setAddress(MPU6050_I2C_ADDR_CENTRAL);
+        imu_enableSleepMode();
+        imu_enableDMP();
+
+        mpu6050_setAddress(MPU6050_I2C_ADDR_FACE);
+        imu_enableSleepMode();
+        imu_enableDMP();
+
+        sleeping = false;
+
+        /* So that the device does not go back to sleep immediately, we pretend
+         * that we just received a character on one of the serial communication
+         * interfaces.  This effectively resets the character timer. */
+        app_timer_cnt_get(&lastCharTime_rtcTicks);
+
+        bleApp_setAdvertisingEnabled(true);
+
+        /* Restart charging */
+        power_setChargeState(POWER_CHARGESTATE_STANDBY);
+
+        app_uart_put_string("Awoken from sleep\r\n");
+    } else if (sleepRequested ||
+            ((elapsedCharTime_sec > sleepTime_sec) && (sleepTime_sec != 0) && !chargerActive)) {
+        /* If we have received a sleep command, or it has been a long time
+         * since we received the last character over one of the serial
+         * interfaces, (and the batteries are not currently charging, we go to
+         * sleep. */
+
+        /* Clear the sleep requested flag so that we do not re-enter sleep
+         * immediately after waking up.*/
+        sleepRequested = false;
+
+        if (!sleeping) {
+            app_uart_put_string("Going to sleep\r\n");
+            nrf_delay_ms(10);
+
+            /* In case the charger was in standby or an error state, we force
+             * it off before going to sleep. */
+            power_setChargeState(POWER_CHARGESTATE_OFF);
+
+            /* Turn off power to the SMA controller and BLDC driver */
+            power_setVBATSWState(VBATSW_SUPERUSER, false);
+            /* Ensure that the daughterboard is in sleep mode */
+            db_sleep(true);
+
+            /* Put all faceboards to sleep, too */
+            fb_sleep(0, true);
+
+            /* Terminate the BLE connection, if one exists */
+            if (m_sps.conn_handle != BLE_CONN_HANDLE_INVALID) {
+                err_code = sd_ble_gap_disconnect(m_sps.conn_handle, BLE_HCI_CONN_INTERVAL_UNACCEPTABLE);
+                APP_ERROR_CHECK(err_code);
+            }
+
+            /* Stop advertising */
+            bleApp_setAdvertisingEnabled(false);
+
+            /* Disable the DMP by placing the IMU into sleep mode and then
+             * enable low-power motion detection.  We'll use motion to
+             * wake-up from sleep. */
+            mpu6050_setAddress(MPU6050_I2C_ADDR_CENTRAL);
+            imu_enableSleepMode();
+            imu_enableMotionDetection(true);
+
+            mpu6050_setAddress(MPU6050_I2C_ADDR_FACE);
+            imu_enableSleepMode();
+            imu_enableMotionDetection(false);
+
+            /* Start the timer which we'll use to check whether the IMU has
+             * sensed motion. */
+            if (motionCheckTimerID != TIMER_NULL) {
+                err_code = app_timer_start(motionCheckTimerID, APP_TIMER_TICKS(1000, APP_TIMER_PRESCALER), NULL);
+                APP_ERROR_CHECK(err_code);
+            }
+
+            /* Clear the motion detected flag so that we do not wake-up
+             * immediately. */
+            motionDetected = false;
+
+            led_deinit();
+            uart_deinit();
+            twi_master_deinit();
+            pwm_deinit();
+            spi_deinit();
+            power_deinit();
+            bldc_deinit();
+        }
+
+        sleeping = true;
+    }
+
+    err_code = sd_app_evt_wait();
+    APP_ERROR_CHECK(err_code);
+}
 
 /**@brief Application main function.
  */
 int main(void) {
+    uint8_t c;
+    char str[64];
+    uint8_t strSize;
+    uint16_t bootCurrent_mA;
+    bool mpu6050Initialized_central = false, dmpInitialized_central = false;
+    bool mpu6050Initialized_face = false, dmpInitialized_face = false;
+    bool dbAwakeAfterBoot = false;
+    bool ledsOnAfterBoot = false;
+    uint32_t currentTime_rtcTicks;
 
     nrf_delay_ms(10);
 
@@ -332,19 +519,235 @@ int main(void) {
 
     /* The timer subsystem must be initialized before we can create timers. */
     main_timersInit();
+
     main_gpioteInit();
+    bleApp_stackInit();
     main_gpioInit();
+    uart_init();
+
+    mpu6050_setAddress(MPU6050_I2C_ADDR_FACE);
+    mpu6050Initialized_face = imu_init();
+    dmpInitialized_face = imu_initDMP();
+
+    mpu6050_setAddress(MPU6050_I2C_ADDR_CENTRAL);
+    mpu6050Initialized_central = imu_init();
+    dmpInitialized_central = imu_initDMP();
 
     led_init();
+    pwm_init();
+    spi_init();
+    power_init();
+    bldc_init();
+    commands_init();
+
+    bleApp_gapParamsInit();
+    bleApp_servicesInit();
+    bleApp_connParamsInit();
+    bleApp_secParamsInit();
+    bleApp_advertisingInit();
+    main_timersStart();
+
+    led_setAllOn();
+    ledsOnAfterBoot = true;
+
+    /* Reset the daughterboard by pulling the SCL line low */
+    db_reset();
+    dbAwakeAfterBoot = true;
+
+    SEGGER_RTT_WriteString(0, "MBlocks-MB ");
+#ifdef DEBUG
+    SEGGER_RTT_WriteString(0, " (Debug)");
+#elif defined(RELEASE)
+    SEGGER_RTT_WriteString(0, " (Release)");
+#else
+    SEGGER_RTT_WriteString(0, " (Unknown)");
+#endif
+    SEGGER_RTT_WriteString(0, "\r\n");
+
+    strSize = sizeof(str);
+    if (db_getVersion(str, strSize)) {
+        SEGGER_RTT_WriteString(0, "Daughterboard: OK (");
+        SEGGER_RTT_WriteString(0, str);
+        SEGGER_RTT_WriteString(0, ")\r\n");
+    } else {
+        SEGGER_RTT_WriteString(0, "Daughterboard: Fail\r\n");
+    }
+
+    if (bldc_init()) {
+        SEGGER_RTT_WriteString(0, "A4960: OK\r\n");
+    } else {
+        SEGGER_RTT_WriteString(0, "A4960: Fail\r\n");
+    }
+
+    if (mpu6050Initialized_central) {
+        SEGGER_RTT_WriteString(0, "MPU-6050 (central actuator): OK\r\n");
+    } else {
+        SEGGER_RTT_WriteString(0, "MPU-6050 (central actuator): Fail\r\n");
+    }
+
+    if (dmpInitialized_central) {
+        SEGGER_RTT_WriteString(0, "DMP (central actuator): OK\r\n");
+    } else {
+        SEGGER_RTT_WriteString(0, "DMP (central actuator): Fail\r\n");
+    }
+
+    if (mpu6050Initialized_face) {
+        SEGGER_RTT_WriteString(0, "MPU-6050 (faceboard 1): OK\r\n");
+    } else {
+        SEGGER_RTT_WriteString(0, "MPU-6050 (faceboard 1): Fail\r\n");
+    }
+
+    if (dmpInitialized_face) {
+        SEGGER_RTT_WriteString(0, "DMP (faceboard 1): OK\r\n");
+    } else {
+        SEGGER_RTT_WriteString(0, "DMP (faceboard 1): Fail\r\n");
+    }
+
+    strSize = sizeof(str);
+    if (fb_getVersion(1, str, strSize)) {
+        SEGGER_RTT_WriteString(0, "Faceboard 1: OK (");
+        SEGGER_RTT_WriteString(0, str);
+        SEGGER_RTT_WriteString(0, ")\r\n");
+    } else {
+        SEGGER_RTT_WriteString(0, "Faceboard 1: Fail\r\n");
+    }
+
+    strSize = sizeof(str);
+    if (fb_getVersion(2, str, strSize)) {
+        SEGGER_RTT_WriteString(0, "Faceboard 2: OK (");
+        SEGGER_RTT_WriteString(0, str);
+        SEGGER_RTT_WriteString(0, ")\r\n");
+    } else {
+        SEGGER_RTT_WriteString(0, "Faceboard 2: Fail\r\n");
+    }
+
+    strSize = sizeof(str);
+    if (fb_getVersion(3, str, strSize)) {
+        SEGGER_RTT_WriteString(0, "Faceboard 3: OK (");
+        SEGGER_RTT_WriteString(0, str);
+        SEGGER_RTT_WriteString(0, ")\r\n");
+    } else {
+        SEGGER_RTT_WriteString(0, "Faceboard 3: Fail\r\n");
+    }
+
+    strSize = sizeof(str);
+    if (fb_getVersion(4, str, strSize)) {
+        SEGGER_RTT_WriteString(0, "Faceboard 4: OK (");
+        SEGGER_RTT_WriteString(0, str);
+        SEGGER_RTT_WriteString(0, ")\r\n");
+    } else {
+        SEGGER_RTT_WriteString(0, "Faceboard 4: Fail\r\n");
+    }
+
+    strSize = sizeof(str);
+    if (fb_getVersion(5, str, strSize)) {
+        SEGGER_RTT_WriteString(0, "Faceboard 5: OK (");
+        SEGGER_RTT_WriteString(0, str);
+        SEGGER_RTT_WriteString(0, ")\r\n");
+    } else {
+        SEGGER_RTT_WriteString(0, "Faceboard 5: Fail\r\n");
+    }
+
+    strSize = sizeof(str);
+    if (fb_getVersion(6, str, strSize)) {
+        SEGGER_RTT_WriteString(0, "Faceboard 6: OK (");
+        SEGGER_RTT_WriteString(0, str);
+        SEGGER_RTT_WriteString(0, ")\r\n");
+    } else {
+        SEGGER_RTT_WriteString(0, "Faceboard 6: Fail\r\n");
+    }
+
+    bootCurrent_mA = power_getChargeCurrent_mA();
+    if (bootCurrent_mA < 20) {
+        snprintf(str, sizeof(str), "Boot current: OK (%u mA)\r\n", bootCurrent_mA);
+    } else {
+        snprintf(str, sizeof(str), "Boot current: Fail (%u mA)\r\n", bootCurrent_mA);
+    }
+    SEGGER_RTT_WriteString(0, str);
+    SEGGER_RTT_WriteString(0, "\r\n");
 
     for (;;) {
-        nrf_delay_ms(200);
-        led_setAllOn();
-        nrf_delay_ms(200);
-        led_setAllOff();
+        app_sched_execute();
+
+        while (app_uart_get(&c) == NRF_SUCCESS) {
+            SEGGER_RTT_printf(0, "UART: %c\n", c);
+            cmdline_newChar(c);
+            app_timer_cnt_get(&lastCharTime_rtcTicks);
+        }
+
+#if (ENABLE_BLE_COMMANDS == 1)
+        while (ble_sps_get_char(&m_sps, &c)) {
+            SEGGER_RTT_printf(0, "BLE: %c\n", c);
+            cmdline_newChar(c);
+            app_timer_cnt_get(&lastCharTime_rtcTicks);
+        }
+#endif
+
+        if (ledsOnAfterBoot && (app_timer_cnt_get(&currentTime_rtcTicks) == NRF_SUCCESS) &&
+                (currentTime_rtcTicks * USEC_PER_APP_TIMER_TICK >= 1000000)) {
+            led_setAllOff();
+            ledsOnAfterBoot = false;
+
+            if (bleApp_isAdvertisingEnabled()) {
+                bleApp_advertisingStart();
+            }
+        }
+
+        /* Three seconds after reboot, we put the daughterboard and faceboards
+         * to sleep. */
+        if (dbAwakeAfterBoot && (app_timer_cnt_get(&currentTime_rtcTicks) == NRF_SUCCESS) &&
+                (currentTime_rtcTicks * USEC_PER_APP_TIMER_TICK >= 3000000)) {
+            db_sleep(true);
+            dbAwakeAfterBoot = false;
+            fb_sleep(0, true);
+        }
+
+        power_manage();
     }
 }
 
+/**@brief Timer handler for motion detection to wake up cube.
+ */
+void main_motionCheckTimerHandler(void *context) {
+    static uint32_t lastLEDFlashTime_rtcTicks = 0;
+    bool newMotionDetected;
+    uint32_t currentTime_rtcTicks;
+    uint32_t elapsedTime_sec;
+
+    app_timer_cnt_get(&currentTime_rtcTicks);
+    elapsedTime_sec = ((0x00FFFFFF & (currentTime_rtcTicks - lastLEDFlashTime_rtcTicks)) * USEC_PER_APP_TIMER_TICK) / 1000000;
+
+    if (sleeping && (elapsedTime_sec >= 30)) {
+        nrf_gpio_pin_set(LED_RED_PIN_NO);
+        lastLEDFlashTime_rtcTicks = currentTime_rtcTicks;
+        nrf_delay_ms(25);
+    }
+
+    mpu6050_setAddress(MPU6050_I2C_ADDR_CENTRAL);
+    if (imu_checkForMotion(&newMotionDetected) && newMotionDetected) {
+        motionDetected = true;
+    }
+
+    nrf_gpio_pin_clear(LED_RED_PIN_NO);
+}
+
+
+void main_setSleepRequested(bool requested) {
+    sleepRequested = requested;
+}
+
+bool main_setSleepTime(uint32_t time_sec) {
+    if (time_sec > 3600) {
+        return false;
+    }
+
+    sleepTime_sec = time_sec;
+    return true;
+}
+
+uint32_t main_getSleepTime() {
+    return sleepTime_sec;
+}
 
 /** 
  * @}
