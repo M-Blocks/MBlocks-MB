@@ -117,7 +117,6 @@ void bleApp_evtDispatch(ble_evt_t * p_ble_evt) {
  */
 void bleApp_onEvt(ble_evt_t * p_ble_evt) {
     uint32_t                         err_code = NRF_SUCCESS;
-    static ble_gap_evt_auth_status_t m_auth_status;
     static ble_gap_sec_keyset_t      s_sec_keyset;
     ble_gap_enc_info_t *             p_enc_info;
 
@@ -151,7 +150,6 @@ void bleApp_onEvt(ble_evt_t * p_ble_evt) {
             break;
 
         case BLE_GAP_EVT_AUTH_STATUS:
-            m_auth_status = p_ble_evt->evt.gap_evt.params.auth_status;
             break;
 
         case BLE_GAP_EVT_SEC_INFO_REQUEST:

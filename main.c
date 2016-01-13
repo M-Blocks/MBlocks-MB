@@ -537,7 +537,6 @@ int main(void) {
     pwm_init();
     spi_init();
     power_init();
-    bldc_init();
     commands_init();
 
     bleApp_gapParamsInit();
@@ -670,14 +669,12 @@ int main(void) {
         app_sched_execute();
 
         while (app_uart_get(&c) == NRF_SUCCESS) {
-            SEGGER_RTT_printf(0, "UART: %c\n", c);
             cmdline_newChar(c);
             app_timer_cnt_get(&lastCharTime_rtcTicks);
         }
 
 #if (ENABLE_BLE_COMMANDS == 1)
         while (ble_sps_get_char(&m_sps, &c)) {
-            SEGGER_RTT_printf(0, "BLE: %c\n", c);
             cmdline_newChar(c);
             app_timer_cnt_get(&lastCharTime_rtcTicks);
         }
