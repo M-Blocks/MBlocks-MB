@@ -21,12 +21,12 @@
 
 #include "app_timer.h"
 
-#include "util.h"
 #include "global.h"
 #include "pins.h"
 #include "freqcntr.h"
+#include "util.h"
 
-#define FREQCNTR_DEBUG 		1
+#define FREQCNTR_DEBUG 	1
 
 static bool initialized = false;
 static uint32_t lastUpdateTime_rtcTicks = 0;
@@ -35,7 +35,7 @@ static uint32_t freq_Hz = 0;
 void freqcntr_init() {
 	uint8_t softdevice_enabled;
 	uint32_t err_code;
-
+	
 	/* Stop and clear the timer */
 	NRF_TIMER1->TASKS_STOP = 1;
 	NRF_TIMER1->TASKS_CLEAR = 1;
@@ -50,7 +50,7 @@ void freqcntr_init() {
 			| TIMER_INTENCLR_COMPARE3_Msk;
 
 	NVIC_ClearPendingIRQ(TIMER1_IRQn);
-
+	
 	/* Select counter mode */
 	NRF_TIMER1->MODE = (TIMER_MODE_MODE_Counter << TIMER_MODE_MODE_Pos);
 
@@ -61,14 +61,14 @@ void freqcntr_init() {
 	 * from floating unpredictably. */
 	nrf_gpio_cfg_input(BLDCTACHO_PIN_NO, NRF_GPIO_PIN_PULLDOWN);
 
-	/* Configure GPIO task/event block to generate an event for every low-to-
-	 * high transition of the input signal. */
-	nrf_gpiote_event_configure(FREQCNTR_GPIOTE_CHANNEL, BLDCTACHO_PIN_NO, NRF_GPIOTE_POLARITY_LOTOHI);
+    /* Configure GPIO task/event block to generate an event for every low-to-
+     * high transition of the input signal. */
+    nrf_gpiote_event_configure(FREQCNTR_GPIOTE_CHANNEL, BLDCTACHO_PIN_NO, NRF_GPIOTE_POLARITY_LOTOHI);
 
 	/* Whether or not the soft device is enabled determines how we configure
 	 * the PPI block. */
 	err_code = sd_softdevice_is_enabled(&softdevice_enabled);
-	ASSERT(err_code == NRF_SUCCESS);
+	APP_ERROR_CHECK(err_code);
 
 	/* Connect the rising-edge GPIOTE event to the counter's count task so that
 	 * we count the number of rising edges and then enable the PPI channel. */
@@ -76,10 +76,10 @@ void freqcntr_init() {
 		err_code = sd_ppi_channel_assign(FREQCNTR_PPI_CHANNEL,
 				&(NRF_GPIOTE->EVENTS_IN[FREQCNTR_GPIOTE_CHANNEL]),
 				&(NRF_TIMER1->TASKS_COUNT));
-		ASSERT(err_code == NRF_SUCCESS);
+		APP_ERROR_CHECK(err_code);
 
 		err_code = sd_ppi_channel_enable_set(FREQCNTR_PPI_CHENSET_MASK);
-    	ASSERT(err_code == NRF_SUCCESS);
+    	APP_ERROR_CHECK(err_code);
 	} else {
 		NRF_PPI->CH[FREQCNTR_PPI_CHANNEL].EEP = (uint32_t)&(NRF_GPIOTE->EVENTS_IN[FREQCNTR_GPIOTE_CHANNEL]);
 		NRF_PPI->CH[FREQCNTR_PPI_CHANNEL].TEP = (uint32_t)&(NRF_TIMER1->TASKS_COUNT);
@@ -116,13 +116,13 @@ void freqcntr_deinit() {
 	/* Whether or not the soft device is enabled determines how we configure
 	 * the PPI block. */
 	err_code = sd_softdevice_is_enabled(&softdevice_enabled);
-	ASSERT(err_code == NRF_SUCCESS);
+	APP_ERROR_CHECK(err_code);
 
 	/* Disable the PPI channel which routes rising edge events on the GPIO line
 	 * to the timer's count task. */
 	if (softdevice_enabled) {
 		err_code = sd_ppi_channel_enable_clr(FREQCNTR_PPI_CHEN_MASK);
-    	ASSERT(err_code == NRF_SUCCESS);
+    	APP_ERROR_CHECK(err_code);
 	} else {
 		NRF_PPI->CHENCLR = FREQCNTR_PPI_CHENCLR_MASK;
 	}
@@ -136,9 +136,6 @@ void freqcntr_updateFreq() {
 	uint32_t currentTime_rtcTicks;
 	uint32_t elapsedTicks, elapsedTime_us;
 
-#if FREQCNTR_DEBUG
-	char str[128];
-#endif
 
 	if (!initialized) {
 		freq_Hz = 0;
@@ -150,10 +147,8 @@ void freqcntr_updateFreq() {
 
 	/* Capture the count */
 	NRF_TIMER1->TASKS_CAPTURE[0] = 1;
-	/* Reset the count as soon as we have saved the old count */
-	NRF_TIMER1->TASKS_CLEAR = 1;
+	uint32_t cc0 = NRF_TIMER1->CC[0];
 
-	uint32_t curr_cc0 = NRF_TIMER1->CC[0];
 	/* The RTC is only a 24-bit counter, so when subtracting the two
 	 * tick counts to find the elapsed number of ticks, we must mask out the
 	 * 8 most significant bits. */
@@ -162,21 +157,17 @@ void freqcntr_updateFreq() {
 
 	/* The frequency, expressed in Hertz, is the number rising edges divided by
 	 * the elapsed time (in seconds) over which those ticks occurred. */
-	freq_Hz = (curr_cc0 * 1000000) / elapsedTime_us;
+	freq_Hz = (cc0 * 1000000) / elapsedTime_us;
 
 	lastUpdateTime_rtcTicks = currentTime_rtcTicks;
 
 #if FREQCNTR_DEBUG
-	snprintf(str, sizeof(str), "NRF Timer: %lu, elapsedTime: %lu\r\n", curr_cc0, elapsedTime_us);
+	char str[200];
+	snprintf(str, sizeof(str), "Timer 1: %lu\r\n", cc0);
 	app_uart_put_string(str);
 #endif
 }
 
 uint32_t freqcntr_getFreq_Hz() {
-// #if FREQCNTR_DEBUG
-// 	char str[20];
-// 	snprintf(str, sizeof(str), "Freq (Hz): %lu\r\n", freq_Hz);
-// 	app_uart_put_string(str);
-// #endif
 	return freq_Hz;
 }
