@@ -19,6 +19,7 @@
 #include "nrf_assert.h"
 
 #include "app_util.h"
+#include "app_error.h"
 
 #include "global.h"
 #include "pins.h"
@@ -94,7 +95,7 @@ void pwm_init() {
 	/* Whether or not the soft device is enabled determines how we configure
 	 * the PPI block. */
 	err_code = sd_softdevice_is_enabled(&softdevice_enabled);
-	ASSERT(err_code == NRF_SUCCESS);
+	APP_ERROR_CHECK(err_code);
 
 	/* Configure programmable peripheral interconnects to connect TIMER2
 	 * compare events to GPIO tasks.  Compare events on channel 0 toggle all
@@ -105,28 +106,28 @@ void pwm_init() {
 		err_code = sd_ppi_channel_assign(PWM_CH0_RESET_PPI_CHANNEL,
 				&(NRF_TIMER2->EVENTS_COMPARE[0]),
 				&(NRF_GPIOTE->TASKS_OUT[PWM_CH0_GPIOTE_CHANNEL]));
-		ASSERT(err_code == NRF_SUCCESS);
+		APP_ERROR_CHECK(err_code);
 
 		err_code = sd_ppi_channel_assign(PWM_CH0_MATCH_PPI_CHANNEL,
 				&(NRF_TIMER2->EVENTS_COMPARE[1]),
 				&(NRF_GPIOTE->TASKS_OUT[PWM_CH0_GPIOTE_CHANNEL]));
-		ASSERT(err_code == NRF_SUCCESS);
+		APP_ERROR_CHECK(err_code);
 
 		err_code = sd_ppi_channel_assign(PWM_CH1_RESET_PPI_CHANNEL,
 				&(NRF_TIMER2->EVENTS_COMPARE[0]),
 				&(NRF_GPIOTE->TASKS_OUT[PWM_CH1_GPIOTE_CHANNEL]));
-		ASSERT(err_code == NRF_SUCCESS);
+		APP_ERROR_CHECK(err_code);
 
 		err_code = sd_ppi_channel_assign(PWM_CH1_MATCH_PPI_CHANNEL,
 				&(NRF_TIMER2->EVENTS_COMPARE[2]),
 				&(NRF_GPIOTE->TASKS_OUT[PWM_CH1_GPIOTE_CHANNEL]));
-		ASSERT(err_code == NRF_SUCCESS);
+		APP_ERROR_CHECK(err_code);
 
 		/* Enable PPI channels */
 		err_code = sd_ppi_channel_enable_set(
 				PWM_CH0_RESET_PPI_CHEN_MASK | PWM_CH0_MATCH_PPI_CHEN_MASK |
 				PWM_CH1_RESET_PPI_CHEN_MASK | PWM_CH1_MATCH_PPI_CHEN_MASK );
-		ASSERT(err_code == NRF_SUCCESS);
+		APP_ERROR_CHECK(err_code);
 	} else {
 		NRF_PPI->CH[PWM_CH0_RESET_PPI_CHANNEL].EEP = (uint32_t)&(NRF_TIMER2->EVENTS_COMPARE[0]);
 		NRF_PPI->CH[PWM_CH0_RESET_PPI_CHANNEL].TEP = (uint32_t)&(NRF_GPIOTE->TASKS_OUT[PWM_CH0_GPIOTE_CHANNEL]);
@@ -166,14 +167,14 @@ void pwm_deinit() {
 	/* Whether or not the soft device is enabled determines how we configure
 	 * the PPI block. */
 	err_code = sd_softdevice_is_enabled(&softdevice_enabled);
-	ASSERT(err_code == NRF_SUCCESS);
+	APP_ERROR_CHECK(err_code);
 
 	/* Disable the PPI channels used for PWM */
 	if (softdevice_enabled) {
 		err_code = sd_ppi_channel_enable_clr(
 				PWM_CH0_RESET_PPI_CHEN_MASK | PWM_CH0_MATCH_PPI_CHEN_MASK |
 				PWM_CH1_RESET_PPI_CHEN_MASK | PWM_CH1_MATCH_PPI_CHEN_MASK );
-		ASSERT(err_code == NRF_SUCCESS);
+		APP_ERROR_CHECK(err_code);
 	} else {
 		NRF_PPI->CHENCLR =
 				PWM_CH0_RESET_PPI_CHENCLR_MASK | PWM_CH0_MATCH_PPI_CHENCLR_MASK |

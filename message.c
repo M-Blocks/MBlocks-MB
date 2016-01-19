@@ -63,7 +63,7 @@ void message_timeoutHandler(void *p_context) {
 
 			fb_receiveFromRxBuffer(faceNum, count, rxData);
 			for (int i = 0; i < count; i++) {
-				if ((char) rxData[i] == '}') {
+				if ((char) rxData[i] == '|') {
 					// message has been received, send it for processing
 					strncpy(msg, buffer, bufferLen);
 					msg[bufferLen] = '\0';
@@ -80,72 +80,17 @@ void message_timeoutHandler(void *p_context) {
 	}
 }
 
-void push_message(int faceNum, char *txData) {
-	/* Push message on face faceNum. If faceNum = 0, send on all faces. */
-	if (faceNum > 6)
-		return;
-
-	char str[100];
-	int numBytes = strlen(txData);
-
-	if (faceNum != 0) {
-		if (fb_sendToTxBuffer(faceNum, numBytes, (uint8_t *)txData)) {
-			snprintf(str, sizeof(str), "Wrote %u bytes to IR transmit buffer on faceboard %u\r\n", numBytes, faceNum);
-		} else {
-			snprintf(str, sizeof(str), "Failed to write to IR transmit buffer on faceboard %u\r\n", faceNum);
-		}
-		app_uart_put_string(str);
-	} else {
-		for (int faceNum = 1; faceNum <= 6; faceNum++) {
-			if (fb_sendToTxBuffer(faceNum, numBytes, (uint8_t *)txData)) {
-				snprintf(str, sizeof(str), "Wrote %u bytes to IR transmit buffer on faceboard %u\r\n", numBytes, faceNum);
-			} else {
-				snprintf(str, sizeof(str), "Failed to write to IR transmit buffer on faceboard %u\r\n", faceNum);
-			}
-			app_uart_put_string(str);
-		}
-	}
-}
-
+/**@brief Process message and execute command
+ *
+ * Messages are formatted:
+ *		<type>;<sender MAC>+<sender count>;<command>
+ */
 void process_message(char *msg) {
 	char *token = strtok(msg, ";");
 	if (strcmp(token, "SENDCMD") == 0) {
-		token = strtok(NULL, ";");		// get message ID
-		if(duplicate(token)) {
-			return;
-		}			 
-		
 		token = strtok(NULL, ";");
-		char macAddress[] = "c6:ea:b8:01:3d:ee";  // TODO
-		if (strcmp(token, macAddress) == 0) {
-			token = strtok(NULL, ";");
-			cmdLine_execCmd(token);
-		}
-	}
-	if (strcmp(token, "BDCASTCMD") == 0) {
-		char bcastCpy[100];
-		strcpy(bcastCpy, msg);
-
-		token = strtok(NULL, ";");		// get message ID
-		if(duplicate(token)) {
-			return;
-		}			 
-		
+		// extract command
 		token = strtok(NULL, ";");
 		cmdLine_execCmd(token);
 	}
-}
-
-bool duplicate(char *msgid) {
-	char *token = strtok(msgid, "+");
-	int h = atoi(token);
-	
-	token = strtok(NULL, "+");
-	int cTime = atoi(token);
-
-	if (msgTime[h] >= cTime)
-		return true;
-
-	msgTime[h] = cTime;
-	return false;
 }

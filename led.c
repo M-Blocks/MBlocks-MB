@@ -59,7 +59,7 @@ void led_deinit(void) {
 
 	if (ledTimerID != TIMER_NULL) {
 		err_code = app_timer_stop(ledTimerID);
-		ASSERT(err_code == NRF_SUCCESS);
+		APP_ERROR_CHECK(err_code);
 	}
 
 	for (led=0; led<LED_COUNT; led++) {

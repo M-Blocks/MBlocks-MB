@@ -192,7 +192,6 @@ void main_timersInit() {
 /**@brief Start timers.
 */
 void main_timersStart() {
-    uint32_t err_code;
 	/* YOUR_JOB: Start your timers. below is an example of how to start a timer.
     
     err_code = app_timer_start(m_app_timer_id, TIMER_INTERVAL, NULL);

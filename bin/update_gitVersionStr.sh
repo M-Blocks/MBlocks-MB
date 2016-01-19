@@ -36,8 +36,8 @@ fi
 # pushd and popd to /dev/null to suppress their output.
 pushd . >> /dev/null
 cd $gitDir
-gitVersionStr=$(git describe --tags 2>/dev/null)
-gitVersionLongStr=$(git describe --tags --long --dirty 2>/dev/null)
+gitVersionStr="v40"
+gitVersionLongStr="v40.0.0"
 success=$?
 popd >> /dev/null
 
