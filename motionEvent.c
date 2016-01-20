@@ -634,8 +634,7 @@ bool motionEvent_getFlywheelFrameAligned(bool *flywheelFrameAligned, unsigned in
 	return true;
 }
 
-// TODO
-static const enum Face {
+enum Face {
 	FORWARD = 3,
 	BACKWARD,
 	TOP,

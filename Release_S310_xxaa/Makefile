@@ -40,7 +40,7 @@ CFLAGS += -DENABLE_BLE_COMMANDS=1
 CFLAGS += -DHARDWARE_VERSION=2
 CFLAGS += -DBLE_STACK_SUPPORT_REQD
 CFLAGS += -mcpu=$(CPU) -mthumb -mabi=aapcs -D$(DEVICE) -D$(BOARD) -D$(TARGET_CHIP) --std=gnu99
-CFLAGS += -Wall
+CFLAGS += -Wall -Werror
 CFLAGS += -mfloat-abi=soft
 
 ## Assembly source files

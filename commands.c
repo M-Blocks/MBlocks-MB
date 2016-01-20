@@ -113,8 +113,6 @@ static void cmdChangePlane(const char *args);
 static void cmdInertialActuation(const char *args);
 /* Complex commands */
 static void cmdLightTracker(const char *args);
-/* */
-static void cmdTestCurr(const char *args);
 
 // These string are what the command line processes looking for the user to
 // type on the serial terminal.
@@ -184,11 +182,6 @@ static const char cmdChangePlaneStr[] = "cp";
 static const char cmdInertialActuationStr[] = "ia";
 /* Complext commands */
 static const char cmdLightTrackerStr[] = "ltrack";
-/* */
-static const char cmdTestCurrStr[] = "tstfun";
-
-// Other global variables
-static int msgCnt = 0;
 
 // This table correlates the command strings above to the actual functions that
 // are called when the user types the command into the terminal and presses
@@ -259,8 +252,6 @@ static cmdFcnPair_t cmdTable[] = {
 		{cmdInertialActuationStr, cmdInertialActuation },
 		/* Complex commands */
 		{cmdLightTrackerStr, cmdLightTracker},
-		/* */
-		{cmdTestCurrStr, cmdTestCurr},
 // Always end the command table with an emptry string and null pointer
 		{ cmdEmptyStr, NULL } };
 
@@ -1172,7 +1163,7 @@ void cmdFBTx(const char *args) {
 	char txData[256];
 	char str[100];
 
-	if (sscanf(args, "%u %255s", &faceNum, txData) != 2) {
+	if (sscanf(args, "%u %[^\t\n]", &faceNum, txData) != 2) {
 		return;
 	}
 
@@ -1911,15 +1902,6 @@ void cmdLightTracker(const char *args) {
 		bldcSpeed_rpm_r, brakeCurrent_mA_r, brakeTime_ms_r, threshold)) {
 		app_uart_put_string("Starting light tracker.\r\n");
 	}
-}
-
-/* */
-void cmdTestCurr(const char *args) {
-	char str[100];
-	uint32_t ticks = curr_time();
-
-	snprintf(str, sizeof(str), "Current time: %u\r\n", ticks);
-	app_uart_put_string(str);
 }
 
 /*************/

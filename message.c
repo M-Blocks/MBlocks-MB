@@ -6,12 +6,12 @@
 #include "fb.h"
 #include "util.h"
 #include "global.h"
+#include "cmdline.h"
 
 #include "message.h"
 
 app_timer_id_t messageTimerID = TIMER_NULL;
 
-static uint32_t msgTime[10];
 static bool initialized = false;
 
 static void message_timeoutHandler(void *p_context);
@@ -63,6 +63,9 @@ void message_timeoutHandler(void *p_context) {
 
 			fb_receiveFromRxBuffer(faceNum, count, rxData);
 			for (int i = 0; i < count; i++) {
+				if (rxData[i] > 0x7F) {
+					continue;
+				}
 				if ((char) rxData[i] == '|') {
 					// message has been received, send it for processing
 					strncpy(msg, buffer, bufferLen);
@@ -86,8 +89,10 @@ void message_timeoutHandler(void *p_context) {
  *		<type>;<sender MAC>+<sender count>;<command>
  */
 void process_message(char *msg) {
+	app_uart_put_string(msg);
+	app_uart_put_string("\r\n");
 	char *token = strtok(msg, ";");
-	if (strcmp(token, "SENDCMD") == 0) {
+	if (strcmp(token, "sendcmd") == 0) {
 		token = strtok(NULL, ";");
 		// extract command
 		token = strtok(NULL, ";");
