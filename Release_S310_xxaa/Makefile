@@ -122,7 +122,6 @@ ASM_SOURCE_FILES  = $(abspath $(SDK_PATH)components/toolchain/gcc/gcc_startup_nr
 #includes common to all targets
 INCLUDEPATHS += -I$(abspath ../)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/softdevice/s310/headers)
-INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/config)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/delay)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/gpiote)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/hal)
@@ -161,6 +160,7 @@ INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/softdevice/common/softdevice_h
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ble/ble_services/ble_hrs)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/ble_flash)
 
+INCLUDEPATHS += -I$(abspath ../includes)
 INCLUDEPATHS += -I$(abspath ../includes/RTT)
 
 
@@ -254,9 +254,6 @@ $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_CompleteImage.hex: $(OUTPUT_BINARY
 	mergehex --merge $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_BootloaderInput.hex $(BOOTLOADER_HEXFILE) --output $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_AppWithBootloaderCode.hex
 	mergehex --merge $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_AppWithBootloaderCode.hex $(SOFTDEVICE_HEXFILE) --output $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_AppWithBootloaderCodeAndSoftdevice.hex
 	bash -c "../bin/appendBootloaderSettings.sh $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_AppWithBootloaderCodeAndSoftdevice.hex $@"
-	#$(RM) $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_AppWithBootloaderCode.hex
-	#$(RM) $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_AppWithBootloaderCodeAndSoftdevice.hex
-	
 
 include $(TEMPLATE_PATH)Makefile.windows
 

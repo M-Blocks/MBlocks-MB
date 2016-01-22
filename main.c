@@ -165,7 +165,7 @@ void assert_nrf_callback(uint16_t line_num, const uint8_t * p_file_name)
 //           application by the services it uses.
 static void service_error_handler(uint32_t nrf_error)
 {
-    APP_ERROR_HANDLER(nrf_error);
+APP_ERROR_HANDLER(nrf_error);
 } */
 
 
@@ -264,25 +264,25 @@ void main_gpioInit() {
      * their input buffers disabled so that they do not consume current when
      * the pins are at a voltage somewhere between 0 and VCC. */
     NRF_GPIO->PIN_CNF[VINSENSE_PIN_NO] =
-            (GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
-            (GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
-            (GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
-            (GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
-            (GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
+	(GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
+	(GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
+	(GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
+	(GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
+	(GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
 
     NRF_GPIO->PIN_CNF[LIPROVBATOUT_PIN_NO] =
-            (GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
-            (GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
-            (GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
-            (GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
-            (GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
+	(GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
+	(GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
+	(GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
+	(GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
+	(GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
 
     NRF_GPIO->PIN_CNF[ICHARGE_PIN_NO] =
-            (GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
-            (GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
-            (GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
-            (GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
-            (GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
+	(GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
+	(GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
+	(GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
+	(GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
+	(GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
 
     /* Make the TXD pin an output which drives high */
     nrf_gpio_pin_set(UART_TX_PIN_NO);
@@ -358,8 +358,8 @@ static void power_manage(void)
 
 
     if ((power_getChargeState() == POWER_CHARGESTATE_OFF) ||
-            (power_getChargeState() == POWER_CHARGESTATE_STANDBY) ||
-            (power_getChargeState() == POWER_CHARGESTATE_ERROR)) {
+	(power_getChargeState() == POWER_CHARGESTATE_STANDBY) ||
+	(power_getChargeState() == POWER_CHARGESTATE_ERROR)) {
         chargerActive = false;
     } else {
         chargerActive = true;
@@ -427,7 +427,7 @@ static void power_manage(void)
 
         app_uart_put_string("Awoken from sleep\r\n");
     } else if (sleepRequested ||
-            ((elapsedCharTime_sec > sleepTime_sec) && (sleepTime_sec != 0) && !chargerActive)) {
+	       ((elapsedCharTime_sec > sleepTime_sec) && (sleepTime_sec != 0) && !chargerActive)) {
         /* If we have received a sleep command, or it has been a long time
          * since we received the last character over one of the serial
          * interfaces, (and the batteries are not currently charging, we go to
@@ -475,10 +475,8 @@ static void power_manage(void)
 
             /* Start the timer which we'll use to check whether the IMU has
              * sensed motion. */
-            if (motionCheckTimerID != TIMER_NULL) {
-                err_code = app_timer_start(motionCheckTimerID, APP_TIMER_TICKS(1000, APP_TIMER_PRESCALER), NULL);
-                APP_ERROR_CHECK(err_code);
-            }
+	    err_code = app_timer_start(motionCheckTimerID, APP_TIMER_TICKS(1000, APP_TIMER_PRESCALER), NULL);
+	    APP_ERROR_CHECK(err_code);
 
             /* Clear the motion detected flag so that we do not wake-up
              * immediately. */
@@ -684,7 +682,7 @@ int main(void) {
 #endif
 
         if (ledsOnAfterBoot && (app_timer_cnt_get(&currentTime_rtcTicks) == NRF_SUCCESS) &&
-                (currentTime_rtcTicks * USEC_PER_APP_TIMER_TICK >= 1000000)) {
+	    (currentTime_rtcTicks * USEC_PER_APP_TIMER_TICK >= 1000000)) {
             led_setAllOff();
             ledsOnAfterBoot = false;
 
@@ -696,7 +694,7 @@ int main(void) {
         /* Three seconds after reboot, we put the daughterboard and faceboards
          * to sleep. */
         if (dbAwakeAfterBoot && (app_timer_cnt_get(&currentTime_rtcTicks) == NRF_SUCCESS) &&
-                (currentTime_rtcTicks * USEC_PER_APP_TIMER_TICK >= 3000000)) {
+	    (currentTime_rtcTicks * USEC_PER_APP_TIMER_TICK >= 3000000)) {
             db_sleep(true);
             dbAwakeAfterBoot = false;
             fb_sleep(0, true);
