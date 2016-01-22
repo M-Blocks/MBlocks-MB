@@ -55,8 +55,6 @@
 #define APP_TIMER_USER_SIZE          8                          /**< Size of app_timer.timer_user_t (only for use inside APP_TIMER_BUF_SIZE()). */
 #define APP_TIMER_INT_LEVELS         3                          /**< Number of interrupt levels from where timer operations may be initiated (only for use inside APP_TIMER_BUF_SIZE()). */
 
-#define TIMER_NULL                  ((app_timer_id_t)(0 - 1)) 
-
 /**@brief Compute number of bytes required to hold the application timer data structures.
  *
  * @param[in]  OP_QUEUE_SIZE   Size of queues holding timer operations that are pending execution.

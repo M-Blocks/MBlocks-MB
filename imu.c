@@ -22,7 +22,7 @@
 #include "mpu6050.h"
 #include "imu.h"
 
-#define DEBUG_IMU 					0
+#define DEBUG_IMU 					1
 #define ORIGINAL_DMP_CODE			0
 
 #define MPU6050_DMP_CODE_SIZE		1929 // dmpMemory[]

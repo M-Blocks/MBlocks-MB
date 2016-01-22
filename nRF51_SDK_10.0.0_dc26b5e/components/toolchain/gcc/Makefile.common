@@ -99,7 +99,6 @@ debug:    $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).bin $(OUTPUT_BINARY_DIRE
 
 .PHONY: release
 release: clean
-release:  @echo SDK: $(SDK_PATH)
 release:  CFLAGS += -DNDEBUG -O3
 release:  ASMFLAGS += -DNDEBUG -O3
 release:  $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).bin $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).hex

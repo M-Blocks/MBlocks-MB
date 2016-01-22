@@ -11,6 +11,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "nrf_drv_twi.h"
+
 #define MPU6050_AUX_VDDIO_REG_ADDR				0X00
 #define MPU6050_YG_OFFS_TC_REG_ADDR				0X01
 #define MPU6050_ZG_OFFS_TC_REG_ADDR				0X02
@@ -371,71 +373,71 @@ bool mpu6050_setAddress(uint8_t address);
 uint8_t mpu6050_getAddress(void);
 const char *mpu6050_getName(void);
 
-bool mpu6050_writeReg(uint8_t addr, uint8_t data);
-bool mpu6050_readReg(uint8_t addr, uint8_t *data);
-bool mpu6050_writeBytes(uint8_t *addrData, uint8_t nBytes);
-bool mpu6050_readBytes(uint8_t addr, uint8_t *data, uint8_t nBytes);
+bool mpu6050_writeReg(uint8_t addr, uint8_t data, nrf_drv_twi_t *m_twi_master);
+bool mpu6050_readReg(uint8_t addr, uint8_t *data, nrf_drv_twi_t *m_twi_master);
+bool mpu6050_writeBytes(uint8_t *addrData, uint8_t nBytes, nrf_drv_twi_t *m_twi_master);
+bool mpu6050_readBytes(uint8_t addr, uint8_t *data, uint8_t nBytes, nrf_drv_twi_t *m_twi_master);
 
-bool mpu6050_setBits(uint8_t addr, uint8_t bitsToSet);
-bool mpu6050_clearBits(uint8_t addr, uint8_t bitsToClear);
+bool mpu6050_setBits(uint8_t addr, uint8_t bitsToSet, nrf_drv_twi_t *m_twi_master);
+bool mpu6050_clearBits(uint8_t addr, uint8_t bitsToClear, nrf_drv_twi_t *m_twi_master);
 
-bool mpu6050_getWhoAmI(uint8_t *whoAmI);
+bool mpu6050_getWhoAmI(uint8_t *whoAmI, nrf_drv_twi_t *m_twi_master);
 
-bool mpu6050_reset(void);
-bool mpu6050_resetSignalPaths(void);
-bool mpu6050_resetDMP(void);
-bool mpu6050_resetFIFO(void);
-bool mpu6050_resetI2CMaster(void);
+bool mpu6050_reset(nrf_drv_twi_t *m_twi_master);
+bool mpu6050_resetSignalPaths(nrf_drv_twi_t *m_twi_master);
+bool mpu6050_resetDMP(nrf_drv_twi_t *m_twi_master);
+bool mpu6050_resetFIFO(nrf_drv_twi_t *m_twi_master);
+bool mpu6050_resetI2CMaster(nrf_drv_twi_t *m_twi_master);
 
-bool mpu6050_getFIFOEnabled(bool *fifoEnabled);
-bool mpu6050_setFIFOEnabled(bool fifoEnabled);
+bool mpu6050_getFIFOEnabled(bool *fifoEnabled, nrf_drv_twi_t *m_twi_master);
+bool mpu6050_setFIFOEnabled(bool fifoEnabled, nrf_drv_twi_t *m_twi_master);
 
-bool mpu6050_getDMPEnabled(bool *dmpEnabled);
-bool mpu6050_setDMPEnabled(bool dmpEnabled);
+bool mpu6050_getDMPEnabled(bool *dmpEnabled, nrf_drv_twi_t *m_twi_master);
+bool mpu6050_setDMPEnabled(bool dmpEnabled, nrf_drv_twi_t *m_twi_master);
 
-bool mpu6050_setClockSource(uint8_t clockSource);
+bool mpu6050_setClockSource(uint8_t clockSource, nrf_drv_twi_t *m_twi_master);
 
-bool mpu6050_setExternalFrameSync(uint8_t externalSync);
+bool mpu6050_setExternalFrameSync(uint8_t externalSync, nrf_drv_twi_t *m_twi_master);
 
-bool mpu6050_setDLPFMode(uint8_t dlpfMode);
+bool mpu6050_setDLPFMode(uint8_t dlpfMode, nrf_drv_twi_t *m_twi_master);
 
-bool mpu6050_setFullScaleGyroRange(uint8_t fsGyroRange);
+bool mpu6050_setFullScaleGyroRange(uint8_t fsGyroRange, nrf_drv_twi_t *m_twi_master);
 
-bool mpu6050_setAccelHPFMode(uint8_t accelHPFMode);
+bool mpu6050_setAccelHPFMode(uint8_t accelHPFMode, nrf_drv_twi_t *m_twi_master);
 
-bool mpu6050_setFullScaleAccelRange(uint8_t fsAccelRange);
+bool mpu6050_setFullScaleAccelRange(uint8_t fsAccelRange, nrf_drv_twi_t *m_twi_master);
 
-bool mpu6050_getOTPBankValid(bool *otpBankValid);
+bool mpu6050_getOTPBankValid(bool *otpBankValid, nrf_drv_twi_t *m_twi_master);
 
-bool mpu6050_setOTPBankValid(bool otpBankValid);
+bool mpu6050_setOTPBankValid(bool otpBankValid, nrf_drv_twi_t *m_twi_master);
 
-bool mpu6050_getXGyroOffsetTC(int8_t *offset);
-bool mpu6050_setXGyroOffsetTC(int8_t offset);
+bool mpu6050_getXGyroOffsetTC(int8_t *offset, nrf_drv_twi_t *m_twi_master);
+bool mpu6050_setXGyroOffsetTC(int8_t offset, nrf_drv_twi_t *m_twi_master);
 
-bool mpu6050_getYGyroOffsetTC(int8_t *offset);
-bool mpu6050_setYGyroOffsetTC(int8_t offset);
+bool mpu6050_getYGyroOffsetTC(int8_t *offset, nrf_drv_twi_t *m_twi_master);
+bool mpu6050_setYGyroOffsetTC(int8_t offset, nrf_drv_twi_t *m_twi_master);
 
-bool mpu6050_getZGyroOffsetTC(int8_t *offset);
-bool mpu6050_setZGyroOffsetTC(int8_t offset);
+bool mpu6050_getZGyroOffsetTC(int8_t *offset, nrf_drv_twi_t *m_twi_master);
+bool mpu6050_setZGyroOffsetTC(int8_t offset, nrf_drv_twi_t *m_twi_master);
 
-bool mpu6050_setSleepEnabled(bool sleepEnabled);
+bool mpu6050_setSleepEnabled(bool sleepEnabled, nrf_drv_twi_t *m_twi_master);
 
-bool mpu6050_setCycleEnabled(bool cycleEnabled);
+bool mpu6050_setCycleEnabled(bool cycleEnabled, nrf_drv_twi_t *m_twi_master);
 
-bool mpu6050_setWakeupFrequency(uint8_t wakeupFreq);
+bool mpu6050_setWakeupFrequency(uint8_t wakeupFreq, nrf_drv_twi_t *m_twi_master);
 
-bool mpu6050_getFIFOCount(uint16_t *fifoCount);
-bool mpu6050_getFIFOBytes(uint8_t *fifoBuffer, uint16_t fifoCount) ;
+bool mpu6050_getFIFOCount(uint16_t *fifoCount, nrf_drv_twi_t *m_twi_master);
+bool mpu6050_getFIFOBytes(uint8_t *fifoBuffer, uint16_t fifoCount, nrf_drv_twi_t *m_twi_master);
 
-bool mpu6050_setMemoryBank(uint8_t bank, bool prefetchEnabled, bool userBank);
+bool mpu6050_setMemoryBank(uint8_t bank, bool prefetchEnabled, bool userBank, nrf_drv_twi_t *m_twi_master);
 
-bool mpu6050_setMemoryStartAddress(uint8_t address);
+bool mpu6050_setMemoryStartAddress(uint8_t address, nrf_drv_twi_t *m_twi_master);
 
-bool mpu6050_readMemoryByte(uint8_t *data);
+bool mpu6050_readMemoryByte(uint8_t *data, nrf_drv_twi_t *m_twi_master);
 
-bool mpu6050_writeMemoryByte(uint8_t data);
-bool mpu6050_readMemoryBlock(uint8_t *data, uint16_t dataSize, uint8_t bank, uint8_t address);
+bool mpu6050_writeMemoryByte(uint8_t data, nrf_drv_twi_t *m_twi_master);
+bool mpu6050_readMemoryBlock(uint8_t *data, uint16_t dataSize, uint8_t bank, uint8_t address, nrf_drv_twi_t *m_twi_master);
 
-bool mpu6050_writeMemoryBlock(const uint8_t *data, uint16_t dataSize, uint8_t bank, uint8_t address, bool verify);
+bool mpu6050_writeMemoryBlock(const uint8_t *data, uint16_t dataSize, uint8_t bank, uint8_t address, bool verify, nrf_drv_twi_t *m_twi_master);
 
 #endif /* MPU6050_H_ */

@@ -86,12 +86,10 @@ $(abspath $(SDK_PATH)components/libraries/util/nrf_assert.c) \
 $(abspath $(SDK_PATH)components/libraries/util/app_error.c) \
 $(abspath $(SDK_PATH)components/libraries/uart/app_uart_fifo.c) \
 $(abspath $(SDK_PATH)components/libraries/sensorsim/sensorsim.c) \
-$(abspath $(SDK_PATH)components/libraries/spi/spi_master.c) \
-$(abspath $(SDK_PATH)components/libraries/spi/spi_slave.c) \
 $(abspath $(SDK_PATH)components/libraries/fifo/app_fifo.c) \
 $(abspath $(SDK_PATH)components/libraries/gpiote/app_gpiote.c) \
+$(abspath $(SDK_PATH)components/drivers_nrf/spi_master/nrf_drv_spi.c) \
 $(abspath $(SDK_PATH)components/drivers_nrf/delay/nrf_delay.c) \
-$(abspath $(SDK_PATH)components/drivers_nrf/twi_master/deprecated/twi_hw_master.c) \
 $(abspath $(SDK_PATH)components/drivers_nrf/gpiote/nrf_drv_gpiote.c) \
 $(abspath $(SDK_PATH)components/drivers_nrf/uart/nrf_drv_uart.c) \
 $(abspath $(SDK_PATH)components/drivers_nrf/common/nrf_drv_common.c) \
@@ -122,15 +120,13 @@ ASM_SOURCE_FILES  = $(abspath $(SDK_PATH)components/toolchain/gcc/gcc_startup_nr
 #includes common to all targets
 INCLUDEPATHS += -I$(abspath ../)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/softdevice/s310/headers)
-INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/config)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/delay)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/gpiote)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/hal)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/twi_master)
-INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/twi_master/deprecated)
+INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/spi_master)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/common)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/uart)
-INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/pstorage)
 
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/util)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/scheduler)
@@ -140,10 +136,8 @@ INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/button)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/timer)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/scheduler)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/gpiote)
-INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/spi)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/fifo)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/)
-INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/libraries/trace)
 
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ble/device_manager)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ble/common)
@@ -151,16 +145,13 @@ INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ble/ble_error_log)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ble/ble_services/ble_dis)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/device)
 
-INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ant/ant_stack_config)
-INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ant/ant_stack_config/config)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/toolchain/gcc)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/toolchain)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ble/ble_services/ble_bas)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ble/ble_debug_assert_handler)
 INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/softdevice/common/softdevice_handler)
-INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/ble/ble_services/ble_hrs)
-INCLUDEPATHS += -I$(abspath $(SDK_PATH)components/drivers_nrf/ble_flash)
 
+INCLUDEPATHS += -I$(abspath ../includes)
 INCLUDEPATHS += -I$(abspath ../includes/RTT)
 
 
@@ -254,9 +245,6 @@ $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_CompleteImage.hex: $(OUTPUT_BINARY
 	mergehex --merge $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_BootloaderInput.hex $(BOOTLOADER_HEXFILE) --output $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_AppWithBootloaderCode.hex
 	mergehex --merge $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_AppWithBootloaderCode.hex $(SOFTDEVICE_HEXFILE) --output $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_AppWithBootloaderCodeAndSoftdevice.hex
 	bash -c "../bin/appendBootloaderSettings.sh $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_AppWithBootloaderCodeAndSoftdevice.hex $@"
-	#$(RM) $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_AppWithBootloaderCode.hex
-	#$(RM) $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_AppWithBootloaderCodeAndSoftdevice.hex
-	
 
 include $(TEMPLATE_PATH)Makefile.windows
 
