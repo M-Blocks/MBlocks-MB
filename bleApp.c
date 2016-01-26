@@ -71,12 +71,12 @@ static void bleApp_connParamsErrorHandler(uint32_t nrf_error);
  * @details Initializes the SoftDevice and the BLE event interrupt.
  */
 void bleApp_stackInit() {
-	uint32_t err_code;
+    uint32_t err_code;
 
-	SOFTDEVICE_HANDLER_INIT(NRF_CLOCK_LFCLKSRC_RC_250_PPM_4000MS_CALIBRATION, true);
+    SOFTDEVICE_HANDLER_INIT(NRF_CLOCK_LFCLKSRC_RC_250_PPM_4000MS_CALIBRATION, true);
 
-	err_code = softdevice_ble_evt_handler_set(bleApp_evtDispatch);
-	APP_ERROR_CHECK(err_code);
+    err_code = softdevice_ble_evt_handler_set(bleApp_evtDispatch);
+    APP_ERROR_CHECK(err_code);
 }
 
 
@@ -110,61 +110,61 @@ void bleApp_onEvt(ble_evt_t * p_ble_evt) {
 
     switch (p_ble_evt->header.evt_id)
     {
-        case BLE_GAP_EVT_CONNECTED:
-            m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
-        	led_setState(LED_BLUE, LED_STATE_ON);
-            break;
+    case BLE_GAP_EVT_CONNECTED:
+	m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
+	led_setState(LED_BLUE, LED_STATE_ON);
+	break;
 
-        case BLE_GAP_EVT_DISCONNECTED:
-        	m_conn_handle = BLE_CONN_HANDLE_INVALID;
-        	led_setState(LED_BLUE, LED_STATE_OFF);
-        	if (advertisingEnabled) {
-        		bleApp_advertisingStart();
-        	}
-            break;
+    case BLE_GAP_EVT_DISCONNECTED:
+	m_conn_handle = BLE_CONN_HANDLE_INVALID;
+	led_setState(LED_BLUE, LED_STATE_OFF);
+	if (advertisingEnabled) {
+	    bleApp_advertisingStart();
+	}
+	break;
 
-        case BLE_GAP_EVT_SEC_PARAMS_REQUEST:
-            err_code = sd_ble_gap_sec_params_reply(m_conn_handle,
-                                                   BLE_GAP_SEC_STATUS_SUCCESS,
-                                                   &m_sec_params);
-            break;
+    case BLE_GAP_EVT_SEC_PARAMS_REQUEST:
+	err_code = sd_ble_gap_sec_params_reply(m_conn_handle,
+					       BLE_GAP_SEC_STATUS_SUCCESS,
+					       &m_sec_params);
+	break;
 
-        case BLE_GATTS_EVT_SYS_ATTR_MISSING:
-            err_code = sd_ble_gatts_sys_attr_set(m_conn_handle, NULL, 0);
-            break;
+    case BLE_GATTS_EVT_SYS_ATTR_MISSING:
+	err_code = sd_ble_gatts_sys_attr_set(m_conn_handle, NULL, 0);
+	break;
 
-        case BLE_GAP_EVT_AUTH_STATUS:
-            m_auth_status = p_ble_evt->evt.gap_evt.params.auth_status;
-            break;
+    case BLE_GAP_EVT_AUTH_STATUS:
+	m_auth_status = p_ble_evt->evt.gap_evt.params.auth_status;
+	break;
 
-        case BLE_GAP_EVT_SEC_INFO_REQUEST:
-            p_enc_info = &m_auth_status.periph_keys.enc_info;
-            if (p_enc_info->div == p_ble_evt->evt.gap_evt.params.sec_info_request.div)
-            {
-                err_code = sd_ble_gap_sec_info_reply(m_conn_handle, p_enc_info, NULL);
-            }
-            else
-            {
-                // No keys found for this device
-                err_code = sd_ble_gap_sec_info_reply(m_conn_handle, NULL, NULL);
-            }
-            break;
+    case BLE_GAP_EVT_SEC_INFO_REQUEST:
+	p_enc_info = &m_auth_status.periph_keys.enc_info;
+	if (p_enc_info->div == p_ble_evt->evt.gap_evt.params.sec_info_request.div)
+	{
+	    err_code = sd_ble_gap_sec_info_reply(m_conn_handle, p_enc_info, NULL);
+	}
+	else
+	{
+	    // No keys found for this device
+	    err_code = sd_ble_gap_sec_info_reply(m_conn_handle, NULL, NULL);
+	}
+	break;
 
-        case BLE_GAP_EVT_TIMEOUT:
-            if (p_ble_evt->evt.gap_evt.params.timeout.src == BLE_GAP_TIMEOUT_SRC_ADVERTISEMENT) {
-            	led_setState(LED_BLUE, LED_STATE_OFF);
+    case BLE_GAP_EVT_TIMEOUT:
+	if (p_ble_evt->evt.gap_evt.params.timeout.src == BLE_GAP_TIMEOUT_SRC_ADVERTISEMENT) {
+	    led_setState(LED_BLUE, LED_STATE_OFF);
 
-                // Go to system-off mode (this function will not return; wakeup will cause a reset)
-                //GPIO_WAKEUP_BUTTON_CONFIG(WAKEUP_BUTTON_PIN);
-                //err_code = sd_power_system_off();
-            }
-            break;
+	    // Go to system-off mode (this function will not return; wakeup will cause a reset)
+	    //GPIO_WAKEUP_BUTTON_CONFIG(WAKEUP_BUTTON_PIN);
+	    //err_code = sd_power_system_off();
+	}
+	break;
 
-        case BLE_GAP_EVT_RSSI_CHANGED:
-        	break;
+    case BLE_GAP_EVT_RSSI_CHANGED:
+	break;
 
-        default:
-            break;
+    default:
+	break;
     }
 
     APP_ERROR_CHECK(err_code);
@@ -204,20 +204,20 @@ void bleApp_gapParamsInit() {
 /**@brief Initialize services that will be used by the application.
  */
 void bleApp_servicesInit() {
-	uint32_t err_code;
+    uint32_t err_code;
 
-	ble_vns_init_t vns_init;
-	vns_init.version = 0x0100;
-	err_code = ble_vns_init(&m_vns, &vns_init);
-	APP_ERROR_CHECK(err_code);
+    ble_vns_init_t vns_init;
+    vns_init.version = 0x0100;
+    err_code = ble_vns_init(&m_vns, &vns_init);
+    APP_ERROR_CHECK(err_code);
 
-	ble_sps_init_t sps_init;
-	fifo_init(&ble_sps_txFifo, ble_sps_txFifoData, sizeof(ble_sps_txFifoData));
-	fifo_init(&ble_sps_rxFifo, ble_sps_rxFifoData, sizeof(ble_sps_rxFifoData));
-	sps_init.p_txFifo = &ble_sps_txFifo;
-	sps_init.p_rxFifo = &ble_sps_rxFifo;
-	err_code = ble_sps_init(&m_sps, &sps_init);
-	APP_ERROR_CHECK(err_code);
+    ble_sps_init_t sps_init;
+    fifo_init(&ble_sps_txFifo, ble_sps_txFifoData, sizeof(ble_sps_txFifoData));
+    fifo_init(&ble_sps_rxFifo, ble_sps_rxFifoData, sizeof(ble_sps_rxFifoData));
+    sps_init.p_txFifo = &ble_sps_txFifo;
+    sps_init.p_rxFifo = &ble_sps_rxFifo;
+    err_code = ble_sps_init(&m_sps, &sps_init);
+    APP_ERROR_CHECK(err_code);
 }
 
 
@@ -284,33 +284,33 @@ void bleApp_connParamsErrorHandler(uint32_t nrf_error) {
 
 
 bool bleApp_isConnected() {
-	if (m_conn_handle == BLE_CONN_HANDLE_INVALID) {
-		return false;
-	}
+    if (m_conn_handle == BLE_CONN_HANDLE_INVALID) {
+	return false;
+    }
 
-	return true;
+    return true;
 }
 
 void bleApp_setAdvertisingEnabled(bool enable) {
-	advertisingEnabled = enable;
+    advertisingEnabled = enable;
 
-	if (advertisingEnabled && (m_conn_handle == BLE_CONN_HANDLE_INVALID)) {
-		/* If advertising is enabled, we need to actually start advertising
-		 * here (assuming we are not already connected) because advertising is
-		 * normally only started when the previous connection is
-		 * disconnected. */
-		bleApp_advertisingStart();
-	} else if (!advertisingEnabled && (m_conn_handle == BLE_CONN_HANDLE_INVALID)) {
-		/* Likewise, if we have just disabled advertising, and there is no
-		 * active connection, we stop advertising here.  If there is an active
-		 * connection, we leave it intact, but once its disconnects, we will
-		 * not start advertising again. */
-		bleApp_advertisingStop();
-	}
+    if (advertisingEnabled && (m_conn_handle == BLE_CONN_HANDLE_INVALID)) {
+	/* If advertising is enabled, we need to actually start advertising
+	 * here (assuming we are not already connected) because advertising is
+	 * normally only started when the previous connection is
+	 * disconnected. */
+	bleApp_advertisingStart();
+    } else if (!advertisingEnabled && (m_conn_handle == BLE_CONN_HANDLE_INVALID)) {
+	/* Likewise, if we have just disabled advertising, and there is no
+	 * active connection, we stop advertising here.  If there is an active
+	 * connection, we leave it intact, but once its disconnects, we will
+	 * not start advertising again. */
+	bleApp_advertisingStop();
+    }
 }
 
 bool bleApp_isAdvertisingEnabled() {
-	return advertisingEnabled;
+    return advertisingEnabled;
 }
 
 /**@brief Advertising functionality initialization.
@@ -379,9 +379,9 @@ void bleApp_advertisingStart() {
 }
 
 void bleApp_advertisingStop() {
-	uint32_t err_code;
+    uint32_t err_code;
 
-	err_code = sd_ble_gap_adv_stop();
+    err_code = sd_ble_gap_adv_stop();
     /* Allow invalid state errors, trap everything else.  We do this because we
      * may not be advertising at the moment when we try to stop advertising,
      * and even though that generates an error, it's okay. */
@@ -391,5 +391,5 @@ void bleApp_advertisingStop() {
     	APP_ERROR_CHECK(err_code);
     }
 
-	led_setState(LED_BLUE, LED_STATE_OFF);
+    led_setState(LED_BLUE, LED_STATE_OFF);
 }

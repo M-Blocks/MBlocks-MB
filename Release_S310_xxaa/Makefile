@@ -48,7 +48,7 @@ ASSEMBLER_SOURCE_FILES += gcc_startup_$(DEVICESERIES).s
 
 ## Assembly Flags
 ASMFLAGS += -DRELEASE -Os
-ASMFLAGS += -D__HEAP_SIZE=128
+ASMFLAGS += -D__HEAP_SIZE=0
 ASMFLAGS += -x assembler-with-cpp
 
 ## Libraries
@@ -109,6 +109,8 @@ ASSEMBLER_SOURCE_FILENAMES = $(notdir $(ASSEMBLER_SOURCE_FILES) )
 
 # Make a list of source paths
 C_SOURCE_PATHS += ../ $(SDK_SOURCE_PATH) $(TEMPLATE_PATH) $(wildcard $(SDK_SOURCE_PATH)*/)  $(wildcard $(SDK_SOURCE_PATH)ext_sensors/*/) $(wildcard $(SDK_SOURCE_PATH)ble/*/)
+C_SOURCE_PATHS += ../includes/RTT
+
 ASSEMBLER_SOURCE_PATHS = ../ $(SDK_SOURCE_PATH) $(TEMPLATE_PATH) $(wildcard $(SDK_SOURCE_PATH)*/)
 
 C_OBJECTS = $(addprefix $(OBJECT_DIRECTORY)/, $(C_SOURCE_FILENAMES:.c=.o) )
@@ -187,9 +189,6 @@ $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_CompleteImage.hex: $(OUTPUT_BINARY
 	mergehex --merge $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_BootloaderInput.hex $(BOOTLOADER_HEXFILE) --output $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_AppWithBootloaderCode.hex
 	mergehex --merge $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_AppWithBootloaderCode.hex $(SOFTDEVICE_HEXFILE) --output $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_AppWithBootloaderCodeAndSoftdevice.hex
 	bash -c "../bin/appendBootloaderSettings.sh $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_AppWithBootloaderCodeAndSoftdevice.hex $@"
-	#$(RM) $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_AppWithBootloaderCode.hex
-	#$(RM) $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)_AppWithBootloaderCodeAndSoftdevice.hex
-	
 
 include $(TEMPLATE_PATH)Makefile.windows
 

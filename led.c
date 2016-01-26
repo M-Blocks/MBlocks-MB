@@ -26,150 +26,150 @@ static bool initialized = false;
 static void led_timerHandler(void *p_context);
 
 void led_init() {
-	uint32_t err_code;
-	uint32_t led;
+    uint32_t err_code;
+    uint32_t led;
 
-	for (led=0; led<LED_COUNT; led++) {
-		nrf_gpio_pin_clear(led_pin_number[led]);
-		nrf_gpio_cfg_output(led_pin_number[led]);
-		led_state[led] = LED_STATE_OFF;
-	}
+    for (led=0; led<LED_COUNT; led++) {
+	nrf_gpio_pin_clear(led_pin_number[led]);
+	nrf_gpio_cfg_output(led_pin_number[led]);
+	led_state[led] = LED_STATE_OFF;
+    }
 
 
     /* Create a timer which will be used to flash the LEDs */
-	if (ledTimerID == TIMER_NULL) {
-		err_code = app_timer_create(&ledTimerID, APP_TIMER_MODE_REPEATED, led_timerHandler);
-		APP_ERROR_CHECK(err_code);
-	}
-
-	/* Start the timer which controls the LEDs */
-	err_code = app_timer_start(ledTimerID, APP_TIMER_TICKS(100, APP_TIMER_PRESCALER), NULL);
+    if (ledTimerID == TIMER_NULL) {
+	err_code = app_timer_create(&ledTimerID, APP_TIMER_MODE_REPEATED, led_timerHandler);
 	APP_ERROR_CHECK(err_code);
+    }
 
-	initialized = true;
+    /* Start the timer which controls the LEDs */
+    err_code = app_timer_start(ledTimerID, APP_TIMER_TICKS(100, APP_TIMER_PRESCALER), NULL);
+    APP_ERROR_CHECK(err_code);
+
+    initialized = true;
 }
 
 void led_deinit(void) {
-	uint32_t err_code;
-	uint32_t led;
+    uint32_t err_code;
+    uint32_t led;
 
-	if (!initialized) {
-		return;
-	}
+    if (!initialized) {
+	return;
+    }
 
-	if (ledTimerID != TIMER_NULL) {
-		err_code = app_timer_stop(ledTimerID);
-		APP_ERROR_CHECK(err_code);
-	}
+    if (ledTimerID != TIMER_NULL) {
+	err_code = app_timer_stop(ledTimerID);
+	APP_ERROR_CHECK(err_code);
+    }
 
-	for (led=0; led<LED_COUNT; led++) {
-		led_state[led] = LED_STATE_OFF;
-		nrf_gpio_pin_clear(led_pin_number[led]);
-	}
+    for (led=0; led<LED_COUNT; led++) {
+	led_state[led] = LED_STATE_OFF;
+	nrf_gpio_pin_clear(led_pin_number[led]);
+    }
 
-	initialized = false;
+    initialized = false;
 }
 
 void led_setAllOff() {
-	uint32_t i;
+    uint32_t i;
 
-	for (i=0; i<LED_COUNT; i++) {
-		led_state[i] = LED_STATE_OFF;
-	}
+    for (i=0; i<LED_COUNT; i++) {
+	led_state[i] = LED_STATE_OFF;
+    }
 }
 
 void led_setAllOn() {
-	uint32_t i;
+    uint32_t i;
 
-	for (i=0; i<LED_COUNT; i++) {
-		led_state[i] = LED_STATE_ON;
-	}
+    for (i=0; i<LED_COUNT; i++) {
+	led_state[i] = LED_STATE_ON;
+    }
 }
 
 bool led_setState(uint8_t led, led_state_t state) {
-	if ((led < LED_COUNT) && (LED_STATE_IS_VALID(state))) {
-		led_state[led] = state;
-		return true;
-	}
+    if ((led < LED_COUNT) && (LED_STATE_IS_VALID(state))) {
+	led_state[led] = state;
+	return true;
+    }
 
-	return false;
+    return false;
 }
 
 led_state_t led_getState(uint8_t led) {
-	if (led < LED_COUNT) {
-		return led_state[led];
-	}
+    if (led < LED_COUNT) {
+	return led_state[led];
+    }
 
-	return LED_STATE_OFF;
+    return LED_STATE_OFF;
 }
 
 
 uint32_t led_getDutyCycle_percent(uint8_t led) {
-	if (led < LED_COUNT) {
-		if (led_state[led] == LED_STATE_OFF) {
-			return 0;
-		} else if (led_state[led] == LED_STATE_ON) {
-			return 100;
-		} else if (led_state[led] == LED_STATE_SLOW_FLASH) {
-			return 50;
-		} else if (led_state[led] == LED_STATE_FAST_FLASH) {
-			return 50;
-		} else if (led_state[led] == LED_STATE_SINGLE_BLINK) {
-			return 10;
-		} else if (led_state[led] == LED_STATE_DOUBLE_BLINK) {
-			return 20;
-		} else {
-			return 0;
-		}
+    if (led < LED_COUNT) {
+	if (led_state[led] == LED_STATE_OFF) {
+	    return 0;
+	} else if (led_state[led] == LED_STATE_ON) {
+	    return 100;
+	} else if (led_state[led] == LED_STATE_SLOW_FLASH) {
+	    return 50;
+	} else if (led_state[led] == LED_STATE_FAST_FLASH) {
+	    return 50;
+	} else if (led_state[led] == LED_STATE_SINGLE_BLINK) {
+	    return 10;
+	} else if (led_state[led] == LED_STATE_DOUBLE_BLINK) {
+	    return 20;
+	} else {
+	    return 0;
 	}
+    }
 
-	return 0;
+    return 0;
 }
 
 void led_timerHandler(void *p_context) {
-	static uint32_t count = 0;
-	uint32_t adjCount;
-	uint32_t led;
+    static uint32_t count = 0;
+    uint32_t adjCount;
+    uint32_t led;
 
-	count = (count + 1) % COUNT_PERIOD;
+    count = (count + 1) % COUNT_PERIOD;
 
-	for (led=0; led<LED_COUNT; led++) {
-		adjCount = (count + 3*led) % COUNT_PERIOD;
+    for (led=0; led<LED_COUNT; led++) {
+	adjCount = (count + 3*led) % COUNT_PERIOD;
 
-		if (led_state[led] == LED_STATE_OFF) {
-			nrf_gpio_pin_clear(led_pin_number[led]);
-		} else if (led_state[led] == LED_STATE_ON) {
-			nrf_gpio_pin_set(led_pin_number[led]);
-		} else if (led_state[led] == LED_STATE_SLOW_FLASH) {
-			if ((adjCount >> 1) < (COUNT_PERIOD / 4)) {
-				nrf_gpio_pin_set(led_pin_number[led]);
-			} else {
-				nrf_gpio_pin_clear(led_pin_number[led]);
-			}
-		} else if (led_state[led] == LED_STATE_FAST_FLASH) {
-			if (adjCount >> 1 & 0x01) {
-				nrf_gpio_pin_set(led_pin_number[led]);
-			} else {
-				nrf_gpio_pin_clear(led_pin_number[led]);
-			}
-		} else if (led_state[led] == LED_STATE_SINGLE_BLINK) {
-			if (adjCount % (COUNT_PERIOD / 2) == 0) {
-				nrf_gpio_pin_set(led_pin_number[led]);
-			} else {
-				nrf_gpio_pin_clear(led_pin_number[led]);
-			}
-		} else if (led_state[led] == LED_STATE_DOUBLE_BLINK) {
-			if ((adjCount % (COUNT_PERIOD / 2) == 0) || (adjCount % (COUNT_PERIOD / 2) == 2)) {
-				nrf_gpio_pin_set(led_pin_number[led]);
-			} else {
-				nrf_gpio_pin_clear(led_pin_number[led]);
-			}
-		} else {
-			/* If the state is unknown, set the state to OFF */
-			led_state[led] = LED_STATE_OFF;
-			nrf_gpio_pin_clear(led_pin_number[led]);
-		}
+	if (led_state[led] == LED_STATE_OFF) {
+	    nrf_gpio_pin_clear(led_pin_number[led]);
+	} else if (led_state[led] == LED_STATE_ON) {
+	    nrf_gpio_pin_set(led_pin_number[led]);
+	} else if (led_state[led] == LED_STATE_SLOW_FLASH) {
+	    if ((adjCount >> 1) < (COUNT_PERIOD / 4)) {
+		nrf_gpio_pin_set(led_pin_number[led]);
+	    } else {
+		nrf_gpio_pin_clear(led_pin_number[led]);
+	    }
+	} else if (led_state[led] == LED_STATE_FAST_FLASH) {
+	    if (adjCount >> 1 & 0x01) {
+		nrf_gpio_pin_set(led_pin_number[led]);
+	    } else {
+		nrf_gpio_pin_clear(led_pin_number[led]);
+	    }
+	} else if (led_state[led] == LED_STATE_SINGLE_BLINK) {
+	    if (adjCount % (COUNT_PERIOD / 2) == 0) {
+		nrf_gpio_pin_set(led_pin_number[led]);
+	    } else {
+		nrf_gpio_pin_clear(led_pin_number[led]);
+	    }
+	} else if (led_state[led] == LED_STATE_DOUBLE_BLINK) {
+	    if ((adjCount % (COUNT_PERIOD / 2) == 0) || (adjCount % (COUNT_PERIOD / 2) == 2)) {
+		nrf_gpio_pin_set(led_pin_number[led]);
+	    } else {
+		nrf_gpio_pin_clear(led_pin_number[led]);
+	    }
+	} else {
+	    /* If the state is unknown, set the state to OFF */
+	    led_state[led] = LED_STATE_OFF;
+	    nrf_gpio_pin_clear(led_pin_number[led]);
 	}
+    }
 }
 
 

@@ -24,37 +24,37 @@
 #include "adc.h"
 
 bool adc_init() {
-	/* Make the VINSENSE, FRAMETEMP, LIPROVBATOUT, and ICHARGE pins inputs with
-	 * their input buffers disabled so that they do not consume current when
-	 * the pins are at a voltage somewhere between 0 and VCC. */
+    /* Make the VINSENSE, FRAMETEMP, LIPROVBATOUT, and ICHARGE pins inputs with
+     * their input buffers disabled so that they do not consume current when
+     * the pins are at a voltage somewhere between 0 and VCC. */
 
     NRF_GPIO->PIN_CNF[VINSENSE_PIN_NO] =
-    		(GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
-    		(GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
-    		(GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
-    		(GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
-    		(GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
+	(GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
+	(GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
+	(GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
+	(GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
+	(GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
 
     NRF_GPIO->PIN_CNF[LIPROVBATOUT_PIN_NO] =
-    		(GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
-    		(GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
-    		(GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
-    		(GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
-    		(GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
+	(GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
+	(GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
+	(GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
+	(GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
+	(GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
 
     NRF_GPIO->PIN_CNF[ICHARGE_PIN_NO] =
-    		(GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
-    		(GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
-    		(GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
-    		(GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
-    		(GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
+	(GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
+	(GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
+	(GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
+	(GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
+	(GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
 
-	return true;
+    return true;
 }
 
 void adc_deinit() {
-	/* Nothing to do here */
-	;
+    /* Nothing to do here */
+    ;
 }
 
 uint16_t adc_read_mV(uint8_t channel) {
@@ -73,10 +73,10 @@ uint16_t adc_read_mV(uint8_t channel) {
 
     /* Configure the ADC parameters */
     NRF_ADC->CONFIG = (ADC_CONFIG_RES_10bit << ADC_CONFIG_RES_Pos) | /* 10-bit result */
-    		(ADC_CONFIG_INPSEL_AnalogInputOneThirdPrescaling << ADC_CONFIG_INPSEL_Pos) | /* Scale positive input by 1/3 */
-    		(ADC_CONFIG_REFSEL_VBG << ADC_CONFIG_REFSEL_Pos) | /* Use 1.2V bandgap reference voltage */
-    		((0x01 << channel) << ADC_CONFIG_PSEL_Pos) | /* Select the specified channel */
-    		(ADC_CONFIG_EXTREFSEL_None << ADC_CONFIG_EXTREFSEL_Pos); /* Disable external reference pins */
+	(ADC_CONFIG_INPSEL_AnalogInputOneThirdPrescaling << ADC_CONFIG_INPSEL_Pos) | /* Scale positive input by 1/3 */
+	(ADC_CONFIG_REFSEL_VBG << ADC_CONFIG_REFSEL_Pos) | /* Use 1.2V bandgap reference voltage */
+	((0x01 << channel) << ADC_CONFIG_PSEL_Pos) | /* Select the specified channel */
+	(ADC_CONFIG_EXTREFSEL_None << ADC_CONFIG_EXTREFSEL_Pos); /* Disable external reference pins */
 
 
     /* Clear the conversion complete flag */
@@ -113,12 +113,12 @@ uint16_t adc_read_mV(uint8_t channel) {
 }
 
 uint16_t adc_avg_mV(uint8_t channel, uint8_t nsamples) {
-	uint32_t accum = 0;
-	int i;
+    uint32_t accum = 0;
+    int i;
 
-	for (i=0; i<nsamples; i++) {
-		accum += adc_read_mV(channel);
-	}
+    for (i=0; i<nsamples; i++) {
+	accum += adc_read_mV(channel);
+    }
 
-	return (uint16_t)(accum / nsamples);
+    return (uint16_t)(accum / nsamples);
 }
