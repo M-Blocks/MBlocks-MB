@@ -1,0 +1,17 @@
+s120_nrf51822_1.0.1
+
+This release consists of the following:
+- This readme file
+- The s120_nrf51822_1.0.1 SoftDevice (binary hex file)
+- The s120_nrf51822_1.0.1 API (SoftDevice header files)
+- The s120_nrf51822_1.0.1 release notes
+- The s120_nrf51822_1.0.1 licence agreement
+
+This release contains bugfixes, see release notes.
+
+This SoftDevice release has internal changes that requires that the SoftDevice
+is programmed onto the chip in a specific way.  The following Nordic tools
+handle this:
+
+- nrfjprog version 5.0.1 or higher
+- nRFgo Studio version 1.17.0 or higher.  

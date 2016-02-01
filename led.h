@@ -1,43 +1,47 @@
-/*
- * led.h
+/**@file led.h
+ * @brief Function prototypes for LED handler.
  *
- *  Created on: Jan 29, 2014
- *      Author: kwgilpin
+ * @author Kyle W. Gilpin
+ * @author Sebastian Claici
+ * @bug No known bugs.
  */
+#ifndef LED_HEADER_
+#define LED_HEADER_
 
-#ifndef LED_H_
-#define LED_H_
-
-#include <stdint.h>
-#include <stdbool.h>
-
-#include "app_timer.h"
-
-#define LED_COUNT	3
-
-#define LED_RED		0
-#define LED_GREEN	1
-#define LED_BLUE	2
+#define LED_MEAS_INTERVAL       APP_TIMER_TICKS(1000, APP_TIMER_PRESCALER)
 
 typedef enum {
-	LED_STATE_OFF = 0,
-	LED_STATE_ON,
-	LED_STATE_SLOW_FLASH,
-	LED_STATE_FAST_FLASH,
-	LED_STATE_SINGLE_BLINK,
-	LED_STATE_DOUBLE_BLINK
+    LED_STATE_OFF = 0,       /**< LED is off. */
+    LED_STATE_ON,            /**< LED is on. */
+    LED_STATE_SLOW_FLASH,    /**< LED flashes once every three cycles. */
+    LED_STATE_NUM_TYPES
 } led_state_t;
 
-#define LED_STATE_IS_VALID(s)	((s == LED_STATE_OFF) || (s == LED_STATE_ON) || \
-								 (s == LED_STATE_SLOW_FLASH) || (s == LED_STATE_FAST_FLASH) || \
-								 (s == LED_STATE_SINGLE_BLINK) || (s == LED_STATE_DOUBLE_BLINK))
+typedef enum {
+    LED_RED = 0,
+    LED_GREEN,
+    LED_BLUE,
+    LED_COUNT
+} led_t;
 
-void led_init(void);
-void led_deinit(void);
-void led_setAllOff(void);
-void led_setAllOn(void);
-bool led_setState(uint8_t led, led_state_t state);
-led_state_t led_getState(uint8_t led);
-uint32_t led_getDutyCycle_percent(uint8_t led);
+/**@brief Function for starting the LED timers.
+ */
+void led_timers_start(void);
 
-#endif /* LED_H_ */
+/**@brief Function for stopping the LED timers.
+ */
+void led_timers_stop(void);
+
+/**@brief Function for setting the state of a LED.
+ */
+void led_set_state(led_t led_number, led_state_t led_state);
+
+/**@brief Function for setting all LEDs on.
+ */
+void led_set_all_on(void);
+
+/**@brief Function for setting all LEDs off.
+ */
+void led_set_all_off(void);
+
+#endif

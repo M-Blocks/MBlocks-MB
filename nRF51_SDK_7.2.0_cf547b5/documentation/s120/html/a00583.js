@@ -1,0 +1,26 @@
+var a00583 =
+[
+    [ "GAP Advertisement", "a00584.html", null ],
+    [ "GAP Peripheral Connection Establishment and Termination", "a00585.html", null ],
+    [ "GAP Connection Parameter Update", "a00586.html", null ],
+    [ "GAP RSSI", "a00587.html", null ],
+    [ "GAP Peripheral Pairing: Just Works", "a00588.html", null ],
+    [ "GAP Peripheral Bonding: Just Works", "a00589.html", null ],
+    [ "GAP Peripheral Bonding: Passkey Entry, Peripheral displays", "a00590.html", null ],
+    [ "GAP Peripheral Bonding: Passkey Entry (Central display) or OOB MSC", "a00591.html", null ],
+    [ "GAP Peripheral Encryption Establishment using stored keys", "a00592.html", null ],
+    [ "GAP Peripheral Initiated Security Establishment", "a00593.html", null ],
+    [ "GAP Scanning", "a00594.html", null ],
+    [ "GAP Central Connection Establishment and Termination", "a00595.html", null ],
+    [ "GAP Central Connection Parameter Update", "a00596.html", null ],
+    [ "GAP Central Encryption Establishment using stored keys", "a00597.html", null ],
+    [ "GAP Central Pairing: Just Works", "a00598.html", null ],
+    [ "GAP Central Bonding: Just Works", "a00599.html", null ],
+    [ "GAP Central Bonding: Passkey Entry, Central displays", "a00600.html", null ],
+    [ "GAP Central Bonding: Passkey Entry (Peripheral display) or OOB MSC", "a00601.html", null ],
+    [ "GAP Central Security Request Reception", "a00602.html", null ],
+    [ "GAP Unexpected Security Packet Reception", "a00603.html", null ],
+    [ "GAP Central Encryption and Authentication mutual exclusion", "a00604.html", null ],
+    [ "GAP Central Connection Parameter Update on multiple links", "a00605.html", null ],
+    [ "GAP Central Control Procedure Serialization on multiple links", "a00606.html", null ]
+];

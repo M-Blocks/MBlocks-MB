@@ -1,0 +1,28 @@
+var annotated =
+[
+    [ "app_button_cfg_t", "a00052.html", "a00052" ],
+    [ "app_fifo_t", "a00053.html", "a00053" ],
+    [ "app_uart_buffers_t", "a00054.html", "a00054" ],
+    [ "app_uart_comm_params_t", "a00055.html", "a00055" ],
+    [ "app_uart_evt_t", "a00056.html", "a00056" ],
+    [ "hci_slip_evt_t", "a00057.html", "a00057" ],
+    [ "hci_transport_evt_t", "a00058.html", "a00058" ],
+    [ "hci_transport_ioctl_cmd_t", "a00059.html", "a00059" ],
+    [ "nrf_ecb_hal_data_t", "a00060.html", "a00060" ],
+    [ "nrf_radio_request_earliest_t", "a00061.html", "a00061" ],
+    [ "nrf_radio_request_normal_t", "a00062.html", "a00062" ],
+    [ "nrf_radio_request_t", "a00063.html", "a00063" ],
+    [ "nrf_radio_signal_callback_return_param_t", "a00064.html", "a00064" ],
+    [ "pin_transition_t", "a00065.html", "a00065" ],
+    [ "pstorage_module_param_t", "a00066.html", "a00066" ],
+    [ "sd_mbr_command_compare_t", "a00067.html", "a00067" ],
+    [ "sd_mbr_command_copy_bl_t", "a00068.html", "a00068" ],
+    [ "sd_mbr_command_copy_sd_t", "a00069.html", "a00069" ],
+    [ "sd_mbr_command_t", "a00070.html", "a00070" ],
+    [ "sd_mbr_command_vector_table_base_set_t", "a00071.html", "a00071" ],
+    [ "spi_master_config_t", "a00072.html", "a00072" ],
+    [ "spi_master_evt_t", "a00073.html", "a00073" ],
+    [ "spi_slave_config_t", "a00074.html", "a00074" ],
+    [ "spi_slave_evt_t", "a00075.html", "a00075" ],
+    [ "uint8_array_t", "a00076.html", "a00076" ]
+];

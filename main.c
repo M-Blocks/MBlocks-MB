@@ -1,114 +1,358 @@
-/* Copyright (c) 2012 Nordic Semiconductor. All Rights Reserved.
+/**@file main.c
+ * @brief Main application entry point.
  *
- * The information contained herein is property of Nordic Semiconductor ASA.
- * Terms and conditions of usage are described in detail in NORDIC
- * SEMICONDUCTOR STANDARD SOFTWARE LICENSE AGREEMENT.
- *
- * Licensees are granted free, non-transferable use of the information. NO
- * WARRANTY of ANY KIND is provided. This heading must NOT be removed from
- * the file.
- *
+ * @author Sebastian Claici
  */
 
-/** @file
- *
- * @defgroup ble_sdk_app_template_main main.c
- * @{
- * @ingroup ble_sdk_app_template
- * @brief Template project main file.
- *
- * This file contains a template for creating a new application. It has the code necessary to wakeup from button, advertise, get a connection
- * restart advertising on disconnect and if no new connection created go back to system-off mode.
- * It can easily be used as a starting point for creating a new application, the comments identified with 'YOUR_JOB' indicates where
- * and how you can customize.
- */
-
-#include <inttypes.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
-
-#include "SEGGER_RTT.h"
 
 #include "nordic_common.h"
 #include "nrf.h"
+#include "nrf_sdm.h"
 #include "nrf_gpio.h"
-#include "nrf_delay.h"
-#include "nrf_soc.h"
-#include "nrf51_bitfields.h"
 
 #include "ble.h"
-#include "ble_hci.h"
 #include "ble_srv_common.h"
 #include "ble_advdata.h"
 #include "ble_conn_params.h"
-#include "ble_debug_assert_handler.h"
+#include "softdevice_handler.h"
 
 #include "app_scheduler.h"
-#include "app_timer.h"
-#include "app_timer_appsh.h"
-#include "app_gpiote.h"
-#include "app_button.h"
-#include "app_timer.h"
+#include "app_util.h"
 #include "app_error.h"
-#include "app_uart.h"
+#include "app_gpiote.h"
+#include "app_timer.h"
 
 #include "global.h"
-#include "pins.h"
-#include "led.h"
-#include "pwm.h"
-#include "spi.h"
-#include "adc.h"
-#include "uart.h"
-#include "util.h"
-#include "power.h"
-#include "db.h"
-#include "fb.h" 
-#include "bldc.h"
-#include "imu.h"
-#include "mpu6050.h"
-#include "twi_master.h"
-#include "twi_master_config.h"
-#include "commands.h"
-#include "cmdline.h"
-
-#include "bleApp.h"
+#include "fifo.h"
 #include "ble_sps.h"
 #include "ble_vns.h"
- 
-//#define WAKEUP_BUTTON_PIN               NRF6310_BUTTON_0                            /**< Button used to wake up the application. */
-// YOUR_JOB: Define any other buttons to be used by the applications:
-// #define MY_BUTTON_PIN                   NRF6310_BUTTON_1
+#include "pins.h"
+#include "led.h"
+
+#include "SEGGER_RTT.h"
 
 
-#define BLE_APPEARANCE_CABLE_REPLACEMENT    1800
+#define APP_GPIOTE_MAX_USERS 4
 
-// YOUR_JOB: Modify these according to requirements.
+#define IS_SRVC_CHANGED_CHARACT_PRESENT 0
 
-#define APP_GPIOTE_MAX_USERS            4                                           /**< Maximum number of users of the GPIOTE handler. */
+#define DEVICE_NAME			"BLE SPP 67:6F:C7"
+#define APP_ADV_INTERVAL		40
+#define APP_ADV_TIMEOUT_IN_SECONDS	180
 
-#define DEAD_BEEF                       0xDEADBEEF                                  /**< Value used as error code on stack dump, can be used to identify stack location on stack unwind. */
+#define APP_TIMER_MAX_TIMERS    8
+#define APP_TIMER_OP_QUEUE_SIZE 2
 
-// YOUR_JOB: Modify these according to requirements (e.g. if other event types are to pass through
-//           the scheduler).
-#define SCHED_MAX_EVENT_DATA_SIZE       sizeof(app_timer_event_t)                   /**< Maximum size of scheduler events. Note that scheduler BLE stack events do not contain any data, as the events are being pulled from the stack in the event handler. */
-#define SCHED_QUEUE_SIZE                12                                          /**< Maximum number of events in the scheduler queue. */
+#define MIN_CONN_INTERVAL	MSEC_TO_UNITS(500, UNIT_1_25_MS)
+#define MAX_CONN_INTERVAL	MSEC_TO_UNITS(1000, UNIT_1_25_MS)
+#define SLAVE_LATENCY		0
+#define CONN_SUP_TIMEOUT	MSEC_TO_UNITS(4000, UNIT_10_MS)
 
-static bool sleepRequested = false;
-static uint32_t sleepTime_sec = 600;
-static bool sleeping = false;
-static uint32_t lastCharTime_rtcTicks = 0;
-static bool motionDetected = false;
+#define FIRST_CONN_PARAMS_UPDATE_DELAY	APP_TIMER_TICKS(5000, APP_TIMER_PRESCALER)
+#define NEXT_CONN_PARAMS_UPDATE_DELAY	APP_TIMER_TICKS(30000, APP_TIMER_PRESCALER)
+#define MAX_CONN_PARAMS_UPDATE_COUNT	3
 
-APP_TIMER_DEF(motionCheckTimerID); 
+#define SEC_PARAM_TIMEOUT               30
+#define SEC_PARAM_IO_CAPABILITIES	BLE_GAP_IO_CAPS_NONE
+#define SEC_PARAM_BOND			1
+#define SEC_PARAM_MITM			0
+#define SEC_PARAM_OOB			0
+#define SEC_PARAM_MIN_KEY_SIZE		7
+#define SEC_PARAM_MAX_KEY_SIZE		16
 
-static void main_timersInit(void);
-static void main_timersStart(void);
-static void main_schedulerInit(void);
-static void main_gpioteInit(void);
-static void main_gpioInit(void);
-static void main_configUnusedPins(void);
+#define BLE_TX_FIFO_SIZE	512
+#define BLE_RX_FIFO_SIZE	64
 
-static void main_motionCheckTimerHandler(void *context);
+#define DEAD_BEEF 0xDEADBEEF
+
+static ble_gap_sec_params_t	m_sec_params;
+static ble_gap_adv_params_t	m_adv_params;
+
+static ble_sps_t m_sps;
+static ble_vns_t m_vns;
+
+static fifo_t ble_sps_txFifo;
+static uint8_t ble_sps_txFifoData[BLE_TX_FIFO_SIZE];
+static fifo_t ble_sps_rxFifo;
+static uint8_t ble_sps_rxFifoData[BLE_RX_FIFO_SIZE];
+
+
+/**@brief Function for the GAP initialization
+ */
+static void gap_params_init(void) {
+    uint32_t			err_code;
+    ble_gap_conn_params_t	gap_conn_params;
+    ble_gap_conn_sec_mode_t	sec_mode;
+
+    BLE_GAP_CONN_SEC_MODE_SET_OPEN(&sec_mode);
+    err_code = sd_ble_gap_device_name_set(&sec_mode,
+					  (const uint8_t *)DEVICE_NAME,
+					  strlen(DEVICE_NAME));
+    APP_ERROR_CHECK(err_code);
+
+    err_code = sd_ble_gap_appearance_set(BLE_APPEARANCE_UNKNOWN);
+    APP_ERROR_CHECK(err_code);
+
+    gap_conn_params.min_conn_interval = MIN_CONN_INTERVAL;
+    gap_conn_params.max_conn_interval = MAX_CONN_INTERVAL;
+    gap_conn_params.slave_latency     = SLAVE_LATENCY;
+    gap_conn_params.conn_sup_timeout  = CONN_SUP_TIMEOUT;
+
+    err_code = sd_ble_gap_ppcp_set(&gap_conn_params);
+    APP_ERROR_CHECK(err_code);
+}
+
+
+/**@brief Function for initializing the Advertising functionality
+ */
+static void advertising_init(void) {
+    uint32_t			err_code;
+    ble_advdata_t		advdata;
+    ble_advdata_t		scanrsp;
+    ble_advdata_manuf_data_t	manufdata;
+
+    uint8_t spp_key[3] = {0x00, 0x00, 0x00};
+    uint8_t	flags  = BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE;
+
+    ble_uuid_t adv_uuids[] =
+    {
+	{SPS_UUID_SERVICE, m_sps.service_uuid_type}
+    };
+
+    memset(&advdata, 0, sizeof(advdata));
+    advdata.name_type		    = BLE_ADVDATA_NO_NAME;
+    advdata.flags.size		    = sizeof(flags);
+    advdata.flags.p_data	    = &flags;
+    advdata.uuids_complete.uuid_cnt = sizeof(adv_uuids) / sizeof(adv_uuids[0]);
+    advdata.uuids_complete.p_uuids  = adv_uuids;
+    manufdata.company_identifier    = 0xFFFF;
+    manufdata.data.size		    = 3;
+    manufdata.data.p_data	    = spp_key;
+    advdata.p_manuf_specific_data   = &manufdata;
+
+    memset(&scanrsp, 0, sizeof(scanrsp));
+    scanrsp.name_type	       = BLE_ADVDATA_FULL_NAME;
+    scanrsp.include_appearance = true;
+
+    err_code = ble_advdata_set(&advdata, &scanrsp);
+    APP_ERROR_CHECK(err_code);
+
+    memset(&m_adv_params, 0, sizeof(m_adv_params));
+    m_adv_params.type	     = BLE_GAP_ADV_TYPE_ADV_IND;
+    m_adv_params.p_peer_addr = NULL;
+    m_adv_params.fp	     = BLE_GAP_ADV_FP_ANY;
+    m_adv_params.interval    = APP_ADV_INTERVAL;
+    m_adv_params.timeout     = APP_ADV_TIMEOUT_IN_SECONDS;
+}
+
+
+static void services_init(void) {
+    uint32_t		err_code;
+    ble_vns_init_t	vns_init;
+    ble_sps_init_t	sps_init;
+
+    vns_init.version = 0x0100;
+    err_code = ble_vns_init(&m_vns, &vns_init);
+    APP_ERROR_CHECK(err_code);
+
+    fifo_init(&ble_sps_txFifo, ble_sps_txFifoData, sizeof(ble_sps_txFifoData));
+    fifo_init(&ble_sps_rxFifo, ble_sps_rxFifoData, sizeof(ble_sps_rxFifoData));
+    sps_init.p_txFifo = &ble_sps_txFifo;
+    sps_init.p_rxFifo = &ble_sps_rxFifo;
+    
+    err_code = ble_sps_init(&m_sps, &sps_init);
+    APP_ERROR_CHECK(err_code);
+}
+
+
+/**@brief Function for initializing the security parameters
+ */
+static void sec_params_init(void) {
+    m_sec_params.timeout      = SEC_PARAM_TIMEOUT;
+    m_sec_params.oob	      = SEC_PARAM_OOB;
+    m_sec_params.mitm	      = SEC_PARAM_MITM;
+    m_sec_params.bond	      = SEC_PARAM_BOND;
+    m_sec_params.io_caps      = SEC_PARAM_IO_CAPABILITIES;
+    m_sec_params.min_key_size = SEC_PARAM_MIN_KEY_SIZE;
+    m_sec_params.max_key_size = SEC_PARAM_MAX_KEY_SIZE;
+}
+
+
+/**@brief Function for starting the application timers
+ */
+static void application_timers_start(void) {
+    led_timers_start();
+}
+
+
+/**@brief Function for starting advertising
+ */
+static void advertising_start(void) {
+    uint32_t err_code;
+
+    err_code = sd_ble_gap_adv_start(&m_adv_params);
+    APP_ERROR_CHECK(err_code);
+
+    led_set_state(LED_BLUE, LED_STATE_SLOW_FLASH);
+}
+
+
+/**@brief Function for handling a connection parameters error.
+ */
+static void conn_params_error_handler(uint32_t nrf_error) {
+    APP_ERROR_HANDLER(nrf_error);
+}
+
+
+/**@brief Function for initializing the connection parameters module.
+ */
+static void conn_params_init(void) {
+    uint32_t               err_code;
+    ble_conn_params_init_t connection_params_init;
+    
+    memset(&connection_params_init, 0, sizeof(connection_params_init));
+
+    connection_params_init.p_conn_params                  = NULL;
+    connection_params_init.first_conn_params_update_delay = FIRST_CONN_PARAMS_UPDATE_DELAY;
+    connection_params_init.next_conn_params_update_delay  = NEXT_CONN_PARAMS_UPDATE_DELAY;
+    connection_params_init.max_conn_params_update_count   = MAX_CONN_PARAMS_UPDATE_COUNT;
+    connection_params_init.start_on_notify_cccd_handle    = BLE_GATT_HANDLE_INVALID;
+    connection_params_init.disconnect_on_fail             = true;
+    connection_params_init.evt_handler                    = NULL;
+    connection_params_init.error_handler                  = conn_params_error_handler;
+    
+    err_code = ble_conn_params_init(&connection_params_init);
+    APP_ERROR_CHECK(err_code);
+}
+
+
+/**@brief Function for handling the application's BLE stack events
+ *
+ * @param[in]  p_ble_evt  Bluetooth stack event.
+ */
+static void on_ble_evt(ble_evt_t *p_ble_evt) {
+    uint32_t				 err_code;
+    static uint16_t			 s_conn_handle = BLE_CONN_HANDLE_INVALID;
+    static ble_gap_evt_auth_status_t	 s_auth_status;
+    ble_gap_enc_info_t			*p_enc_info;
+
+    switch (p_ble_evt->header.evt_id) {
+    case BLE_GAP_EVT_CONNECTED:
+	led_set_state(LED_BLUE, LED_STATE_ON);
+	s_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
+	break;
+
+    case BLE_GAP_EVT_DISCONNECTED:
+	led_set_state(LED_BLUE, LED_STATE_SLOW_FLASH);
+	advertising_start();
+	break;
+
+    case BLE_GAP_EVT_SEC_PARAMS_REQUEST:
+	err_code = sd_ble_gap_sec_params_reply(s_conn_handle,
+					       BLE_GAP_SEC_STATUS_SUCCESS,
+					       &m_sec_params);
+	APP_ERROR_CHECK(err_code);
+	break;
+
+    case BLE_GAP_EVT_AUTH_STATUS:
+	s_auth_status = p_ble_evt->evt.gap_evt.params.auth_status;
+	break;
+
+    case BLE_GATTS_EVT_SYS_ATTR_MISSING:
+	err_code = sd_ble_gatts_sys_attr_set(s_conn_handle, NULL, 0);
+	APP_ERROR_CHECK(err_code);
+	break;
+
+    case BLE_GAP_EVT_SEC_INFO_REQUEST:
+	p_enc_info = &s_auth_status.periph_keys.enc_info;
+	if (p_enc_info->div == p_ble_evt->evt.gap_evt.params.sec_info_request.div) {
+	    err_code = sd_ble_gap_sec_info_reply(s_conn_handle, p_enc_info, NULL);
+	    APP_ERROR_CHECK(err_code);
+	} else {
+	    // No keys found for this device
+	    err_code = sd_ble_gap_sec_info_reply(s_conn_handle, NULL, NULL);
+	    APP_ERROR_CHECK(err_code);
+	}
+	break;
+
+    case BLE_GAP_EVT_TIMEOUT:
+	if (p_ble_evt->evt.gap_evt.params.timeout.src == BLE_GAP_TIMEOUT_SRC_ADVERTISEMENT)
+	{
+	    led_set_all_off();
+	}
+	break;
+	
+    default:
+	break;
+    }
+}
+
+
+/**@brief Function for dispatching a BLE stack event to all modules with a BLE stack event handler
+ *
+ * @param[in]  p_ble_evt  Bluetooth stack event.
+ */
+static void ble_evt_dispatch(ble_evt_t *p_ble_evt) {
+    ble_vns_on_ble_evt(&m_vns, p_ble_evt);
+    ble_sps_on_ble_evt(&m_sps, p_ble_evt);
+    ble_conn_params_on_ble_evt(p_ble_evt);
+    on_ble_evt(p_ble_evt);
+}
+
+
+void ble_stack_start(void) {
+    uint32_t err_code;
+
+    SOFTDEVICE_HANDLER_INIT(NRF_CLOCK_LFCLKSRC_RC_250_PPM_4000MS_CALIBRATION, false);
+    
+    ble_enable_params_t ble_enable_params;
+    memset(&ble_enable_params, 0, sizeof(ble_enable_params));
+    ble_enable_params.gatts_enable_params.service_changed = IS_SRVC_CHANGED_CHARACT_PRESENT;
+    err_code = sd_ble_enable(&ble_enable_params);
+    APP_ERROR_CHECK(err_code);
+
+    err_code = softdevice_ble_evt_handler_set(ble_evt_dispatch);
+    APP_ERROR_CHECK(err_code);
+}
+
+
+void ble_stack_stop(void) {
+    uint32_t err_code;
+
+    err_code = softdevice_handler_sd_disable();
+    APP_ERROR_CHECK(err_code);
+}
+
+
+void ble_app_start(void) {
+    SEGGER_RTT_WriteString(0, "Initializing GAP parameters.\n");
+    gap_params_init();
+    SEGGER_RTT_WriteString(0, "Initializing services.\n");
+    services_init();
+    SEGGER_RTT_WriteString(0, "Initializing CONN parameters.\n");
+    conn_params_init();
+    SEGGER_RTT_WriteString(0, "Initializing security parameters.\n");
+    sec_params_init();
+    SEGGER_RTT_WriteString(0, "Initializing advertising.\n");
+    advertising_init();
+    SEGGER_RTT_WriteString(0, "Starting application timers.\n");
+    application_timers_start();
+    SEGGER_RTT_WriteString(0, "Starting advertising.\n");
+    advertising_start();
+}
+
+
+void ble_app_stop(void) {
+    uint32_t err_code;
+    
+    // Stop any impending connection parameters update.
+    err_code = ble_conn_params_stop();
+    APP_ERROR_CHECK(err_code);
+}
+
 
 /**@brief Error handler function, which is called when an error has occurred. 
  *
@@ -120,23 +364,16 @@ static void main_motionCheckTimerHandler(void *context);
  * @param[in] p_file_name Pointer to the file name. 
  */
 void app_error_handler(uint32_t error_code, uint32_t line_num, const uint8_t * p_file_name) {
-    // This call can be used for debug purposes during development of an application.
-    // @note CAUTION: Activating this code will write the stack to flash on an error.
-    //                This function should NOT be used in a final product.
-    //                It is intended STRICTLY for development/debugging purposes.
-    //                The flash write will happen EVEN if the radio is active, thus interrupting
-    //                any communication.
-    //                Use with care. Un-comment the line below to use.
-    //ble_debug_assert_handler(error_code, line_num, p_file_name);
-
-    // On assert, the system can only recover with a reset.
     char err[20];
     sprintf(err, "Error Code: %u\n", (unsigned) error_code);
     SEGGER_RTT_WriteString(0, err);
+
+    // On assert, the system can only recover with a reset.
+    NVIC_SystemReset();
 }
 
 
-/**@brief Assert macro callback function.
+/**@brief Callback function for asserts in the SoftDevice.
  *
  * @details This function will be called in case of an assert in the SoftDevice.
  *
@@ -147,608 +384,63 @@ void app_error_handler(uint32_t error_code, uint32_t line_num, const uint8_t * p
  * @param[in]   line_num   Line number of the failing ASSERT call.
  * @param[in]   file_name  File name of the failing ASSERT call.
  */
-void assert_nrf_callback(uint16_t line_num, const uint8_t * p_file_name)
-{
+void assert_nrf_callback(uint16_t line_num, const uint8_t *p_file_name) {
     app_error_handler(DEAD_BEEF, line_num, p_file_name);
 }
 
 
-/**@brief Service error handler.
- *
- * @details A pointer to this function will be passed to each service which may need to inform the 
- *          application about an error.
- *
- * @param[in]   nrf_error   Error code containing information about what went wrong.
+/**@brief Function for the timer module initialization
  */
-/*
-// YOUR_JOB: Uncomment this function and make it handle error situations sent back to your 
-//           application by the services it uses.
-static void service_error_handler(uint32_t nrf_error)
-{
-    APP_ERROR_HANDLER(nrf_error);
-} */
-
-
-/**@brief Timer initialization.
- *
- * @details Initializes the timer module.
- */
-void main_timersInit() {
-    // Initialize timer module, making it use the scheduler
-    APP_TIMER_APPSH_INIT(APP_TIMER_PRESCALER, APP_TIMER_OP_QUEUE_SIZE, true);
-
-    // Create the motion detection timer
-    uint32_t err_code;
-    err_code = app_timer_create(&motionCheckTimerID, APP_TIMER_MODE_REPEATED, main_motionCheckTimerHandler);
-    APP_ERROR_CHECK(err_code);
+static void timers_init(void) {
+    APP_TIMER_INIT(APP_TIMER_PRESCALER, APP_TIMER_MAX_TIMERS, APP_TIMER_OP_QUEUE_SIZE, false);
 }
 
-/**@brief Timer start.
- *
- * @details Starts all timers
+
+/**@brief Function for initializing the GPIOTE module.
  */
-void main_timersStart() {
-    // Nothing here
-}
-
-/**@brief Event Scheduler initialization. */
-void main_schedulerInit() {
-    APP_SCHED_INIT(SCHED_MAX_EVENT_DATA_SIZE, SCHED_QUEUE_SIZE);
-}
-
-/**@brief Initialize GPIOTE handler module. */
-void main_gpioteInit() {
+static void gpiote_init(void) {
     APP_GPIOTE_INIT(APP_GPIOTE_MAX_USERS);
 }
 
-void main_gpioInit() {
-    main_configUnusedPins();
 
-    nrf_gpio_pin_clear(BAT1DISCHRG_PIN_NO);
-    nrf_gpio_cfg_output(BAT1DISCHRG_PIN_NO);
-
-    nrf_gpio_pin_clear(BAT2DISCHRG_PIN_NO);
-    nrf_gpio_cfg_output(BAT2DISCHRG_PIN_NO);
-
-    nrf_gpio_pin_clear(BAT3DISCHRG_PIN_NO);
-    nrf_gpio_cfg_output(BAT3DISCHRG_PIN_NO);
-
-    nrf_gpio_pin_clear(BAT4DISCHRG_PIN_NO);
-    nrf_gpio_cfg_output(BAT4DISCHRG_PIN_NO);
-
-    /* The S-8243B datasheet states that CTL3 and CTL4 pins should not both be
-     * low.  So, we default to setting them high. */
-    nrf_gpio_pin_set(LIPROCTL3_PIN_NO);
-    nrf_gpio_cfg_output(LIPROCTL3_PIN_NO);
-
-    nrf_gpio_pin_set(LIPROCTL4_PIN_NO);
-    nrf_gpio_cfg_output(LIPROCTL4_PIN_NO);
-
-    nrf_gpio_pin_clear(CHRGEN_PIN_NO);
-    nrf_gpio_cfg_output(CHRGEN_PIN_NO);
-
-    /* Make the SCK, MOSI, and CS pins outputs with well defined states */
-    nrf_gpio_pin_clear(SPI_SCK_PIN_NO);
-    nrf_gpio_cfg_output(SPI_SCK_PIN_NO);
-
-    nrf_gpio_pin_clear(SPI_MOSI_PIN_NO);
-    nrf_gpio_cfg_output(SPI_MOSI_PIN_NO);
-
-    nrf_gpio_pin_set(SPI_BLDCCS_PIN_NO);
-    nrf_gpio_cfg_output(SPI_BLDCCS_PIN_NO);
-
-    /* Make sure the MISO pin has a pull-down so that it does not float and
-     * consume extra current. */
-    nrf_gpio_cfg_input(SPI_MOSI_PIN_NO, NRF_GPIO_PIN_PULLDOWN);
-
-    /* The BLDCRESETN pin serves as the active-low reset for the A4960 but it
-     * also enables the switched battery rail when high. This switched battery
-     * rail supplies the A4960 and the SMA controller. */
-    nrf_gpio_pin_clear(BLDCRESETN_PIN_NO);
-    nrf_gpio_cfg_output(BLDCRESETN_PIN_NO);
-
-    /* Despite plans to use PWM output to control the BLDC motor's speed, we
-     * have found that adjusting the current limit (via the A4960's REF pin)
-     * accomplishes the same task.  If the PWM is unused, the BLDCSPEED pin
-     * must be tied high so that the A4960 does not brake the motor.  That
-     * said, the A4960 consume about 50uA additional current when the pin is
-     * high, so we keep it low for now. */
-    nrf_gpio_pin_clear(BLDCSPEED_PIN_NO);
-    nrf_gpio_cfg_output(BLDCSPEED_PIN_NO);
-
-    /* Make the BLDCTACHO pin an input with pull-down.  We will detect and
-     * count all rising edges.*/
-    nrf_gpio_cfg_input(BLDCTACHO_PIN_NO, NRF_GPIO_PIN_PULLDOWN);
-
-    /* Make the VINSENSE, LIPROVBATOUT, and ICHARGE pins inputs with
-     * their input buffers disabled so that they do not consume current when
-     * the pins are at a voltage somewhere between 0 and VCC. */
-    NRF_GPIO->PIN_CNF[VINSENSE_PIN_NO] =
-            (GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
-            (GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
-            (GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
-            (GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
-            (GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
-
-    NRF_GPIO->PIN_CNF[LIPROVBATOUT_PIN_NO] =
-            (GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
-            (GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
-            (GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
-            (GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
-            (GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
-
-    NRF_GPIO->PIN_CNF[ICHARGE_PIN_NO] =
-            (GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) |
-            (GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) |
-            (GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) |
-            (GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
-            (GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos);
-
-    /* Make the TXD pin an output which drives high */
-    nrf_gpio_pin_set(UART_TX_PIN_NO);
-    nrf_gpio_cfg_output(UART_TX_PIN_NO);
-
-    /* Make the RXD pin an input will a pull-up */
-    nrf_gpio_pin_set(UART_RX_PIN_NO);
-    nrf_gpio_cfg_input(UART_RX_PIN_NO, NRF_GPIO_PIN_PULLUP);
-
-    /* Set the PWM pins to 0 until they are turned on. */
-    nrf_gpio_pin_clear(PRECHRGEN_PIN_NO);
-    nrf_gpio_cfg_output(PRECHRGEN_PIN_NO);
-
-    nrf_gpio_pin_clear(BLDCIREF_PIN_NO);
-    nrf_gpio_cfg_output(BLDCIREF_PIN_NO);
-
-    /* The SMAPWM is controlled by software-based PWM, but we still need to
-     * set its initial state to 0. */
-    nrf_gpio_pin_clear(SMAPWM_PIN_NO);
-    nrf_gpio_cfg_output(SMAPWM_PIN_NO);
-
-    /* Ensure that the SCL and SDA pins are inputs.  We assume that they do not
-     * need to be pulled-up as there should be external pull-up resistors on
-     * the I2C bus. */
-    nrf_gpio_cfg_input(TWI_MASTER_CONFIG_CLOCK_PIN_NUMBER, NRF_GPIO_PIN_NOPULL);
-    nrf_gpio_cfg_input(TWI_MASTER_CONFIG_DATA_PIN_NUMBER, NRF_GPIO_PIN_NOPULL);
-
-    /* The IMUINT pin should be configured as an input without pull-up or pull-
-     * down as the accelerometer default to making its interrupt pin a push-
-     * pull output.*/
-    nrf_gpio_cfg_input(IMUINT_PIN_NO, NRF_GPIO_PIN_NOPULL);
-
-    /* Configure the LED pins as outputs */
+/**@brief Function for configuring the GPIO pins.
+ */
+static void gpio_init(void) {
     nrf_gpio_pin_clear(LED_RED_PIN_NO);
     nrf_gpio_cfg_output(LED_RED_PIN_NO);
 
-    nrf_gpio_pin_clear(LED_GREEN_PIN_NO);
-    nrf_gpio_cfg_output(LED_GREEN_PIN_NO);
-
     nrf_gpio_pin_clear(LED_BLUE_PIN_NO);
     nrf_gpio_cfg_output(LED_BLUE_PIN_NO);
+
+    nrf_gpio_pin_clear(LED_GREEN_PIN_NO);
+    nrf_gpio_cfg_output(LED_GREEN_PIN_NO);
 }
 
-void main_configUnusedPins() {
-    /* P0.26 is truly unconnected */
-    nrf_gpio_pin_clear(26);
-    nrf_gpio_cfg_output(26);
-
-    /* P0.03 is truly unconnected.*/
-    nrf_gpio_pin_clear(3);
-    nrf_gpio_cfg_output(3);
-
-    /* P0.02 is truly unconnected.*/
-    nrf_gpio_pin_clear(2);
-    nrf_gpio_cfg_output(2);
-}
-
-/**@brief Power management
+/**@brief Function for power management
  */
-static void power_manage(void)
-{
-    uint32_t err_code;
-    uint32_t currentTime_rtcTicks;
-    uint32_t elapsedTime_rtcTicks;
-
-    uint32_t elapsedCharTime_sec;
-    bool chargerActive;
-
-    app_timer_cnt_get(&currentTime_rtcTicks);
-
-    elapsedTime_rtcTicks = 0x00FFFFFF & (currentTime_rtcTicks - lastCharTime_rtcTicks);
-    elapsedCharTime_sec = (elapsedTime_rtcTicks * USEC_PER_APP_TIMER_TICK) / 1000000;
-
-
-    if ((power_getChargeState() == POWER_CHARGESTATE_OFF) ||
-            (power_getChargeState() == POWER_CHARGESTATE_STANDBY) ||
-            (power_getChargeState() == POWER_CHARGESTATE_ERROR)) {
-        chargerActive = false;
-    } else {
-        chargerActive = true;
-    }
-
-
-    if (sleeping && motionDetected) {
-        /* If the processor was sleeping, the IMU has detected motion, we must
-         * re-initialize the peripherals that we de-initialized before entering
-         * sleep mode. */
-
-        /* Turn on all LEDs on the mainboard and the daughterboard for 1 second
-         * as an indication that the M-Blocks has exited sleep. */
-        db_setLEDs(true, true, true);
-        fb_setTopLEDs(0, true, true, true);
-        fb_setBottomLEDs(0, true, true, true);
-
-        nrf_gpio_pin_set(LED_RED_PIN_NO);
-        nrf_gpio_pin_set(LED_GREEN_PIN_NO);
-        nrf_gpio_pin_set(LED_BLUE_PIN_NO);
-        nrf_delay_ms(1000);
-
-        /* Turn off all of the LEDs.  The led_init() function will handle this
-         * on the mainboard. */
-        db_setLEDs(false, false, false);
-        fb_setTopLEDs(0, false, false, false);
-        fb_setBottomLEDs(0, false, false, false);
-
-        /* Sleep the daughterboard and the faceboards */
-        db_sleep(true);
-        fb_sleep(0, true);
-
-
-        led_init();
-        uart_init();
-        pwm_init();
-        spi_init();
-        power_init();
-        bldc_init();
-
-        if (motionCheckTimerID != TIMER_NULL) {
-            err_code = app_timer_stop(motionCheckTimerID);
-            APP_ERROR_CHECK(err_code);
-        }
-
-        mpu6050_setAddress(MPU6050_I2C_ADDR_CENTRAL);
-        imu_enableSleepMode();
-        imu_enableDMP();
-
-        mpu6050_setAddress(MPU6050_I2C_ADDR_FACE);
-        imu_enableSleepMode();
-        imu_enableDMP();
-
-        sleeping = false;
-
-        /* So that the device does not go back to sleep immediately, we pretend
-         * that we just received a character on one of the serial communication
-         * interfaces.  This effectively resets the character timer. */
-        app_timer_cnt_get(&lastCharTime_rtcTicks);
-
-        bleApp_setAdvertisingEnabled(true);
-
-        /* Restart charging */
-        power_setChargeState(POWER_CHARGESTATE_STANDBY);
-
-        app_uart_put_string("Awoken from sleep\r\n");
-    } else if (sleepRequested ||
-            ((elapsedCharTime_sec > sleepTime_sec) && (sleepTime_sec != 0) && !chargerActive)) {
-        /* If we have received a sleep command, or it has been a long time
-         * since we received the last character over one of the serial
-         * interfaces, (and the batteries are not currently charging, we go to
-         * sleep. */
-
-        /* Clear the sleep requested flag so that we do not re-enter sleep
-         * immediately after waking up.*/
-        sleepRequested = false;
-
-        if (!sleeping) {
-            app_uart_put_string("Going to sleep\r\n");
-            nrf_delay_ms(10);
-
-            /* In case the charger was in standby or an error state, we force
-             * it off before going to sleep. */
-            power_setChargeState(POWER_CHARGESTATE_OFF);
-
-            /* Turn off power to the SMA controller and BLDC driver */
-            power_setVBATSWState(VBATSW_SUPERUSER, false);
-            /* Ensure that the daughterboard is in sleep mode */
-            db_sleep(true);
-
-            /* Put all faceboards to sleep, too */
-            fb_sleep(0, true);
-
-            /* Terminate the BLE connection, if one exists */
-            if (m_sps.conn_handle != BLE_CONN_HANDLE_INVALID) {
-                err_code = sd_ble_gap_disconnect(m_sps.conn_handle, BLE_HCI_CONN_INTERVAL_UNACCEPTABLE);
-                APP_ERROR_CHECK(err_code);
-            }
-
-            /* Stop advertising */
-            bleApp_setAdvertisingEnabled(false);
-
-            /* Disable the DMP by placing the IMU into sleep mode and then
-             * enable low-power motion detection.  We'll use motion to
-             * wake-up from sleep. */
-            mpu6050_setAddress(MPU6050_I2C_ADDR_CENTRAL);
-            imu_enableSleepMode();
-            imu_enableMotionDetection(true);
-
-            mpu6050_setAddress(MPU6050_I2C_ADDR_FACE);
-            imu_enableSleepMode();
-            imu_enableMotionDetection(false);
-
-            /* Start the timer which we'll use to check whether the IMU has
-             * sensed motion. */
-            if (motionCheckTimerID != TIMER_NULL) {
-                err_code = app_timer_start(motionCheckTimerID, APP_TIMER_TICKS(1000, APP_TIMER_PRESCALER), NULL);
-                APP_ERROR_CHECK(err_code);
-            }
-
-            /* Clear the motion detected flag so that we do not wake-up
-             * immediately. */
-            motionDetected = false;
-
-            led_deinit();
-            uart_deinit();
-            twi_master_deinit();
-            pwm_deinit();
-            spi_deinit();
-            power_deinit();
-            bldc_deinit();
-        }
-
-        sleeping = true;
-    }
-
-    err_code = sd_app_evt_wait();
+static void power_manage(void) {
+    uint32_t err_code = sd_app_evt_wait();
     APP_ERROR_CHECK(err_code);
 }
 
-/**@brief Application main function.
+
+/**@brief Function for application main entry
  */
 int main(void) {
-    uint8_t c;
-    char str[64];
-    uint8_t strSize;
-    uint16_t bootCurrent_mA;
-    bool mpu6050Initialized_central = false, dmpInitialized_central = false;
-    bool mpu6050Initialized_face = false, dmpInitialized_face = false;
-    bool dbAwakeAfterBoot = false;
-    bool ledsOnAfterBoot = false;
-    uint32_t currentTime_rtcTicks;
-
-    nrf_delay_ms(10);
-
-    main_schedulerInit();
-
-    /* The timer subsystem must be initialized before we can create timers. */
-    main_timersInit();
-
-    main_gpioteInit();
-    bleApp_stackInit();
-    main_gpioInit();
-    uart_init();
-
-    mpu6050_setAddress(MPU6050_I2C_ADDR_FACE);
-    mpu6050Initialized_face = imu_init();
-    dmpInitialized_face = imu_initDMP();
-
-    mpu6050_setAddress(MPU6050_I2C_ADDR_CENTRAL);
-    mpu6050Initialized_central = imu_init();
-    dmpInitialized_central = imu_initDMP();
-
-    led_init();
-    pwm_init();
-    spi_init();
-    power_init();
-    bldc_init();
-    commands_init();
-
-    bleApp_gapParamsInit();
-    bleApp_servicesInit();
-    bleApp_connParamsInit();
-    bleApp_secParamsInit();
-    bleApp_advertisingInit();
-    main_timersStart();
-
-    led_setAllOn();
-    ledsOnAfterBoot = true;
-
-    /* Reset the daughterboard by pulling the SCL line low */
-    db_reset();
-    dbAwakeAfterBoot = true;
-
-    SEGGER_RTT_WriteString(0, "MBlocks-MB ");
-#ifdef DEBUG
-    SEGGER_RTT_WriteString(0, " (Debug)");
-#elif defined(RELEASE)
-    SEGGER_RTT_WriteString(0, " (Release)");
-#else
-    SEGGER_RTT_WriteString(0, " (Unknown)");
-#endif
-    SEGGER_RTT_WriteString(0, "\r\n");
-
-    strSize = sizeof(str);
-    if (db_getVersion(str, strSize)) {
-        SEGGER_RTT_WriteString(0, "Daughterboard: OK (");
-        SEGGER_RTT_WriteString(0, str);
-        SEGGER_RTT_WriteString(0, ")\r\n");
-    } else {
-        SEGGER_RTT_WriteString(0, "Daughterboard: Fail\r\n");
-    }
-
-    if (bldc_init()) {
-        SEGGER_RTT_WriteString(0, "A4960: OK\r\n");
-    } else {
-        SEGGER_RTT_WriteString(0, "A4960: Fail\r\n");
-    }
-
-    if (mpu6050Initialized_central) {
-        SEGGER_RTT_WriteString(0, "MPU-6050 (central actuator): OK\r\n");
-    } else {
-        SEGGER_RTT_WriteString(0, "MPU-6050 (central actuator): Fail\r\n");
-    }
-
-    if (dmpInitialized_central) {
-        SEGGER_RTT_WriteString(0, "DMP (central actuator): OK\r\n");
-    } else {
-        SEGGER_RTT_WriteString(0, "DMP (central actuator): Fail\r\n");
-    }
-
-    if (mpu6050Initialized_face) {
-        SEGGER_RTT_WriteString(0, "MPU-6050 (faceboard 1): OK\r\n");
-    } else {
-        SEGGER_RTT_WriteString(0, "MPU-6050 (faceboard 1): Fail\r\n");
-    }
-
-    if (dmpInitialized_face) {
-        SEGGER_RTT_WriteString(0, "DMP (faceboard 1): OK\r\n");
-    } else {
-        SEGGER_RTT_WriteString(0, "DMP (faceboard 1): Fail\r\n");
-    }
-
-    strSize = sizeof(str);
-    if (fb_getVersion(1, str, strSize)) {
-        SEGGER_RTT_WriteString(0, "Faceboard 1: OK (");
-        SEGGER_RTT_WriteString(0, str);
-        SEGGER_RTT_WriteString(0, ")\r\n");
-    } else {
-        SEGGER_RTT_WriteString(0, "Faceboard 1: Fail\r\n");
-    }
-
-    strSize = sizeof(str);
-    if (fb_getVersion(2, str, strSize)) {
-        SEGGER_RTT_WriteString(0, "Faceboard 2: OK (");
-        SEGGER_RTT_WriteString(0, str);
-        SEGGER_RTT_WriteString(0, ")\r\n");
-    } else {
-        SEGGER_RTT_WriteString(0, "Faceboard 2: Fail\r\n");
-    }
-
-    strSize = sizeof(str);
-    if (fb_getVersion(3, str, strSize)) {
-        SEGGER_RTT_WriteString(0, "Faceboard 3: OK (");
-        SEGGER_RTT_WriteString(0, str);
-        SEGGER_RTT_WriteString(0, ")\r\n");
-    } else {
-        SEGGER_RTT_WriteString(0, "Faceboard 3: Fail\r\n");
-    }
-
-    strSize = sizeof(str);
-    if (fb_getVersion(4, str, strSize)) {
-        SEGGER_RTT_WriteString(0, "Faceboard 4: OK (");
-        SEGGER_RTT_WriteString(0, str);
-        SEGGER_RTT_WriteString(0, ")\r\n");
-    } else {
-        SEGGER_RTT_WriteString(0, "Faceboard 4: Fail\r\n");
-    }
-
-    strSize = sizeof(str);
-    if (fb_getVersion(5, str, strSize)) {
-        SEGGER_RTT_WriteString(0, "Faceboard 5: OK (");
-        SEGGER_RTT_WriteString(0, str);
-        SEGGER_RTT_WriteString(0, ")\r\n");
-    } else {
-        SEGGER_RTT_WriteString(0, "Faceboard 5: Fail\r\n");
-    }
-
-    strSize = sizeof(str);
-    if (fb_getVersion(6, str, strSize)) {
-        SEGGER_RTT_WriteString(0, "Faceboard 6: OK (");
-        SEGGER_RTT_WriteString(0, str);
-        SEGGER_RTT_WriteString(0, ")\r\n");
-    } else {
-        SEGGER_RTT_WriteString(0, "Faceboard 6: Fail\r\n");
-    }
-
-    bootCurrent_mA = power_getChargeCurrent_mA();
-    if (bootCurrent_mA < 20) {
-        snprintf(str, sizeof(str), "Boot current: OK (%u mA)\r\n", bootCurrent_mA);
-    } else {
-        snprintf(str, sizeof(str), "Boot current: Fail (%u mA)\r\n", bootCurrent_mA);
-    }
-    SEGGER_RTT_WriteString(0, str);
-    SEGGER_RTT_WriteString(0, "\r\n");
+    SEGGER_RTT_WriteString(0, "Initializing timers.\n");
+    timers_init();
+    SEGGER_RTT_WriteString(0, "Initializing GPIOTE.\n");
+    gpiote_init();
+    SEGGER_RTT_WriteString(0, "Configuring GPIO pins.\n");
+    gpio_init();
+    SEGGER_RTT_WriteString(0, "Starting BLE stack.\n");
+    ble_stack_start();
+    SEGGER_RTT_WriteString(0, "Starting BLE app.\n");
+    ble_app_start();
+    SEGGER_RTT_WriteString(0, "All systems up.\n");
 
     for (;;) {
-        app_sched_execute();
-
-        while (app_uart_get(&c) == NRF_SUCCESS) {
-            SEGGER_RTT_printf(0, "UART: %c\n", c);
-            cmdline_newChar(c);
-            app_timer_cnt_get(&lastCharTime_rtcTicks);
-        }
-
-#if (ENABLE_BLE_COMMANDS == 1)
-        while (ble_sps_get_char(&m_sps, &c)) {
-            SEGGER_RTT_printf(0, "BLE: %c\n", c);
-            cmdline_newChar(c);
-            app_timer_cnt_get(&lastCharTime_rtcTicks);
-        }
-#endif
-
-        if (ledsOnAfterBoot && (app_timer_cnt_get(&currentTime_rtcTicks) == NRF_SUCCESS) &&
-                (currentTime_rtcTicks * USEC_PER_APP_TIMER_TICK >= 1000000)) {
-            led_setAllOff();
-            ledsOnAfterBoot = false;
-
-            if (bleApp_isAdvertisingEnabled()) {
-                bleApp_advertisingStart();
-            }
-        }
-
-        /* Three seconds after reboot, we put the daughterboard and faceboards
-         * to sleep. */
-        if (dbAwakeAfterBoot && (app_timer_cnt_get(&currentTime_rtcTicks) == NRF_SUCCESS) &&
-                (currentTime_rtcTicks * USEC_PER_APP_TIMER_TICK >= 3000000)) {
-            db_sleep(true);
-            dbAwakeAfterBoot = false;
-            fb_sleep(0, true);
-        }
-
-        power_manage();
+	app_sched_execute();
+	power_manage();
     }
 }
-
-/**@brief Timer handler for motion detection to wake up cube.
- */
-void main_motionCheckTimerHandler(void *context) {
-    static uint32_t lastLEDFlashTime_rtcTicks = 0;
-    bool newMotionDetected;
-    uint32_t currentTime_rtcTicks;
-    uint32_t elapsedTime_sec;
-
-    app_timer_cnt_get(&currentTime_rtcTicks);
-    elapsedTime_sec = ((0x00FFFFFF & (currentTime_rtcTicks - lastLEDFlashTime_rtcTicks)) * USEC_PER_APP_TIMER_TICK) / 1000000;
-
-    if (sleeping && (elapsedTime_sec >= 30)) {
-        nrf_gpio_pin_set(LED_RED_PIN_NO);
-        lastLEDFlashTime_rtcTicks = currentTime_rtcTicks;
-        nrf_delay_ms(25);
-    }
-
-    mpu6050_setAddress(MPU6050_I2C_ADDR_CENTRAL);
-    if (imu_checkForMotion(&newMotionDetected) && newMotionDetected) {
-        motionDetected = true;
-    }
-
-    nrf_gpio_pin_clear(LED_RED_PIN_NO);
-}
-
-
-void main_setSleepRequested(bool requested) {
-    sleepRequested = requested;
-}
-
-bool main_setSleepTime(uint32_t time_sec) {
-    if (time_sec > 3600) {
-        return false;
-    }
-
-    sleepTime_sec = time_sec;
-    return true;
-}
-
-uint32_t main_getSleepTime() {
-    return sleepTime_sec;
-}
-
-/** 
- * @}
- */
