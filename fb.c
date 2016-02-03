@@ -220,7 +220,7 @@ bool fb_getIRManualLEDs(uint8_t faceNum, bool *led1, bool *led2, bool *led3, boo
 }
 
 bool fb_sendToTxBuffer(uint8_t faceNum, uint8_t numBytes, const uint8_t *bytes) {
-    uint8_t twiBuf[256];
+    uint8_t twiBuf[128];
     bool success = true;
 
     if (faceNum > 6) {
@@ -230,7 +230,7 @@ bool fb_sendToTxBuffer(uint8_t faceNum, uint8_t numBytes, const uint8_t *bytes) 
     twi_master_init();
 
     twiBuf[0]  = FB_REGISTER_ADDR_TX_BUF;
-    // pad message with 0xDE as there is a tendency to drop the first few characters
+    // pad message with there is a tendency to drop the first few characters
     twiBuf[1] = twiBuf[2] = twiBuf[3] = 0xB7;
     memcpy(&twiBuf[4], bytes, numBytes);
 
@@ -242,7 +242,7 @@ bool fb_sendToTxBuffer(uint8_t faceNum, uint8_t numBytes, const uint8_t *bytes) 
 }
 
 bool fb_queueToTxBuffer(uint8_t faceNum, uint8_t numBytes, const uint8_t *bytes) {
-    uint8_t twiBuf[256];
+    uint8_t twiBuf[128];
     bool success = true;
 
     if (faceNum > 6) {
@@ -252,11 +252,11 @@ bool fb_queueToTxBuffer(uint8_t faceNum, uint8_t numBytes, const uint8_t *bytes)
     twi_master_init();
 
     twiBuf[0] = FB_REGISTER_ADDR_TX_MSG_BUF;
-    // pad message with 0xDE as there is a tendency to drop the first few characters
+    // pad message there is a tendency to drop the first few characters
     twiBuf[1] = twiBuf[2] = twiBuf[3] = 0xB7;
-    memcpy(&twiBuf[1], bytes, numBytes);
+    memcpy(&twiBuf[4], bytes, numBytes);
 
-    success &= twi_master_transfer((faceNum << 1), twiBuf, 1 + numBytes, true);
+    success &= twi_master_transfer((faceNum << 1), twiBuf, 4 + numBytes, true);
 
     twi_master_deinit();
 
@@ -421,7 +421,7 @@ bool fb_flushRxBuffer(uint8_t faceNum) {
     return success;
 }
 
-bool fb_getRxAmbientLightBuffer(uint8_t faceNum, uint8_t numBytes, uint8_t *bytes) {
+bool fb_getRxAmbientBuffer(uint8_t faceNum, uint8_t numBytes, uint8_t *bytes) {
     uint8_t twiBuf[2];
     bool success = true;
 

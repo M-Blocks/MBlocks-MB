@@ -68,6 +68,9 @@ bool fb_flushRxBuffer(uint8_t faceNum);
 bool fb_setRxEnable(uint8_t faceNum, bool rxEnable);
 bool fb_getRxEnable(uint8_t faceNum, bool *rxEnabled);
 
+bool fb_getRxAmbientBufferConsumedCount(uint8_t faceNum, uint8_t *bytesConsumed);
+bool fb_getRxAmbientBuffer(uint8_t faceNum, uint8_t numBytes, uint8_t *bytes);
+
 bool fb_sleep(uint8_t faceNum, bool sleepEnabled);
 
 #endif /* FB_H_ */

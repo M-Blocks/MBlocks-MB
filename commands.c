@@ -70,6 +70,8 @@ static void cmdFBTxLEDs(const char *args);
 static void cmdFBRx(const char *args);
 static void cmdFBRxCount(const char *args);
 static void cmdFBRxFlush(const char *args);
+static void cmdFBRxAmbient(const char *args);
+static void cmdFBRxAmbientCount(const char *args);
 static void cmdFBRxEnable(const char *args);
 static void cmdFBSleep(const char *args);
 /* IMU commands */
@@ -108,11 +110,13 @@ static const char cmdFBLightStr[] = "fblight";
 static const char cmdFBIRManualLEDsStr[] = "fbirled";
 static const char cmdFBTxStr[] = "fbtx";
 static const char cmdFBMsgTxStr[] = "fbtxmsg";
-static const char cmdFBTxCountStr[] = "fbtxcount";
+static const char cmdFBTxCountStr[] = "fbtxcnt";
 static const char cmdFBTxLEDsStr[] = "fbtxled";
 static const char cmdFBRxStr[] = "fbrx";
-static const char cmdFBRxCountStr[] = "fbrxcount";
+static const char cmdFBRxCountStr[] = "fbrxcnt";
 static const char cmdFBRxFlushStr[] = "fbrxflush";
+static const char cmdFBRxAmbientStr[] = "fbrxamb";
+static const char cmdFBRxAmbientCountStr[] = "fbrxambcnt";
 static const char cmdFBRxEnableStr[] = "fbrxen";
 static const char cmdFBSleepStr[] = "fbsleep";
 /* IMU commands */
@@ -157,6 +161,8 @@ static cmdFcnPair_t cmdTable[] = {
     {cmdFBRxCountStr, cmdFBRxCount},
     {cmdFBRxFlushStr, cmdFBRxFlush},
     {cmdFBRxEnableStr, cmdFBRxEnable},
+    {cmdFBRxAmbientCountStr, cmdFBRxAmbientCount},
+    {cmdFBRxAmbientStr, cmdFBRxAmbient},
     {cmdFBSleepStr, cmdFBSleep},
     /* IMU commands */
     {cmdIMUSelectStr, cmdIMUSelect},
@@ -690,7 +696,7 @@ void cmdFBMsgTx(const char *args) {
     unsigned int faceNum;
     unsigned int flashPostTx;
     unsigned int numBytes;
-    char txData[256];
+    char txData[128];
     char str[100];
 
     if (sscanf(args, "%u %u %255s", &faceNum, &flashPostTx, txData) != 2) {
@@ -835,7 +841,7 @@ void cmdFBTxLEDs(const char *args) {
 void cmdFBRx(const char *args) {
     unsigned int faceNum;
     unsigned int numBytes;
-    uint8_t rxData[256];
+    uint8_t rxData[128];
     char str[100];
 
 
@@ -872,7 +878,6 @@ void cmdFBRxCount(const char *args) {
     unsigned int faceNum;
     uint8_t count;
     char str[100];
-
 
     if (sscanf(args, "%u", &faceNum) != 1) {
 	return;
@@ -914,6 +919,46 @@ void cmdFBRxFlush(const char *args) {
     }
 
     app_uart_put_string(str);
+}
+
+void cmdFBRxAmbient(const char *args) {
+    unsigned int faceNum = 0;
+    unsigned int numBytes;
+    char str[100];
+
+    sscanf(args, "%u %u", &faceNum, &numBytes);
+    if (faceNum > 6 || faceNum <= 0) {
+	return;
+    }
+
+    uint8_t rxData[200];
+    if (fb_getRxAmbientBuffer(faceNum, numBytes, rxData)) {
+	rxData[numBytes] = '\0';
+	snprintf(str, sizeof(str), "Read %u bytes from ambient light buffer on faceboard %u:\r\n", numBytes, faceNum);
+	app_uart_put_string(str);
+	app_uart_put_string((char *)rxData);
+	app_uart_put_string("\r\n");
+    } else {
+	snprintf(str, sizeof(str), "Failed to read ambient light buffer on faceboard %u\r\n", faceNum);
+	app_uart_put_string(str);
+    }
+}
+
+void cmdFBRxAmbientCount(const char *args) {
+    unsigned int faceNum = 0;
+    char str[100];
+
+    sscanf(args, "%u", &faceNum);
+    if (faceNum > 6 || faceNum <= 0) {
+	return;
+    }
+
+    uint8_t numBytes;
+    if (fb_getRxAmbientBufferConsumedCount(faceNum, &numBytes)) {
+	snprintf(str, sizeof(str), "Faceboard %u ambient light buffer bytes consumed: %u\r\n", faceNum, numBytes);
+    } else {
+	snprintf(str, sizeof(str), "Failed to get ambient light buffer consumed count from faceboard %u\r\n", faceNum);
+    }
 }
 
 void cmdFBRxEnable(const char *args) {
