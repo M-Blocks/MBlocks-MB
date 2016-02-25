@@ -64,6 +64,7 @@ static void cmdFBRGBLED(const char *args);
 static void cmdFBLight(const char *args);
 static void cmdFBIRManualLEDs(const char *args);
 static void cmdFBTx(const char *args);
+static void cmdFBMsgQueue(const char *args);
 static void cmdFBMsgTx(const char *args);
 static void cmdFBTxCount(const char *args);
 static void cmdFBTxLEDs(const char *args);
@@ -109,6 +110,7 @@ static const char cmdFBRGBLEDStr[] = "fbrgbled";
 static const char cmdFBLightStr[] = "fblight";
 static const char cmdFBIRManualLEDsStr[] = "fbirled";
 static const char cmdFBTxStr[] = "fbtx";
+static const char cmdFBMsgQueueStr[] = "fbtxqueue";
 static const char cmdFBMsgTxStr[] = "fbtxmsg";
 static const char cmdFBTxCountStr[] = "fbtxcnt";
 static const char cmdFBTxLEDsStr[] = "fbtxled";
@@ -154,6 +156,7 @@ static cmdFcnPair_t cmdTable[] = {
     {cmdFBLightStr, cmdFBLight},
     {cmdFBIRManualLEDsStr, cmdFBIRManualLEDs},
     {cmdFBTxStr, cmdFBTx},
+    {cmdFBMsgQueueStr, cmdFBMsgQueue},
     {cmdFBMsgTxStr, cmdFBMsgTx},
     {cmdFBTxCountStr, cmdFBTxCount},
     {cmdFBTxLEDsStr, cmdFBTxLEDs},
@@ -666,7 +669,7 @@ void cmdFBIRManualLEDs(const char *args) {
 
     app_uart_put_string(str);
 }
-
+ 
 void cmdFBTx(const char *args) {
     unsigned int faceNum;
     unsigned int numBytes;
@@ -692,22 +695,19 @@ void cmdFBTx(const char *args) {
     app_uart_put_string(str);
 }
 
-void cmdFBMsgTx(const char *args) {
+void cmdFBMsgQueue(const char *args) {
     unsigned int faceNum;
-    unsigned int flashPostTx;
     unsigned int numBytes;
     char txData[128];
     char str[100];
 
-    if (sscanf(args, "%u %u %255s", &faceNum, &flashPostTx, txData) != 2) {
+    if (sscanf(args, "%u %[^\t\n]", &faceNum, txData) != 2) {
 	return;
     }
 
     if ((faceNum < 1) || (faceNum > 6)) {
 	return;
     }
-    app_uart_put_string(str);
-
     numBytes = strlen(txData);
 
     if (fb_queueToTxBuffer(faceNum, numBytes, (uint8_t *)txData)) {
@@ -716,8 +716,18 @@ void cmdFBMsgTx(const char *args) {
 	snprintf(str, sizeof(str), "Failed to queue to IR transmit buffer on faceboard %u\r\n", faceNum);
     }
     app_uart_put_string(str);
+}
 
-    if (fb_sendMsgToTxBuffer(faceNum, flashPostTx)) {
+void cmdFBMsgTx(const char *args) {
+    unsigned int faceNum;
+    unsigned int flashPostTx;
+    char str[100];
+
+    if (sscanf(args, "%u %u", &faceNum, &flashPostTx) != 2) {
+	return;
+    }
+    
+    if (fb_sendMsgToTxBuffer(faceNum, true)) {
 	snprintf(str, sizeof(str), "Sent queued message on faceboard %u\r\n", faceNum);
     } else {
 	snprintf(str, sizeof(str), "Failed to transmit queued message on faceboard %u\r\n", faceNum);
@@ -959,6 +969,7 @@ void cmdFBRxAmbientCount(const char *args) {
     } else {
 	snprintf(str, sizeof(str), "Failed to get ambient light buffer consumed count from faceboard %u\r\n", faceNum);
     }
+    app_uart_put_string(str);
 }
 
 void cmdFBRxEnable(const char *args) {
@@ -1159,7 +1170,9 @@ void cmdBLEMACAddr(const char *args) {
     err_code = sd_ble_gap_address_get(&mac_addr);
     APP_ERROR_CHECK(err_code);
 
-    snprintf(str, sizeof(str), "%u %u %u\r\n", mac_addr.addr[0], mac_addr.addr[1], mac_addr.addr[2]);
+    snprintf(str, sizeof(str), "%02x%02x%02x%02x%02x%02x\r\n",
+	     mac_addr.addr[5], mac_addr.addr[4], mac_addr.addr[3],
+	     mac_addr.addr[2], mac_addr.addr[1], mac_addr.addr[0]);
     app_uart_put_string(str);
 }
 

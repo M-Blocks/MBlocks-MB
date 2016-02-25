@@ -47,14 +47,14 @@ void message_deinit() {
 
 void message_timeoutHandler(void *p_context) {
     static char buffer[6][128];
-    static int bufferLen;
+    static short bufferLen[6];
 
     // read as many bytes as we can; split at '\n'
     // keep buffer; once '\n' is seen, parse message
     uint8_t count;
     uint8_t rxData[100];
 
-    for (int faceNum = 0; faceNum <= 0; faceNum++) {			// TODO
+    for (int faceNum = 0; faceNum <= 5; faceNum++) {			// TODO
 	if (fb_getRxBufferConsumedCount(faceNum + 1, &count)) {
 	    if (count == 0) {
 		continue;
@@ -65,19 +65,20 @@ void message_timeoutHandler(void *p_context) {
 
 	    fb_receiveFromRxBuffer(faceNum + 1, count, rxData);
 	    for (int i = 0; i < count; i++) {
+		short len = bufferLen[faceNum];
 		if (rxData[i] > 0x7F) {
 		    continue;
 		}
 		if ((char) rxData[i] == '|') {
 		    // message has been received, send it for processing
-		    buffer[faceNum][bufferLen] = '\0';
+		    buffer[faceNum][len] = '\0';
 		    process_message(buffer[faceNum]);
 
 		    // reset variables
-		    bufferLen = 0;
+		    bufferLen[faceNum] = 0;
 		} else {
-		    buffer[faceNum][bufferLen] = (char) rxData[i];
-		    bufferLen += 1;
+		    buffer[faceNum][len] = (char) rxData[i];
+		    bufferLen[faceNum] += 1;
 		}
 	    }
 	}

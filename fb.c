@@ -230,7 +230,7 @@ bool fb_sendToTxBuffer(uint8_t faceNum, uint8_t numBytes, const uint8_t *bytes) 
     twi_master_init();
 
     twiBuf[0]  = FB_REGISTER_ADDR_TX_BUF;
-    // pad message with there is a tendency to drop the first few characters
+    // pad message as there is a tendency to drop the first few characters
     twiBuf[1] = twiBuf[2] = twiBuf[3] = 0xB7;
     memcpy(&twiBuf[4], bytes, numBytes);
 
@@ -252,7 +252,7 @@ bool fb_queueToTxBuffer(uint8_t faceNum, uint8_t numBytes, const uint8_t *bytes)
     twi_master_init();
 
     twiBuf[0] = FB_REGISTER_ADDR_TX_MSG_BUF;
-    // pad message there is a tendency to drop the first few characters
+    // pad message as there is a tendency to drop the first few characters
     twiBuf[1] = twiBuf[2] = twiBuf[3] = 0xB7;
     memcpy(&twiBuf[4], bytes, numBytes);
 
@@ -274,7 +274,8 @@ bool fb_sendMsgToTxBuffer(uint8_t faceNum, bool flash) {
     twi_master_init();
 
     twiBuf[0] = FB_REGISTER_ADDR_TX_MSG_CONTROL;
-    twiBuf[1] = flash ? (0x01 | 0x02) : 0x00; 
+    twiBuf[1] = flash ? 0x02 : 0x00;
+    twiBuf[1] |= 0x01;
 
     success &= twi_master_transfer((faceNum << 1), twiBuf, 2, true);
 
