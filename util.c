@@ -22,31 +22,31 @@
 extern ble_sps_t m_sps;
 
 uint32_t app_uart_put_string(const char *str) {
-	uint32_t i = 0;
-	uint32_t err_code = NRF_SUCCESS;
+    uint32_t i = 0;
+    uint32_t err_code = NRF_SUCCESS;
 
 #if (ENABLE_BLE_COMMANDS == 1)
-	if (ble_sps_getInitialized()) {
-		ble_sps_put_string(&m_sps, (const uint8_t *)str);
-	}
+    if (ble_sps_getInitialized()) {
+	ble_sps_put_string(&m_sps, (const uint8_t *)str);
+    }
 #endif
 
-	while (str[i] != '\0') {
-		err_code = app_uart_put(str[i++]);
-		if (err_code != NRF_SUCCESS) {
-			return err_code;
-		}
+    while (str[i] != '\0') {
+	err_code = app_uart_put(str[i++]);
+	if (err_code != NRF_SUCCESS) {
+	    return err_code;
 	}
+    }
 
-	return err_code;
+    return err_code;
 }
 
 uint32_t app_uart_put_debug(const char *str, bool debug) {
-	if (debug) {
-		return app_uart_put_string(str);
-	} else {
-		return NRF_SUCCESS;
-	}
+    if (debug) {
+	return app_uart_put_string(str);
+    } else {
+	return NRF_SUCCESS;
+    }
 }
 
 bool delay_ms(uint32_t ms) {
@@ -77,7 +77,7 @@ bool delay_ms(uint32_t ms) {
         intermediaryTicks = elapsedTicks - scheduleTicks;
 
         if (intermediaryTicks > APP_TIMER_TICKS(15, APP_TIMER_PRESCALER)) {
-        	app_sched_execute();
+	    app_sched_execute();
             if (app_timer_cnt_get(&scheduleTicks) != NRF_SUCCESS) {
             	return false;
             }
@@ -99,4 +99,20 @@ uint32_t curr_time() {
     }
 
     return nowTicks;
+}
+
+void MACaddress(char *addr) {
+    uint32_t err_code;
+    if (m_sps.conn_handle == BLE_CONN_HANDLE_INVALID) {
+	app_uart_put_string("BLE not connected\r\n");
+	return;
+    }
+
+    ble_gap_addr_t mac_addr;
+    err_code = sd_ble_gap_address_get(&mac_addr);
+    APP_ERROR_CHECK(err_code);
+
+    sprintf(addr, "%02x%02x%02x%02x%02x%02x",
+	    mac_addr.addr[5], mac_addr.addr[4], mac_addr.addr[3],
+	    mac_addr.addr[2], mac_addr.addr[1], mac_addr.addr[0]);
 }

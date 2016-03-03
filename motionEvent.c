@@ -386,9 +386,9 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 
 	/* Check that the accelerometer readings have stabilized. */
 	imu_getGravityFloat(&gravityNew);
-	if (fabs(gravityNew.x - gravityCurrent.x) < 0.02 &&
-	    fabs(gravityNew.y - gravityCurrent.y) < 0.02 &&
-	    fabs(gravityNew.z - gravityCurrent.z) < 0.02) {	
+	if (fabs(gravityNew.x - gravityCurrent.x) < 0.03 &&
+	    fabs(gravityNew.y - gravityCurrent.y) < 0.03 &&
+	    fabs(gravityNew.z - gravityCurrent.z) < 0.03) {	
 	    /* Central actuator is not moving, so we read the gravity vector
 	     * from the IMU and check whether it is 1) aligned with one of the
 	     * cube's faces, and 2) aligned with a the correct face. */
@@ -451,13 +451,6 @@ void ebrakePlaneChangePrimitiveHandler(void *p_event_data, uint16_t event_size) 
 	    app_uart_put_debug("Extending SMA pin\r\n", DEBUG_MOTION_EVENTS);
 	    sma_extend(ebrakePlaneChangePrimitiveHandler);
 	} else  {	
-	    snprintf(str, sizeof(str), "Previous accelerometer readings: [%f %f %f]\r\n", 
-		     gravityCurrent.x, gravityCurrent.y, gravityCurrent.z);
-	    app_uart_put_debug(str, DEBUG_MOTION_EVENTS);
-	    snprintf(str, sizeof(str), "Current accelerometer readings: [%f %f %f]\r\n", 
-		     gravityNew.x, gravityNew.y, gravityNew.z);
-	    app_uart_put_debug(str, DEBUG_MOTION_EVENTS);
-
 	    /* Set current accelerometer readings to previous */
 	    gravityCurrent.x = gravityNew.x;
 	    gravityCurrent.y = gravityNew.y;

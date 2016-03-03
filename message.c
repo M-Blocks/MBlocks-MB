@@ -50,11 +50,11 @@ void message_timeoutHandler(void *p_context) {
     static short bufferLen[6];
 
     // read as many bytes as we can; split at '\n'
-    // keep buffer; once '\n' is seen, parse message
+    // keep buffer; once '|' is seen, parse message
     uint8_t count;
     uint8_t rxData[100];
 
-    for (int faceNum = 0; faceNum <= 5; faceNum++) {			// TODO
+    for (int faceNum = 0; faceNum <= 5; faceNum++) {		
 	if (fb_getRxBufferConsumedCount(faceNum + 1, &count)) {
 	    if (count == 0) {
 		continue;
@@ -74,11 +74,10 @@ void message_timeoutHandler(void *p_context) {
 		    buffer[faceNum][len] = '\0';
 		    process_message(buffer[faceNum]);
 
-		    // reset variables
 		    bufferLen[faceNum] = 0;
 		} else {
 		    buffer[faceNum][len] = (char) rxData[i];
-		    bufferLen[faceNum] += 1;
+		    bufferLen[faceNum] = (len + 1) % 128;
 		}
 	    }
 	}
@@ -91,13 +90,39 @@ void message_timeoutHandler(void *p_context) {
  *		<type>;<sender MAC>+<sender count>;<command>
  */
 void process_message(char *msg) {
+    static int msg_cnt = 0;
+    char macaddr[13];
+    char recaddr[13];
+    
+    MACaddress(macaddr);
+    macaddr[12] = '\0';
+    
     app_uart_put_string(msg);
     app_uart_put_string("\r\n");
     char *token = strtok(msg, ";");
     if (strcmp(token, "sendcmd") == 0) {
 	token = strtok(NULL, ";");
-	// extract command
+	strncpy(recaddr, token, sizeof(recaddr));
+	if (strcmp(recaddr, macaddr) == 0) {
+	    // extract ID
+	    token = strtok(NULL, ";");
+	    int msg_id = atoi(token);
+	    if (msg_id > msg_cnt) {
+		// extract command
+		msg_cnt = msg_id;
+		token = strtok(NULL, ";");
+		cmdLine_execCmd(token);
+	    }
+	}
+    } else if (strcmp(token, "bcstcmd") == 0) {
+	// extract ID
 	token = strtok(NULL, ";");
-	cmdLine_execCmd(token);
+	int msg_id = atoi(token);
+	if (msg_id > msg_cnt) {
+	    // extract command
+	    msg_cnt = msg_id;
+	    token = strtok(NULL, ";");
+	    cmdLine_execCmd(token);
+	}
     }
 }

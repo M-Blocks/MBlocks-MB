@@ -401,9 +401,8 @@ int main(void) {
     spi_init();
     power_init();
     commands_init();
-//    message_init();
+    message_init();
 
-    //main_schedulerInit();
     bleApp_gapParamsInit();
     bleApp_servicesInit();
     bleApp_connParamsInit();
@@ -638,8 +637,8 @@ void main_powerManage() {
 	spi_init();
 	power_init();
 	bldc_init();
-//        message_init();
-
+	message_init();
+	
 	if (motionCheckTimerID != TIMER_NULL) {
 	    err_code = app_timer_stop(motionCheckTimerID);
 	    APP_ERROR_CHECK(err_code);
@@ -731,7 +730,7 @@ void main_powerManage() {
 	    spi_deinit();
 	    power_deinit();
 	    bldc_deinit();
-//            message_deinit();
+	    message_deinit();
 	}
 
 	sleeping = true;

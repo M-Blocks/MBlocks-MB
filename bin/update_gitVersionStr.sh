@@ -36,8 +36,8 @@ fi
 # pushd and popd to /dev/null to suppress their output.
 pushd . >> /dev/null
 cd $gitDir
-gitVersionStr="v40"
-gitVersionLongStr="v40.0.0"
+gitVersionStr="v1"
+gitVersionLongStr="v1.0.1"
 success=$?
 popd >> /dev/null
 

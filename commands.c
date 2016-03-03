@@ -41,13 +41,13 @@
 #include "ble_sps.h"
 #include "led.h"
 #include "commands.h"
-#include "message.h"
 
 extern ble_sps_t m_sps;
 
 static void cmdVersion(const char *args);
 /* Power management commands */
 static void cmdVBat(const char *args);
+static void cmdCharge(const char *args);
 /* Motor control commands */
 static void cmdBLDCAccel(const char *args);
 static void cmdBLDCSpeed(const char *args);
@@ -94,6 +94,7 @@ static void cmdLightTracker(const char *args);
 static const char cmdVersionStr[] = "ver";
 /* Power management commands */
 static const char cmdVBatStr[] = "vbat";
+static const char cmdChargeStr[] = "charge";
 /* Motor control commands */
 static const char cmdBLDCAccelStr[] = "bldcaccel";
 static const char cmdBLDCSpeedStr[] = "bldcspeed";
@@ -141,6 +142,7 @@ static cmdFcnPair_t cmdTable[] = {
     {cmdVersionStr, cmdVersion},
     /* Power management commands */
     {cmdVBatStr, cmdVBat},
+    {cmdChargeStr, cmdCharge},
     /* Motor control commands */
     {cmdBLDCAccelStr, cmdBLDCAccel},
     {cmdBLDCSpeedStr, cmdBLDCSpeed},
@@ -232,6 +234,46 @@ void cmdVersion(const char *args) {
 /*****************************/
 void cmdVBat(const char *args) {
     power_printBatteryVoltages();
+}
+
+void cmdCharge(const char *args) {
+    char str[50];
+    int nArgs;
+
+    nArgs = sscanf(args, "%50s", str);
+
+    if (nArgs == -1) {
+	/* With no arguments, put the charger into automatic mode. */
+	power_setChargeState(POWER_CHARGESTATE_STANDBY);
+	app_uart_put_string("Charge state set to Automatic\r\n");
+    } else if (nArgs == 1) {
+	if (strncmp(str, "off", 3) == 0) {
+	    power_setChargeState(POWER_CHARGESTATE_OFF);
+	    app_uart_put_string("Charge state set to Off\r\n");
+	} else if (strncmp(str, "manual", 6) == 0) {
+	    power_setChargeState(POWER_CHARGESTATE_MANUAL);
+	    app_uart_put_string("Charge state set to Manual\r\n");
+	} else if (strncmp(str, "auto", 4) == 0) {
+	    power_setChargeState(POWER_CHARGESTATE_STANDBY);
+	    app_uart_put_string("Charge state set to Automatic\r\n");
+	} else if (strncmp(str, "force", 5) == 0) {
+	    power_setChargeState(POWER_CHARGESTATE_PRECHARGE);
+	    app_uart_put_string("Charge state set to Precharge\r\n");
+	} else if (strncmp(str, "discharge", 9) == 0) {
+	    power_setChargeState(POWER_CHARGESTATE_DISCHARGE);
+	    app_uart_put_string("Charge state set to Discharge\r\n");
+	} else if (strncmp(str, "info", 4) == 0) {
+	    power_printDebugInfo();
+	} else if (strncmp(str, "debug", 5) == 0) {
+	    if (power_getDebug()) {
+		power_setDebug(false);
+		app_uart_put_string("Charge debug output disabled\r\n");
+	    } else {
+		power_setDebug(true);
+		app_uart_put_string("Charge debug output enabled\r\n");
+	    }
+	}
+    }
 }
 
 /**************************/
@@ -1158,22 +1200,10 @@ void cmdBLEAdv(const char *args) {
 }
 
 void cmdBLEMACAddr(const char *args) {
-    uint32_t err_code;
     char str[100];
-
-    if (m_sps.conn_handle == BLE_CONN_HANDLE_INVALID) {
-	app_uart_put_string("BLE not connected\r\n");
-	return;
-    }
-
-    ble_gap_addr_t mac_addr;
-    err_code = sd_ble_gap_address_get(&mac_addr);
-    APP_ERROR_CHECK(err_code);
-
-    snprintf(str, sizeof(str), "%02x%02x%02x%02x%02x%02x\r\n",
-	     mac_addr.addr[5], mac_addr.addr[4], mac_addr.addr[3],
-	     mac_addr.addr[2], mac_addr.addr[1], mac_addr.addr[0]);
+    MACaddress(str);
     app_uart_put_string(str);
+    app_uart_put_string("\r\n");
 }
 
 /*******************/
