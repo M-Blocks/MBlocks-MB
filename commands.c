@@ -40,6 +40,8 @@
 #include "bleApp.h"
 #include "ble_sps.h"
 #include "led.h"
+#include "parasite.h"
+
 #include "commands.h"
 
 extern ble_sps_t m_sps;
@@ -79,6 +81,8 @@ static void cmdFBSleep(const char *args);
 static void cmdIMUSelect(const char *args);
 static void cmdIMUInit(const char *args);
 static void cmdIMUGravity(const char *args);
+static void cmdIMUGravityInt(const char *args);
+static void cmdIMUGravityFloat(const char *args);
 /* BLE Serial Port Service Testing Commands */
 static void cmdBLEDiscon(const char *args);
 static void cmdBLEAdv(const char *args);
@@ -86,8 +90,10 @@ static void cmdBLEMACAddr(const char *args);
 /* Motion commands */
 static void cmdChangePlane(const char *args);
 static void cmdInertialActuation(const char *args);
-/* Complex commands */
-static void cmdLightTracker(const char *args);
+/* Parasite board commands */
+static void cmdParasiteOn(const char *args);
+static void cmdParasiteOff(const char *args);
+static void cmdParasiteReset(const char *args);
 
 // These string are what the command line processes looking for the user to
 // type on the serial terminal.
@@ -126,6 +132,8 @@ static const char cmdFBSleepStr[] = "fbsleep";
 static const char cmdIMUSelectStr[] = "imuselect";
 static const char cmdIMUInitStr[] = "imuinit";
 static const char cmdIMUGravityStr[] = "imugravity";
+static const char cmdIMUGravityIntStr[] = "imugravityi";
+static const char cmdIMUGravityFloatStr[] = "imugravityf";
 /* BLE Serial Port Service Testing Commands */
 static const char cmdBLEDisconStr[] = "blediscon";
 static const char cmdBLEAdvStr[] = "bleadv";
@@ -134,6 +142,10 @@ static const char cmdEmptyStr[] = "";
 /* Motion commands */
 static const char cmdChangePlaneStr[] = "cp";
 static const char cmdInertialActuationStr[] = "ia";
+/* Parasite board commands */
+static const char cmdParasiteOnStr[] = "espon";
+static const char cmdParasiteOffStr[] = "espoff";
+static const char cmdParasiteResetStr[] = "esprst";
 
 // This table correlates the command strings above to the actual functions that
 // are called when the user types the command into the terminal and presses
@@ -173,6 +185,8 @@ static cmdFcnPair_t cmdTable[] = {
     {cmdIMUSelectStr, cmdIMUSelect},
     {cmdIMUInitStr, cmdIMUInit},
     {cmdIMUGravityStr, cmdIMUGravity},
+    {cmdIMUGravityIntStr, cmdIMUGravityInt},
+    {cmdIMUGravityFloatStr, cmdIMUGravityFloat},
     /* BLE Serial Port Service Testing Commands */
     {cmdBLEDisconStr, cmdBLEDiscon},
     {cmdBLEAdvStr, cmdBLEAdv},
@@ -180,7 +194,10 @@ static cmdFcnPair_t cmdTable[] = {
     /* Motion commands */
     {cmdChangePlaneStr, cmdChangePlane },
     {cmdInertialActuationStr, cmdInertialActuation },
-    /* Complex commands */
+    /* Parasite board commands */
+    {cmdParasiteOnStr, cmdParasiteOn},
+    {cmdParasiteOffStr, cmdParasiteOff},
+    {cmdParasiteResetStr, cmdParasiteReset},
 // Always end the command table with an emptry string and null pointer
     { cmdEmptyStr, NULL } };
 
@@ -1129,6 +1146,34 @@ void cmdIMUInit(const char *args) {
     }
 }
 
+void cmdIMUGravityInt(const char *args) {
+  char str[200];
+  vector16_t v16;
+
+  if (!imu_getGravity16(&v16)) {
+    snprintf(str, sizeof(str), "FAILED\r\n");
+    app_uart_put_string(str);
+    return;
+  }
+
+  snprintf(str, sizeof(str), "%d %d %d\r\n", v16.x, v16.y, v16.z);
+  app_uart_put_string(str);
+}
+
+void cmdIMUGravityFloat(const char *args) {
+  char str[200];
+  vectorFloat_t gravity;
+
+  if (!imu_getGravityFloat(&gravity)) {
+    snprintf(str, sizeof(str), "FAILED\r\n");
+    app_uart_put_string(str);
+    return;
+  }
+
+  snprintf(str, sizeof(str, "%f %f %f\r\n"), gravity.x, gravity.y, gravity.z);
+  app_uart_put_string(str);
+}
+
 void cmdIMUGravity(const char *args) {
     char str[200];
     vector16_t v16;
@@ -1323,9 +1368,27 @@ void cmdInertialActuation(const char *args) {
     }
 }
 
-/*********************/
-/*  Complex Commands */
-/*********************/
+/****************************/
+/*  Parasite board commands */
+/****************************/
+
+void cmdParasiteOn(const char *args) {
+  app_uart_put_string("Turning on ESP board.\r\n");
+  parasite_turnon();
+  delay_ms(70);
+}
+
+void cmdParasiteOff(const char *args) {
+  app_uart_put_string("Turning off ESP board.\r\n");
+  parasite_turnoff();
+  delay_ms(70);
+}
+
+void cmdParasiteReset(const char *args) {
+  app_uart_put_string("Resetting ESP board.\r\n");
+  parasite_reset();
+  delay_ms(500);
+}
 
 /*************/
 /* Callbacks */

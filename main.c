@@ -71,7 +71,7 @@
 #include "led.h"
 #include "commands.h"
 #include "cmdline.h"
-#include "message.h"
+#include "parasite.h"
 
 #include "bleApp.h"
 #include "ble_sps.h"
@@ -401,7 +401,6 @@ int main(void) {
     spi_init();
     power_init();
     commands_init();
-    message_init();
 
     bleApp_gapParamsInit();
     bleApp_servicesInit();
@@ -629,6 +628,8 @@ void main_powerManage() {
 	db_sleep(true);
 	fb_sleep(0, true);
 
+	/* Turn on the ESP board */
+	parasite_turnon();
 
 	led_init();
 
@@ -637,7 +638,6 @@ void main_powerManage() {
 	spi_init();
 	power_init();
 	bldc_init();
-	message_init();
 	
 	if (motionCheckTimerID != TIMER_NULL) {
 	    err_code = app_timer_stop(motionCheckTimerID);
@@ -692,6 +692,9 @@ void main_powerManage() {
 	    /* Put all faceboards to sleep, too */
 	    fb_sleep(0, true);
 
+	    /* Put the ESP board to sleep */
+	    parasite_turnoff();
+
 	    /* Terminate the BLE connection, if one exists */
 	    if (m_sps.conn_handle != BLE_CONN_HANDLE_INVALID) {
 		err_code = sd_ble_gap_disconnect(m_sps.conn_handle, BLE_HCI_CONN_INTERVAL_UNACCEPTABLE);
@@ -730,7 +733,6 @@ void main_powerManage() {
 	    spi_deinit();
 	    power_deinit();
 	    bldc_deinit();
-	    message_deinit();
 	}
 
 	sleeping = true;
