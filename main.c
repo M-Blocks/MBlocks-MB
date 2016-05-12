@@ -99,6 +99,7 @@ static bool sleepRequested = false;
 static uint32_t sleepTime_sec = 600;
 static bool sleeping = false;
 static uint32_t lastCharTime_rtcTicks = 0;
+static uint32_t lastMotionTime_rtcTicks = 0;
 static app_timer_id_t motionCheckTimerID = TIMER_NULL;
 static bool motionDetected = false;
 
@@ -394,8 +395,6 @@ int main(void) {
     mpu6050Initialized_central = imu_init();
     dmpInitialized_central = imu_initDMP();
 
-
-
     led_init();
     pwm_init();
     spi_init();
@@ -408,6 +407,8 @@ int main(void) {
     bleApp_secParamsInit();
     bleApp_advertisingInit();
 
+    parasite_turnon();
+    
     main_timersStart();
 
     led_setAllOn();
@@ -538,6 +539,13 @@ int main(void) {
     mpu6050_setAddress(MPU6050_I2C_ADDR_CENTRAL);
     imu_enableDMP();
 
+    /* Start the timer which we'll use to check whether the IMU has
+     * sensed motion. */
+    if (motionCheckTimerID != TIMER_NULL) {
+      err_code = app_timer_start(motionCheckTimerID, APP_TIMER_TICKS(1000, APP_TIMER_PRESCALER), NULL);
+      APP_ERROR_CHECK(err_code);
+    }
+
     // Enter main loop
     for (;;) {
         app_sched_execute();
@@ -583,14 +591,19 @@ void main_powerManage() {
     uint32_t err_code;
     uint32_t currentTime_rtcTicks;
     uint32_t elapsedTime_rtcTicks;
+    uint32_t elapsedTime_motionTicks;
 
     uint32_t elapsedCharTime_sec;
+    uint32_t elapsedTime_motionTicks;
     bool chargerActive;
 
     app_timer_cnt_get(&currentTime_rtcTicks);
 
     elapsedTime_rtcTicks = 0x00FFFFFF & (currentTime_rtcTicks - lastCharTime_rtcTicks);
     elapsedCharTime_sec = (elapsedTime_rtcTicks * USEC_PER_APP_TIMER_TICK) / 1000000;
+    
+    elapsedTime_motionTicks = 0x00FFFFFF & (currentTime_rtcTicks - lastMotionTime_rtcTicks);
+    elapsedMotionTime_sec = (elapsedTime_motionTicks * USEC_PER_APP_TIMER_TICK) / 1000000;
 
 
     if ((power_getChargeState() == POWER_CHARGESTATE_OFF) ||
@@ -638,11 +651,6 @@ void main_powerManage() {
 	spi_init();
 	power_init();
 	bldc_init();
-	
-	if (motionCheckTimerID != TIMER_NULL) {
-	    err_code = app_timer_stop(motionCheckTimerID);
-	    APP_ERROR_CHECK(err_code);
-	}
 
 	mpu6050_setAddress(MPU6050_I2C_ADDR_CENTRAL);
 	imu_enableSleepMode();
@@ -666,10 +674,10 @@ void main_powerManage() {
 
 	app_uart_put_string("Awoken from sleep\r\n");
     } else if (sleepRequested ||
-	       ((elapsedCharTime_sec > sleepTime_sec) && (sleepTime_sec != 0) && !chargerActive)) {
+	       ((elapsedMotionTime_sec > sleepTime_sec) && (sleepTime_sec != 0) && !chargerActive)) {
 	/* If we have received a sleep command, or it has been a long time
-	 * since we received the last character over one of the serial
-	 * interfaces, (and the batteries are not currently charging, we go to
+	 * since we detected motion on the central IMU
+	 * (and the batteries are not currently charging, we go to
 	 * sleep. */
 
 	/* Clear the sleep requested flag so that we do not re-enter sleep
@@ -715,13 +723,6 @@ void main_powerManage() {
 	    imu_enableSleepMode();
 	    imu_enableMotionDetection(false);
 
-	    /* Start the timer which we'll use to check whether the IMU has
-	     * sensed motion. */
-	    if (motionCheckTimerID != TIMER_NULL) {
-		err_code = app_timer_start(motionCheckTimerID, APP_TIMER_TICKS(1000, APP_TIMER_PRESCALER), NULL);
-		APP_ERROR_CHECK(err_code);
-	    }
-
 	    /* Clear the motion detected flag so that we do not wake-up
 	     * immediately. */
 	    motionDetected = false;
@@ -749,6 +750,7 @@ void main_motionCheckTimerHandler(void *context) {
     uint32_t elapsedTime_sec;
 
     app_timer_cnt_get(&currentTime_rtcTicks);
+    app_timer_cnt_get(&lastMotionTime_rtcTicks);
     elapsedTime_sec = ((0x00FFFFFF & (currentTime_rtcTicks - lastLEDFlashTime_rtcTicks)) * USEC_PER_APP_TIMER_TICK) / 1000000;
 
     if (sleeping && (elapsedTime_sec >= 30)) {
