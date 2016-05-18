@@ -5,7 +5,7 @@
 #include "twi_master_config.h"
 #include "twi_master.h"
 
-#include "fb.h"
+#include "parasite.h"
 
 bool parasite_turnon() {
   uint8_t address = PARASITE_ADDRESS;  // address of ESP8266 
@@ -31,6 +31,7 @@ bool parasite_turnon() {
 }
 
 bool parasite_turnoff() {
+  uint8_t address = PARASITE_ADDRESS;  // address of ESP8266 
   uint8_t twiBuf[2];
   bool success = true;
 
@@ -48,6 +49,7 @@ bool parasite_turnoff() {
 }
 
 bool parasite_reset() {
+  uint8_t address = PARASITE_ADDRESS;  // address of ESP8266 
   uint8_t twiBuf[2];
   bool success = true;
 
@@ -55,7 +57,7 @@ bool parasite_reset() {
 
   twiBuf[0] = PARASITE_LED_REGISTER;
   // Set LEDs
-  twiBuf[1] = 0x10; // 00 01 00 00
+  twiBuf[1] = 0x04; // 00 00 01 00
 
   success &= twi_master_transfer(address << 1, twiBuf, 2, true);
 

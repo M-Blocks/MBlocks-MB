@@ -394,7 +394,8 @@ int main(void) {
     mpu6050Initialized_central = imu_init();
     dmpInitialized_central = imu_initDMP();
 
-
+    /* Turn on the ESP board */
+    parasite_turnon();
 
     led_init();
     pwm_init();

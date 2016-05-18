@@ -1156,7 +1156,7 @@ void cmdIMUGravityInt(const char *args) {
     return;
   }
 
-  snprintf(str, sizeof(str), "%d %d %d\r\n", v16.x, v16.y, v16.z);
+  snprintf(str, sizeof(str), "imugravityi: %d %d %d\r\n", v16.x, v16.y, v16.z);
   app_uart_put_string(str);
 }
 
@@ -1170,7 +1170,7 @@ void cmdIMUGravityFloat(const char *args) {
     return;
   }
 
-  snprintf(str, sizeof(str, "%f %f %f\r\n"), gravity.x, gravity.y, gravity.z);
+  snprintf(str, sizeof(str), "imugravityf: %f %f %f\r\n", gravity.x, gravity.y, gravity.z);
   app_uart_put_string(str);
 }
 
@@ -1374,20 +1374,34 @@ void cmdInertialActuation(const char *args) {
 
 void cmdParasiteOn(const char *args) {
   app_uart_put_string("Turning on ESP board.\r\n");
-  parasite_turnon();
+  if (parasite_turnon()) {
+      app_uart_put_string("Successfully turned on ESP board.\r\n");
+  } else {
+      app_uart_put_string("Failed to turn on ESP board.\r\n");
+  }
   delay_ms(70);
 }
 
 void cmdParasiteOff(const char *args) {
   app_uart_put_string("Turning off ESP board.\r\n");
-  parasite_turnoff();
+  if (parasite_turnoff()) {
+      app_uart_put_string("Successfully turned off ESP board.\r\n");
+  } else {
+      app_uart_put_string("Failed to turn off ESP board.\r\n");
+  }
   delay_ms(70);
 }
 
 void cmdParasiteReset(const char *args) {
   app_uart_put_string("Resetting ESP board.\r\n");
-  parasite_reset();
-  delay_ms(500);
+  bool success = parasite_reset();
+  delay_ms(200);
+  success &= parasite_turnon();
+  if (success) {
+      app_uart_put_string("Successfully reset ESP board.\r\n");
+  } else {
+      app_uart_put_string("Failed to reset ESP board.\r\n");
+  }
 }
 
 /*************/
