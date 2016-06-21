@@ -1,0 +1,44 @@
+fbrgbled {[r][g][b] | off} {[t][b]} <faceNumber1> [<faceNumber2>] [<faceNumber3>] [<faceNumber4>] [<faceNumber5>] [<faceNumber6>]
+	Turns the faceboard RGB LEDs on or off.  The first argument is some combination of 'r', 'g', and 'b' (or 'off') to indicate which colors should be turned on.  The second argument is some combination of 't' and 'b' indicating whether the top (closer to faceboard 5) or bottom (closer to faceboard 6) should be affected.  The following arumgnets are a list of faces to which the command should be applied.  At least one face number should be specified, but the face number do not need to appear in any particular order.  
+	
+	Example: "fbrgbled r tb 2 4" illuminates both the top and bottom red LEDs on faces 2 and 4.
+	
+fblight <faceNumber>
+	Reads the value of the ambient light sensor on the specified faceboard.  The result is an integer between 0 and 1023.  For the resulting value to be non-zero, one must first enable the particular faceboard's sensors with a "fbrxen <faceNumber> 1" command.
+	
+fbirled <faceNumber> [<irLEDNumber1>] [<irLEDNumber2>] [<irLEDNumber3>] [<irLEDNumber3>]
+	Manually illuminates or extinguishes the specified IR LED numbers on the specified faceboard.  The first argument is the face to which the command should be sent.  A faceNumber of 0 indicates that the command should be broadcast to all faces.  The following arguments, all optional, are a list of the IR LED numbers which should be illuminated.  If the list is empty, all IR LEDs on the specified face will be extinguished.  So long as some IR LEDs on a particular face are illuminated, it is impossible to transmit messages using the IR LEDs, so the "fbtx" command will not function. 
+	
+	Example: "fbirled 0 3 4" manually illuminates IR LEDs 3 and 4 on all faces.
+	
+fbtx <faceNumber> <message>
+	Queues a message for transmission on the specified faceboard.  The first argument is the face to which the command should be sent.  A faceNumber of 0 indicates that the command should be broadcast to all faces.  The following argument is a string (without spaces) that will be sent over the IR communication interface.  For this command to function, none of a face's IR LEDs may be in manual mode ("fbirled <faceNumber>") and at least one IR LED must be selected for transmission (e.g. "fbtxled 3 1").
+	
+	Example: "fbirled 3"
+			 "fbtxled 3 1"
+			 "fbtxcount 3"
+			 "fbtx 3 hello_world" disables manual illumination of all IR LEDs on face 3, then selects IR LED 1 (on face 3) for IR communication, verifies that there is space available in the transmit buffer, and finally queues the message "hello_world" for transmission (from face 3), which will begin immediately.
+	
+fbtxcount <faceNumber>
+	Returns the number of bytes available in the transmit buffer of the specified faceboard.  It is wise to execute this command before the "fbtx" command.
+	
+fbtxled <faceNumber> [<irLEDNumber1>] [<irLEDNumber2>] [<irLEDNumber3>] [<irLEDNumber3>]
+	Selects which IR LEDs should be used for communication with neighboring modules.  The first argument is the face to which the command should be sent.  A faceNumber of 0 indicates that the command should be broadcast to all faces.  The following arguments, all optional, are a list of the IR LED numbers (1-4) which should be using during transmission.  If the list is empty, all of the IR LEDs on the specified face(s) will be de-selected.  Note that at least one IR LED must be selected for transmission before the "fbtx" command will function.  Likewise, so long as characters remain pending for transmission in the transmit buffer, the selected transmit LEDs cannot be changed.
+
+fbrx <faceNumber> <byteCount>
+	Reads bytes queued in the specified faceboard's IR receive buffer.  The byteCount parameter specifies how many bytes to read.  If one tries, the read more bytes than are available, the faceboard will fill the extra space with '\0' characters.  A faceboard will not be able to receive data until the IR demodulator has been enabled with the "fbrxen" command.  It may be useful to call the "fbrxcount" command to determine how many bytes are available to be read.
+
+fbrxcount <faceNumber>
+	Returns the number of byte queued in the receive buffer of the specified faceboard.  It is wise to execute this command before the "fbrx" command.
+
+fbrxflush <faceNumber>
+	Flushes the receive buffer of the specified face.  If the faceNumber parameter is set to 0, the receive buffer of every faceboard is flushed.
+
+fbrxen <faceNumber> <enable>
+	Enables (or disables) the IR demodulator (and ambient light sensor) on the specified face.  The first argument is the face to which the command should be sent.  A faceNumber of 0 indicates that the command should be broadcast to all faces.  The second argument must a 1 or a 0 to enable or disable the demodulator, respectively.
+
+fbsleep <faceNumber>
+	Places the specified faceboard into its low-power sleep mode.  If the faceNumber parameter is set to 0, the sleep command is sent to all faceboards.
+
+imuselect [c|f]
+	Command select which IMU (central actuator or faceboard 1) is active.  All other IMU commands will be applied to the active IMU.  Without any arguments the command indicates which IMU is already active.
